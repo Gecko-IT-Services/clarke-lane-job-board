@@ -26,11 +26,11 @@ export const allDone = job => needed(job).every(p => job.procs[p].done);
 /** Net value of the whole order, or of what is still to send. null when prices are hidden. */
 export function value(job, { remaining = false } = {}) {
   if (job.lines.some(l => l.price == null)) return null;
-  return round2(job.lines.reduce((a, l) => a + (remaining ? left(job, l) : l.qty) * l.price, 0));
+  return round2(job.lines.reduce((a, l) => a + round2((remaining ? left(job, l) : l.qty) * l.price), 0));
 }
 export const despatchValue = (job, d) =>
   job.lines.some(l => l.price == null) ? null
-    : round2(job.lines.reduce((a, l) => a + (d.lines[l.id] || 0) * l.price, 0));
+    : round2(job.lines.reduce((a, l) => a + round2((d.lines[l.id] || 0) * l.price), 0));
 
 /** upcoming: nothing ticked or sent · current: something ticked or part sent · completed: all sent */
 export function stage(job) {
@@ -91,7 +91,8 @@ export function describeLine(l) {
   return spec ? `${desc} — ${spec}` : desc;
 }
 
-/** Unit price from the quote line's sell total, to 4dp (the column's precision). */
-export const unitPrice = (sellTotal, qty) => qty > 0 ? Math.round((sellTotal / qty) * 10000) / 10000 : 0;
+/** Unit price from the quote line's sell total, to 6dp (the column's precision), so qty × unit
+ *  gives back the quoted total to the penny. */
+export const unitPrice = (sellTotal, qty) => qty > 0 ? Math.round((sellTotal / qty) * 1e6) / 1e6 : 0;
 
 export const round2 = n => Math.round(n * 100) / 100;

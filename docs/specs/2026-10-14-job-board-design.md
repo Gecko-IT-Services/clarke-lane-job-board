@@ -89,6 +89,13 @@ before then.** The board itself never uses the secret.
 no network). `?role=floor` shows the shop-floor view. Serve with
 `python3 -m http.server 8080` and open http://localhost:8080/dev/smoke.html.
 
+## Money
+Unit price = quote line total ÷ quantity, kept to 6dp so qty × unit gives back the quoted total
+(Q-0078: 4000 × £3.01044 = £12,041.76; at 4dp it would be £12,041.60). Values are summed per line
+rounded to the penny, as an invoice does. Xero takes unit prices to 4dp only: phase 2 must send
+such lines so the Xero line amount equals qty × exact unit to the penny (e.g. override the line
+amount), and the Waiting for Xero list shows the exact net to type in until then.
+
 ## Phases
 1. Board: jobs, ticks, shop floor, quote → job, SOA, despatch notes, call-offs.
 2. Send to Xero (draft invoices), phone orders without a quote.

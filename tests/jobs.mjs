@@ -43,7 +43,12 @@ assert.equal(PROCESSES.length, 9);
 
 assert.equal(describeLine({ desc: 'Bracket', thickness: 3, material: 'S275' }), 'Bracket — 3mm S275');
 assert.equal(describeLine({ desc: '' }), 'Part');
-assert.equal(unitPrice(110.62, 6), 18.4367);
+assert.equal(unitPrice(110.62, 6), 18.436667);
+// Q-0078: 4000 at £12,041.76 must come back to £12,041.76, not £12,041.60.
+const q78 = { lines: [{ id: 1, qty: 4000, price: unitPrice(12041.76, 4000) }], despatches: [] };
+assert.equal(q78.lines[0].price, 3.01044);
+assert.equal(value(q78), 12041.76);
+assert.equal(despatchValue(q78, { lines: { 1: 1000 } }), 3010.44);
 assert.equal(unitPrice(5, 0), 0);
 
 console.log('jobs: ok');

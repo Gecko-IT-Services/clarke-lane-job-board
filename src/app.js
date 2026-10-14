@@ -10,6 +10,7 @@ import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despat
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const gbp = (n, dp = 0) => n == null ? '' : '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+const unit = n => n == null ? '' : '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const todayIso = () => iso(new Date());
@@ -269,7 +270,7 @@ function quoteCard(q) {
   if (S.conv?.spId !== q.spId) return `<article class="qcard">${head}<div class="actions"><button class="btn pri" type="button" data-start="${q.spId}">Turn into a job</button></div></article>`;
   if (S.conv.loading) return `<article class="qcard">${head}<div class="note">Reading the quote lines…</div></article>`;
   const c = S.conv;
-  const lines = c.lines.map(l => `<tr><td>${esc(describeLine(l))}</td><td>${l.qty}</td><td>${gbp(unitPrice(l.sellTotal, l.qty), 2)}</td><td>${gbp(l.sellTotal, 2)}</td></tr>`).join('');
+  const lines = c.lines.map(l => `<tr><td>${esc(describeLine(l))}</td><td>${l.qty}</td><td>${unit(unitPrice(l.sellTotal, l.qty))}</td><td>${gbp(l.sellTotal, 2)}</td></tr>`).join('');
   return `<article class="qcard wide">${head}
     <form class="convert" data-convert>
       <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>${lines}
@@ -356,7 +357,7 @@ function renderDrawer() {
     ${j.notes ? `<div class="panel"><div class="note">Notes</div>${esc(j.notes)}</div>` : ''}
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div></div>
     <div class="panel"><h3>Parts</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Ordered</th><th>Sent</th><th>Left</th>${money ? '<th>Unit</th>' : ''}</tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${gbp(l.price, 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       ${j.calloffs.length ? callRow(j) : ''}</div>
     <div class="actions">
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement</button>` : ''}
@@ -391,7 +392,7 @@ function showDoc(kind, jobId, despId) {
         <span class="k">Delivery</span><span>${j.calloffs.length ? `${j.calloffs.length} call-offs, ${fmtLong(j.calloffs[0])} to ${fmtLong(j.calloffs[j.calloffs.length - 1])}` : fmtLong(j.due)}</span></div></div>
       <p>Thank you for your order. We confirm the following.</p>
       <table><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Net</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${gbp(l.price, 2)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
       <div class="tot"><span>Net</span><span>${gbp(net, 2)}</span><span>VAT 20%</span><span>${gbp(vat, 2)}</span><span class="g">Total</span><span class="g">${gbp(net + vat, 2)}</span></div>
       ${j.calloffs.length ? `<div><div class="k">Call-off schedule</div>${j.calloffs.map((c, i) => `${i + 1}. ${fmtLong(c)}`).join(' &nbsp; ')}</div>` : ''}
       <div class="foot">Clarke Lane Engineering Ltd. Please quote ${esc(j.so)} on any correspondence about this order.</div>`;
