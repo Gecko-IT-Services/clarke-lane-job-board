@@ -30,12 +30,19 @@ export const orderedQuotes = async () => [
   { spId: 303, quoteNo: 'Q-0303', customer: 'Third Example Ltd', status: 'Ordered', carriage: 12.5, sellTotal: 290.25, deliveryDays: 0, quoteDate: '2026-10-12' }];
 export const quoteLines = async () => [{ lineNo: 1, qty: 10, sellTotal: 290.25, desc: 'Valve guard', thickness: 2, material: 'Zintec', process: 'Laser', folds: 3, weld: 0, inserts: 0, paint: true, plating: 0, holes: 0 }];
 export const xeroStatus = async () => sessionStorage.getItem('fakeXero') ? { tenant_name: 'Clarke Lane Engineering Ltd', connected_by: 'levi@clarke-lane.co.uk', connected_at: '2026-10-15T09:00:00Z' } : null;
-export const xero = async route => {
+export const xero = async (route, body) => {
   if (route === 'connect') { sessionStorage.setItem('fakeXero', '1'); return { url: location.pathname + '?xero=connected#xero' }; }
   if (route === 'read') return { organisation: 'Clarke Lane Engineering Ltd', highestSo: 9728, counterNext: 9729,
     quotes: [{ id: 'q1', number: 'SO-9726', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
       lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] },
       { id: 'q2', number: 'SO-9725', status: 'DRAFT', customer: 'Second Example Ltd', reference: 'P31608', date: '2026-10-01', expiry: '', subTotal: 526.29, lines: [] }],
     invoices: [{ id: 'i1', number: 'INV-31933', status: 'PAID', customer: 'Example Customer Ltd', reference: '9724', date: '2026-10-01', subTotal: 71.4 }] };
+  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited' }, { id: 'c2', name: 'Second Example Ltd' }, { id: 'c3', name: 'Second Example (Old)' }],
+    defaults: { accountCode: '200', taxType: 'OUTPUT2', from: 'your last 100 invoices' } };
+  if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
+    return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
 };
+let cmap = new Map();
+export const loadContactMap = async () => new Map(cmap);
+export const saveContact = async (k, c) => { cmap.set(k, c); };

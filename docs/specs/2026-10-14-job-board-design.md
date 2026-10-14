@@ -115,7 +115,15 @@ no network). `?role=floor` shows the shop-floor view. Serve with
   on the board can be made a job ("Make job") keeping its number and the Xero quote id.
 - **New job** (office): jobs not from a quote — phone orders, Sage carry-over (number SAGE-9701),
   Xero sales orders (SO-9726). A typed SO number moves the counter past it.
-- Next: write side — despatch → draft ACCREC invoice (never approved or sent by the board).
+- **Send to Xero (built 15 Oct):** Despatch › Waiting for Xero. One DRAFT ACCREC invoice per
+  despatch, built server-side from the database (never from the browser): lines = exactly what went
+  out, reference `SO / PO x / DN`, call-off number in the line text, account + VAT code = the pair
+  Clarke Lane's own recent invoices use most (override with `XERO_ACCOUNT_CODE`/`XERO_TAX_TYPE`).
+  Xero's 4dp unit price: a line whose total would change goes as 1 × the exact total with qty @ unit
+  in the description. Idempotency-Key `clj-despatch-<id>` and `xero_mark_sent` (fills only an empty
+  slot) stop a despatch being invoiced twice. Contacts: auto-matched when exactly one Xero contact
+  normalises to the same name (`normName`), otherwise Mandy picks once; kept in `customer_contacts`.
+  The board never approves, emails or deletes an invoice. "Invoiced by hand?" stays as a fallback.
 
 ## Money
 Unit price = quote line total ÷ quantity, kept to 6dp so qty × unit gives back the quoted total

@@ -4,12 +4,16 @@
 //   POST connect   office only → { url } to send the browser to Xero's consent page
 //   GET  callback  Xero redirects here; stores tokens; sends the browser back to the board
 //   POST read      office only → sales orders (Xero quotes) and sales invoices since go-live
+//   POST contacts  office only → Xero contacts + the sales account/VAT Clarke Lane's invoices use
+//   POST send      office only → one DRAFT sales invoice per despatch (never approved or sent)
 //   POST disconnect office only
 //
 // Secrets (Supabase › Edge Functions › Secrets): XERO_CLIENT_ID, XERO_CLIENT_SECRET.
 // Optional: XERO_SCOPES. Deployed with verify_jwt off because Xero's redirect carries no
 // Supabase token; every other route checks the caller itself (office()).
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
+// A copy of src/core/xero.js (tests/xero.mjs checks they are identical).
+import { buildInvoice, invoiceNet, salesDefaults } from './xero-core.js';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const admin = createClient(SB_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -115,6 +119,19 @@ async function xero(s: { access_token: string; tenant_id: string }, path: string
   throw new HttpError(503, 'Xero is busy (rate limit). Try again in a minute.');
 }
 
+async function xeroPost(s: { access_token: string; tenant_id: string }, path: string, body: unknown, idempotencyKey: string) {
+  const res = await fetch(`https://api.xero.com/api.xro/2.0/${path}`, { method: 'POST',
+    headers: { Authorization: `Bearer ${s.access_token}`, 'xero-tenant-id': s.tenant_id, Accept: 'application/json',
+               'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(body) });
+  const r = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const why = r?.Elements?.[0]?.ValidationErrors?.map((v: any) => v.Message).join('; ') || r?.Message || r?.Detail || res.status;
+    throw new HttpError(502, `Xero refused it: ${why}`);
+  }
+  return r;
+}
+
 async function allPages(s: { access_token: string; tenant_id: string }, base: string, key: string) {
   const out = [];
   for (let page = 1; page < 50; page++) {
@@ -130,6 +147,67 @@ const xDate = (v?: string) => {     // "/Date(1759276800000+0000)/" or ISO → Y
   const m = /\/Date\((\d+)/.exec(v);
   return (m ? new Date(Number(m[1])) : new Date(v)).toISOString().slice(0, 10);
 };
+
+/** Account and VAT for draft lines: XERO_ACCOUNT_CODE/XERO_TAX_TYPE if set, else what recent invoices use. */
+async function defaults(s: { access_token: string; tenant_id: string }) {
+  const code = Deno.env.get('XERO_ACCOUNT_CODE');
+  if (code) return { accountCode: code, taxType: Deno.env.get('XERO_TAX_TYPE') || null, from: 'setting' };
+  const r = await xero(s, `Invoices?where=${encodeURIComponent('Type=="ACCREC"')}&order=Date%20DESC&page=1`);
+  const d = salesDefaults(r.Invoices || []);
+  if (!d) throw new HttpError(409, 'There are no sales invoices in Xero yet to copy the sales account from. Ask Gecko to set XERO_ACCOUNT_CODE.');
+  return { ...d, from: `your last ${(r.Invoices || []).length} invoices` };
+}
+
+async function contacts() {
+  const s = await session();
+  const [list, d] = await Promise.all([
+    allPages(s, `Contacts?where=${encodeURIComponent('ContactStatus=="ACTIVE"')}&summaryOnly=true`, 'Contacts'),
+    defaults(s)]);
+  return { contacts: list.map(c => ({ id: c.ContactID, name: c.Name })).sort((a, b) => a.name.localeCompare(b.name)), defaults: d };
+}
+
+/** items: [{ despatchId, contactId }] → one draft invoice each, recorded on the despatch. */
+async function send(items: { despatchId: number; contactId: string }[]) {
+  if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Nothing chosen to send.');
+  const s = await session();
+  const d = await defaults(s);
+  const out = [];
+  for (const it of items) {
+    try {
+      // Amounts come from the database, never from the browser.
+      const { data: row, error } = await admin.from('despatches')
+        .select('id, dn_number, despatched_on, xero_invoice_id, xero_invoice_no, job_id, ' +
+          'jobs(so_number, customer_po, calloff_dates), despatch_lines(qty, job_lines(part, line_no, job_line_prices(unit_price)))')
+        .eq('id', it.despatchId).single();
+      if (error || !row) throw new Error('Despatch not found.');
+      if (row.xero_invoice_id || row.xero_invoice_no) { out.push({ despatchId: it.despatchId, ok: true, invoiceNo: row.xero_invoice_no, already: true }); continue; }
+      if (!it.contactId) throw new Error('Choose the Xero contact first.');
+      const job: any = row.jobs;
+      const calloffs: string[] = job.calloff_dates || [];
+      let calloff = '';
+      if (calloffs.length) {
+        const { count } = await admin.from('despatches').select('id', { count: 'exact', head: true }).eq('job_id', row.job_id).lte('id', row.id);
+        calloff = `${count} of ${calloffs.length}`;
+      }
+      const lines = (row.despatch_lines as any[])
+        .sort((a, b) => a.job_lines.line_no - b.job_lines.line_no)
+        .map(l => ({ part: l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
+      if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this despatch has no price.');
+      const inv = buildInvoice({ dn: row.dn_number, date: row.despatched_on, so: job.so_number, po: job.customer_po, calloff, lines },
+        it.contactId, d.accountCode, d.taxType);
+      const r = await xeroPost(s, 'Invoices', { Invoices: [inv] }, `clj-despatch-${row.id}`);
+      const made = r.Invoices?.[0];
+      if (!made?.InvoiceID) throw new Error('Xero did not return an invoice.');
+      const { data: marked } = await admin.rpc('xero_mark_sent', { p_despatch_id: row.id, p_invoice_id: made.InvoiceID, p_invoice_no: made.InvoiceNumber || '' });
+      const net = invoiceNet(inv);
+      out.push({ despatchId: it.despatchId, ok: true, invoiceNo: made.InvoiceNumber, net,
+        xeroNet: made.SubTotal, mismatch: Math.abs((made.SubTotal ?? net) - net) > 0.004, recorded: !!marked });
+    } catch (e) {
+      out.push({ despatchId: it.despatchId, ok: false, error: (e as Error).message });
+    }
+  }
+  return { results: out, defaults: d };
+}
 
 async function read() {
   const s = await session();
@@ -169,6 +247,8 @@ Deno.serve(async req => {
     if (!CLIENT_ID || !CLIENT_SECRET) throw new HttpError(503, 'Xero is not set up yet: XERO_CLIENT_ID and XERO_CLIENT_SECRET are missing from Supabase › Edge Functions › Secrets.');
     if (route === 'connect') return cors(req, json({ url: await connectUrl(me.email) }));
     if (route === 'read') return cors(req, json(await read()));
+    if (route === 'contacts') return cors(req, json(await contacts()));
+    if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }
     throw new HttpError(404, 'Not found');
   } catch (e) {

@@ -138,17 +138,31 @@ export async function xeroStatus() {
 }
 
 /** route: 'connect' | 'read' | 'disconnect' */
-export async function xero(route) {
+export async function xero(route, body) {
   const sb = await getSupabase();
   const { data: { session } } = await sb.auth.getSession();
   let res;
   try {
     res = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/xero/${route}`, { method: 'POST',
-      headers: { Authorization: `Bearer ${session?.access_token}`, apikey: CONFIG.SUPABASE_KEY } });
+      headers: { Authorization: `Bearer ${session?.access_token}`, apikey: CONFIG.SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined });
   } catch { throw new Error('Could not reach the Xero connection. Check the internet connection and try again.'); }
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `The Xero connection failed (${res.status}).`);
-  return body;
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error || `The Xero connection failed (${res.status}).`);
+  return out;
+}
+
+/** Board customer (normalised) → Xero contact, as chosen by the office. */
+export async function loadContactMap() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('customer_contacts').select('customer_key, xero_contact_id, xero_contact_name');
+  if (error) fail('Could not load the Xero contact choices', error);
+  return new Map(data.map(r => [r.customer_key, { id: r.xero_contact_id, name: r.xero_contact_name }]));
+}
+export async function saveContact(customerKey, contact) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('customer_contacts').upsert({ customer_key: customerKey, xero_contact_id: contact.id, xero_contact_name: contact.name });
+  if (error) fail('The contact choice was not saved', error);
 }
 
 /* ---------- Levi's quotes (SharePoint) ---------- */

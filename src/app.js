@@ -4,6 +4,7 @@
  */
 import * as auth from './auth.js';
 import * as data from './data.js';
+import { normName, matchContact } from './core/xero.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates } from './core/jobs.js';
@@ -21,7 +22,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
+const S = { forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -451,6 +452,69 @@ function quoteCard(q) {
 }
 
 /* ---------- despatch ---------- */
+function waitingForXero(pend) {
+  if (!pend.length) return `<div class="panel"><h3>Waiting for Xero</h3><div class="empty">Nothing waiting. Every despatch is in Xero.</div></div>`;
+  const connected = !!S.xero;
+  if (connected && !S.xc && !S.xcErr) loadXeroContacts();
+  const rows = pend.map(([x, d]) => {
+    const m = contactFor(x.customer);
+    const picked = S.sendPick[d.id] ?? !!m;
+    const contactCell = !connected ? '' : !S.xc ? '<span class="note">…</span>'
+      : m ? `${esc(m.name)} <span class="note">${m.how === 'auto' ? '(matched)' : ''}</span> <button class="btn link sm" type="button" data-xcchange="${esc(normName(x.customer))}">change</button>`
+      : `<select class="f" data-xcpick="${esc(normName(x.customer))}" aria-label="Xero contact for ${esc(x.customer)}"><option value="">Choose the Xero contact…</option>
+          ${S.xc.contacts.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>`;
+    return `<tr${S.sendErr[d.id] ? ' class="rowerr"' : ''}>${connected ? `<td><input type="checkbox" data-sendpick="${d.id}" ${picked && m ? 'checked' : ''} ${m ? '' : 'disabled'} aria-label="Send ${esc(d.dn)}"></td>` : ''}
+      <td><button class="btn link mono" type="button" data-dn="${d.id}" data-job="${x.id}">${esc(d.dn)}</button></td>
+      <td style="text-align:left">${esc(x.customer)}${S.sendErr[d.id] ? `<div class="note bad">${esc(S.sendErr[d.id])}</div>` : ''}</td>
+      ${connected ? `<td style="text-align:left">${contactCell}</td>` : ''}
+      <td style="text-align:left" class="mono">${esc([x.so, x.po, d.dn].filter(Boolean).join(' / '))}</td><td>${fmt(d.date)}</td><td>${gbp(despatchValue(x, d), 2)}</td>
+      <td><form class="inv" data-inv="${d.id}"><input type="text" id="inv-${d.id}" placeholder="INV-" aria-label="Xero invoice number for ${esc(d.dn)} if raised by hand"><button class="btn sm" type="submit">Save</button></form></td></tr>`;
+  }).join('');
+  const ready = pend.filter(([x, d]) => contactFor(x.customer) && (S.sendPick[d.id] ?? true));
+  const total = ready.reduce((a, [x, d]) => a + (despatchValue(x, d) || 0), 0);
+  const how = !connected ? '<p class="note">Connect Xero on the Xero tab to send these as draft invoices with one click. Until then, raise each in Xero by hand and type its invoice number here.</p>'
+    : S.xcErr ? `<div class="err">${esc(S.xcErr)} <button class="btn sm" type="button" data-xcreload>Try again</button></div>`
+    : !S.xc ? '<p class="note">Reading the contacts from Xero…</p>'
+    : `<p class="note">Each one becomes a <b>draft</b> invoice in Xero for exactly what went out on that despatch note, referenced sales order / PO / despatch note, on account <b>${esc(S.xc.defaults.accountCode)}</b>${S.xc.defaults.taxType ? ` with VAT code <b>${esc(S.xc.defaults.taxType)}</b>` : ''} (as on ${esc(S.xc.defaults.from)}). Keith checks and approves them in Xero. The board never approves or sends an invoice.</p>`;
+  return `<div class="panel"><h3>Waiting for Xero <span class="note">${pend.length}</span></h3>${how}
+    <div style="overflow-x:auto"><table class="lines"><thead><tr>${connected ? '<th></th>' : ''}<th>Despatch note</th><th style="text-align:left">Customer</th>${connected ? '<th style="text-align:left">Xero contact</th>' : ''}<th style="text-align:left">Reference</th><th>Sent</th><th>Net</th><th>Invoiced by hand?</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${connected && S.xc ? `<div class="actions"><button class="btn pri" type="button" data-sendxero ${ready.length && !S.busy ? '' : 'disabled'}>${S.busy ? 'Sending…' : `Create ${ready.length} draft invoice${ready.length === 1 ? '' : 's'} in Xero`}</button>${ready.length ? `<span class="note">${gbp(total, 2)} net</span>` : ''}</div>` : ''}</div>`;
+}
+/** The Xero contact a customer's invoices go to, or null while Mandy has to choose. */
+function contactFor(customer) {
+  if (!S.xc || S.forcePick.has(normName(customer))) return null;
+  return matchContact(customer, S.xc.contacts, S.xcMap);
+}
+async function loadXeroContacts() {
+  S.xcErr = null;
+  try { [S.xc, S.xcMap] = await Promise.all([data.xero('contacts'), data.loadContactMap()]); }
+  catch (e) { S.xcErr = e.message; }
+  render();
+}
+async function pickContact(key, id) {
+  const c = S.xc.contacts.find(x => x.id === id); if (!c) return;
+  S.xcMap.set(key, c); S.forcePick.delete(key); render();
+  try { await data.saveContact(key, c); toast(`Invoices for this customer will go to ${c.name} in Xero.`); }
+  catch (e) { S.xcMap.delete(key); render(); toast(e.message, null, true); }
+}
+async function sendToXero() {
+  const pend = []; S.jobs.forEach(x => x.despatches.forEach(d => { if (!d.xero) pend.push([x, d]); }));
+  const items = pend.map(([x, d]) => ({ x, d, m: contactFor(x.customer) }))
+    .filter(({ d, m }) => m && (S.sendPick[d.id] ?? true))
+    .map(({ d, m }) => ({ despatchId: d.id, contactId: m.id }));
+  if (!items.length) return;
+  S.busy = true; S.sendErr = {}; render();
+  try {
+    const r = await data.xero('send', { items });
+    const ok = r.results.filter(x => x.ok), bad = r.results.filter(x => !x.ok);
+    bad.forEach(x => { S.sendErr[x.despatchId] = x.error; });
+    const odd = ok.filter(x => x.mismatch);
+    toast(`${ok.length} draft invoice${ok.length === 1 ? '' : 's'} created in Xero${ok.length ? ` (${ok.map(x => x.invoiceNo).filter(Boolean).join(', ')})` : ''}.` +
+      (bad.length ? ` ${bad.length} not sent: see the list.` : '') + (odd.length ? ' Check the totals of ' + odd.map(x => x.invoiceNo).join(', ') + ' in Xero.' : ''), null, !!bad.length);
+  } catch (e) { toast(e.message, null, true); }
+  S.busy = false; await reload();
+}
+
 function callRow(j) {
   const today = todayIso();
   return `<div class="callrow">${j.calloffs.map((c, i) => { const done = i < j.despatches.length, late = !done && c < today;
@@ -482,13 +546,7 @@ function renderDespatch() {
       <label class="fl">Job
       <select class="f" id="dsel"><option value="">Choose a job…</option>${open.map(x => `<option value="${x.id}" ${x.id === S.desp ? 'selected' : ''}>${esc(x.so)} · ${esc(x.customer)}${x.po ? ' · PO ' + esc(x.po) : ''}${allDone(x) ? ' · ready' : ''}</option>`).join('')}</select></label>
       ${form}</div>
-    ${money ? `<div class="panel"><h3>Waiting for Xero <span class="note">${pend.length}</span></h3>
-      <p class="note">Until the Xero connection is switched on, raise each of these in Xero as an invoice for exactly these quantities, with the sales order, customer PO and despatch note as the reference. Then type the invoice number here so it leaves this list.</p>
-      ${pend.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th>Despatch note</th><th style="text-align:left">Customer</th><th style="text-align:left">Reference</th><th>Sent</th><th>Net</th><th>Xero invoice no.</th></tr></thead><tbody>
-        ${pend.map(([x, d]) => `<tr><td><button class="btn link mono" type="button" data-dn="${d.id}" data-job="${x.id}">${esc(d.dn)}</button></td><td style="text-align:left">${esc(x.customer)}</td>
-          <td style="text-align:left" class="mono">${esc([x.so, x.po, d.dn].filter(Boolean).join(' / '))}</td><td>${fmt(d.date)}</td><td>${gbp(despatchValue(x, d), 2)}</td>
-          <td><form class="inv" data-inv="${d.id}"><input type="text" id="inv-${d.id}" placeholder="INV-" aria-label="Xero invoice number for ${esc(d.dn)}" required><button class="btn sm" type="submit">Save</button></form></td></tr>`).join('')}
-        </tbody></table></div>` : '<div class="empty">Nothing waiting. Every despatch has an invoice number.</div>'}</div>` : ''}
+    ${money ? waitingForXero(pend) : ''}
     <div class="panel"><h3>Despatch notes</h3>
       ${all.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Sales order</th><th>Date</th>${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
       ${all.slice(0, 50).map(([x, d]) => `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>${money ? `<td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : '<span class="chip soon">not yet</span>'}</td>` : ''}<td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">View</button></td></tr>`).join('')}
@@ -653,6 +711,9 @@ document.addEventListener('click', e => {
   if (d.njdel) { collectNewJob(); S.newJob.lines.splice(+d.njdel, 1); keepInputs = false; return render(); }
   if (d.xero) return xeroAction(d.xero);
   if (d.fromxero) return makeJobFromXero(d.fromxero);
+  if ('sendxero' in d) return sendToXero();
+  if ('xcreload' in d) { S.xc = null; S.xcErr = null; return render(); }
+  if (d.xcchange) { S.forcePick.add(d.xcchange); return render(); }
 });
 $('scrim').addEventListener('click', () => { S.open = null; render(); });
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
@@ -661,6 +722,8 @@ document.addEventListener('input', e => {
   if (e.target.id === 'search') { S.search = e.target.value; const pos = e.target.selectionStart; renderJobs(); const s = $('search'); s.focus(); s.setSelectionRange(pos, pos); }
 });
 document.addEventListener('change', e => {
+  if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
+  if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
   if (e.target.id === 'cv-co') $('cv-co-row').hidden = !e.target.checked;
   if (e.target.id === 'nj-co') $('nj-co-row').hidden = !e.target.checked;
