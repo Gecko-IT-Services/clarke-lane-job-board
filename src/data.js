@@ -11,10 +11,10 @@ const fail = (what, error) => { const e = new Error(`${what}: ${error.message}`)
 /** Who is signed in, from the staff table. null role = not on the list. */
 export async function whoAmI() {
   const sb = await getSupabase();
-  const { data: { user } } = await sb.auth.getUser();
-  const { data, error } = await sb.from('staff').select('name, role').eq('email', (user?.email || '').toLowerCase()).maybeSingle();
+  const { data, error } = await sb.rpc('me');
   if (error) fail('Could not read the staff list', error);
-  return { email: user?.email || '', name: data?.name || '', role: data?.role || null };
+  const r = (data && data[0]) || {};
+  return { email: r.email || '', name: r.name || '', role: r.role || null };
 }
 
 /** All jobs in the app's shape (see src/core/jobs.js). */

@@ -61,7 +61,9 @@ export async function start() {
 
   let { data: { session } } = await client.auth.getSession();
   // A session left behind by someone else on a shared tablet is not this person's.
-  if (session && session.user?.email?.toLowerCase() !== account.username.toLowerCase()) {
+  // (Supabase may hold the address only in user_metadata, so an empty one is not a mismatch.)
+  const sessionEmail = (session?.user?.email || session?.user?.user_metadata?.email || '').toLowerCase();
+  if (session && sessionEmail && sessionEmail !== account.username.toLowerCase()) {
     await client.auth.signOut(); session = null;
   }
   if (!session) session = await silentSupabase(client);
