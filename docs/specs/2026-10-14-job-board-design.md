@@ -103,7 +103,8 @@ no network). `?role=floor` shows the shop-floor view. Serve with
 - Edge function `supabase/functions/xero` (verify_jwt off; checks the caller is office itself).
   Xero app at developer.xero.com, Web app, redirect
   `https://rdvkkftgjyrmraotcrfz.supabase.co/functions/v1/xero/callback`. Secrets in Supabase:
-  `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` (optional `XERO_SCOPES`).
+  `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` (optional `XERO_SCOPES`). App created 15 Oct (after 2 Mar 2026), so
+  granular scopes only: `accounting.invoices accounting.contacts.read` plus openid/profile/email/offline_access.
 - Tokens live in `private.xero_tokens` (schema not exposed), reached only through
   service-role functions. The board sees only `xero_status()` (organisation, who, when).
 - Connect: office presses Connect → Xero consent → callback checks a one-use state (15 min),

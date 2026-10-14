@@ -16,8 +16,10 @@ const admin = createClient(SB_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const CLIENT_ID = Deno.env.get('XERO_CLIENT_ID') || '';
 const CLIENT_SECRET = Deno.env.get('XERO_CLIENT_SECRET') || '';
+// Granular scopes: Xero apps created after 2 March 2026 cannot use the old broad ones.
+// accounting.invoices covers invoices and quotes (sales orders), read and draft-invoice write.
 const SCOPES = Deno.env.get('XERO_SCOPES') ||
-  'openid profile email offline_access accounting.transactions accounting.contacts.read';
+  'openid profile email offline_access accounting.invoices accounting.contacts.read';
 const CALLBACK = `${SB_URL}/functions/v1/xero/callback`;
 const BOARD = 'https://gecko-it-services.github.io/clarke-lane-job-board/';
 const ORIGINS = ['https://gecko-it-services.github.io', 'http://localhost:8080'];
