@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
+import { addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
   suggestProcesses, describeLine, unitPrice, allDone } from '../src/core/jobs.js';
 
 const job = over => ({
@@ -50,5 +50,15 @@ assert.equal(q78.lines[0].price, 3.01044);
 assert.equal(value(q78), 12041.76);
 assert.equal(despatchValue(q78, { lines: { 1: 1000 } }), 3010.44);
 assert.equal(unitPrice(5, 0), 0);
+
+// — Delivery days are working days. —
+assert.equal(addWorkingDays('2026-10-14', 10), '2026-10-28', 'Wed + 10 working days');
+assert.equal(addWorkingDays('2026-10-16', 1), '2026-10-19', 'Fri + 1 = Mon');
+assert.equal(addWorkingDays('2026-10-17', 0), '2026-10-17');
+
+// — Quote states come from jobs and dismissals, never stored. —
+const qs = quoteStates([{ spId: 1 }, { spId: 2 }, { spId: 3 }], [{ id: 9, so: 'SO-9729', spQuoteId: 1 }], [2, 1]);
+assert.deepEqual(qs.map(q => q.state), ['job', 'dismissed', 'waiting'], 'a job wins over a dismissal');
+assert.equal(qs[0].so, 'SO-9729');
 
 console.log('jobs: ok');

@@ -112,7 +112,9 @@ export async function graph(path, { headers = {} } = {}) {
   if (!res.ok) {
     let msg = res.statusText;
     try { msg = (await res.json()).error?.message || msg; } catch { /* not JSON */ }
-    const e = new Error(`SharePoint said: ${msg} (${res.status})`);
+    const e = new Error(res.status === 403
+      ? 'Your Microsoft account cannot open the Factory Jobs site in SharePoint, where the quotes are kept. Ask for read access to that site.'
+      : `SharePoint said: ${msg} (${res.status})`);
     e.status = res.status;
     throw e;
   }

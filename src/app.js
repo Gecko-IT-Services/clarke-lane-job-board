@@ -5,7 +5,8 @@
 import * as auth from './auth.js';
 import * as data from './data.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
-  lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2 } from './core/jobs.js';
+  lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
+  addWorkingDays, quoteStates } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -20,10 +21,12 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { me: null, jobs: [], quotes: null, quotesErr: null, tab: 'jobs', stage: 'current', search: '',
+const S = { me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
+/** Ordered quotes with where each stands (waiting / job / dismissed), or null until read. */
+const quotes = () => S.quotesRaw ? quoteStates(S.quotesRaw, S.jobs, S.dismissed) : null;
 
 /* ---------- start ---------- */
 async function boot() {
@@ -43,7 +46,7 @@ async function boot() {
   }
   $('gate').hidden = true; $('app').hidden = false;
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>Sign out</button>`;
-  try { const t = localStorage.getItem('clj.station'); if (t) S.station = t; } catch { /* none kept */ }
+  try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   fromHash();
   await reload();
   if (office()) loadQuotes();
@@ -54,17 +57,20 @@ function gate(html) { $('app').hidden = true; $('gate').hidden = false; $('gate-
 function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
 
 async function reload() {
-  try { S.jobs = await data.loadJobs({ office: office() }); S.error = null; }
-  catch (e) { S.error = e.message; }
+  try {
+    [S.jobs, S.dismissed] = await Promise.all([data.loadJobs({ office: office() }), office() ? data.loadDismissed() : []]);
+    S.error = null;
+    if (!S.stageChosen) {            // open on the first list that has something in it
+      const has = st => S.jobs.some(j => stage(j) === st);
+      S.stage = has('current') ? 'current' : has('upcoming') ? 'upcoming' : 'current';
+    }
+  } catch (e) { S.error = e.message; }
   render();
 }
 async function loadQuotes() {
   S.quotesErr = null;
-  try {
-    const qs = await data.orderedQuotes();
-    const taken = new Set(S.jobs.map(j => j.spQuoteId).filter(Boolean));
-    S.quotes = qs.map(q => ({ ...q, so: S.jobs.find(j => j.spQuoteId === q.spId)?.so || null, done: taken.has(q.spId) }));
-  } catch (e) { S.quotesErr = e.message; }
+  try { S.quotesRaw = await data.orderedQuotes(); }
+  catch (e) { S.quotesErr = e.message; }
   render();
 }
 
@@ -99,7 +105,7 @@ function statusChips(j) {
   else if (j.despatches.length) out.push('<span class="chip">Part despatched</span>');
   if (allDone(j)) out.push('<span class="chip ok">Ready to despatch</span>');
   else if (st === 'current') out.push(`<span class="chip">${doneCount(j)} of ${needed(j).length} done</span>`);
-  if (S.quotes && j.spQuoteId && !S.quotes.some(q => q.spId === j.spQuoteId)) out.push('<span class="chip late" title="The quote is no longer marked Ordered in the quote calculator">Quote no longer Ordered</span>');
+  if (S.quotesRaw && j.spQuoteId && !S.quotesRaw.some(q => q.spId === j.spQuoteId)) out.push('<span class="chip late" title="The quote is no longer marked Ordered in the quote calculator">Quote no longer Ordered</span>');
   return out.join('');
 }
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
@@ -118,19 +124,19 @@ async function toggleProc(id, p) {
 }
 
 async function startConvert(spId) {
-  const q = S.quotes.find(x => x.spId === spId);
+  const q = S.quotesRaw.find(x => x.spId === spId);
   S.conv = { spId, loading: true }; render();
   try {
     const lines = await data.quoteLines(spId);
     if (!lines.length) throw new Error(`${q.quoteNo} has no lines in QuoteLines, so there is nothing to make.`);
     S.conv = { spId, lines, procs: suggestProcesses(lines),
-      due: addDays(todayIso(), q.deliveryDays > 0 ? q.deliveryDays : 14), carriage: q.carriage > 0 };
+      due: addWorkingDays(todayIso(), q.deliveryDays > 0 ? q.deliveryDays : 10), carriage: q.carriage > 0 };
   } catch (e) { S.conv = null; toast(e.message, null, true); }
   render();
 }
 
 async function submitConvert(form) {
-  const q = S.quotes.find(x => x.spId === S.conv.spId);
+  const q = S.quotesRaw.find(x => x.spId === S.conv.spId);
   const procs = [...form.querySelectorAll('input[name=cv-p]:checked')].map(i => i.value);
   const due = $('cv-due').value;
   if (!procs.length) { $('cv-msg').textContent = 'Tick at least one process so the shop floor knows what the job needs.'; return; }
@@ -147,7 +153,7 @@ async function submitConvert(form) {
       contact_name: q.contactName, contact_email: q.contactEmail, customer_po: $('cv-po').value.trim(),
       due_date: calloffs.length ? calloffs[calloffs.length - 1] : due, calloff_dates: calloffs,
       notes: $('cv-notes').value.trim(), processes: procs, lines });
-    S.conv = null; keepInputs = false; await reload(); await loadQuotes();
+    S.conv = null; keepInputs = false; await reload();
     showDoc('soa', j.id);
     toast(`${j.so_number} created for ${q.customer}. It is in Upcoming on the Jobs tab.`);
   } catch (e) { toast(e.message, null, true); }
@@ -173,10 +179,32 @@ async function makeDespatch() {
   S.busy = false; render();
 }
 
+async function dismiss(spId) {
+  const q = S.quotesRaw.find(x => x.spId === spId);
+  if (S.conv?.spId === spId) S.conv = null;
+  S.dismissed = [...S.dismissed, spId]; render();
+  try {
+    await data.dismissQuote(spId, q.quoteNo);
+    toast(`${q.quoteNo} marked not a job. The quote itself is unchanged.`, () => restore(spId));
+  } catch (e) { S.dismissed = S.dismissed.filter(x => x !== spId); render(); toast(e.message, null, true); }
+}
+async function restore(spId) {
+  const q = S.quotesRaw.find(x => x.spId === spId);
+  S.dismissed = S.dismissed.filter(x => x !== spId); render();
+  try { await data.restoreQuote(spId); toast(`${q?.quoteNo || 'Quote'} is back in Ordered, ready to become a job.`); }
+  catch (e) { toast(e.message, null, true); reload(); }
+}
+async function cancelJob(id) {
+  const j = job(id);
+  try { await data.deleteJob(id); S.open = null; S.cancelAsk = null; toast(`${j.so} cancelled.`); }
+  catch (e) { toast(e.message, null, true); }
+  reload();
+}
+
 /* ---------- tabs ---------- */
 const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'Quotes'], ['despatch', 'Despatch']];
 function renderTabs() {
-  const ready = S.quotes ? S.quotes.filter(q => !q.done).length : 0;
+  const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero).length, 0);
   $('tabs').innerHTML = TABS.filter(([k]) => office() || k !== 'quotes').map(([k, t]) => {
     const b = k === 'quotes' ? ready : k === 'despatch' && office() ? toXero : 0;
@@ -251,14 +279,18 @@ function renderFloor() {
 
 /* ---------- quotes ---------- */
 function renderQuotes() {
+  const qs = quotes();
   let body;
   if (S.quotesErr) body = `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(S.quotesErr)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>`;
-  else if (!S.quotes) body = '<div class="empty">Reading the quote calculator…</div>';
+  else if (!qs) body = '<div class="empty">Reading the quote calculator…</div>';
   else {
-    const waiting = S.quotes.filter(q => !q.done), done = S.quotes.filter(q => q.done).slice(0, 12);
+    const waiting = qs.filter(q => q.state === 'waiting');
+    const made = qs.filter(q => q.state === 'job').sort((a, b) => b.jobId - a.jobId).slice(0, 12);
+    const gone = qs.filter(q => q.state === 'dismissed');
     body = `<div class="group-h">Ordered, ready to become a job <span class="note">${waiting.length}</span></div>
       <div class="qgrid">${waiting.map(quoteCard).join('') || '<div class="empty">Nothing waiting. When Levi presses Mark as Ordered on a quote, it appears here.</div>'}</div>
-      ${done.length ? `<div class="group-h">Already jobs <span class="note">latest ${done.length}</span></div><div class="qgrid">${done.map(quoteCard).join('')}</div>` : ''}`;
+      ${made.length ? `<div class="group-h">Already jobs <span class="note">latest ${made.length}</span></div><div class="qgrid">${made.map(quoteCard).join('')}</div>` : ''}
+      ${gone.length ? `<details class="gone"><summary class="group-h">Marked not a job <span class="note">${gone.length}</span></summary><div class="qgrid">${gone.map(quoteCard).join('')}</div></details>` : ''}`;
   }
   $('v-quotes').innerHTML = `<div class="sec-h"><h2>Quotes</h2><span class="sub">Levi keeps quoting in the quote calculator. When he presses Mark as Ordered, the quote appears here with its lines, ready to become a job.</span>
     <span class="right"><button class="btn sm" type="button" data-reloadquotes>Refresh</button></span></div>${body}`;
@@ -266,8 +298,10 @@ function renderQuotes() {
 function quoteCard(q) {
   const head = `<div class="h"><span class="mono">${esc(q.quoteNo)}${q.quoteDate ? ' · ' + fmt(q.quoteDate) : ''}</span>${q.sellTotal != null ? `<span class="amt num">${gbp(q.sellTotal + (q.carriage || 0), 2)}</span>` : ''}</div>
     <div class="cust">${esc(q.customer)}</div>${q.contactName ? `<div class="note">${esc(q.contactName)}</div>` : ''}`;
-  if (q.done) return `<article class="qcard">${head}<div class="actions"><span class="chip ok">Now ${esc(q.so)}</span><button class="btn link" type="button" data-open="${S.jobs.find(j => j.spQuoteId === q.spId)?.id}">Open job</button></div></article>`;
-  if (S.conv?.spId !== q.spId) return `<article class="qcard">${head}<div class="actions"><button class="btn pri" type="button" data-start="${q.spId}">Turn into a job</button></div></article>`;
+  if (q.state === 'job') return `<article class="qcard">${head}<div class="actions"><span class="chip ok">Now ${esc(q.so)}</span><button class="btn link" type="button" data-open="${q.jobId}">Open job</button></div></article>`;
+  if (q.state === 'dismissed') return `<article class="qcard">${head}<div class="actions"><span class="chip">Not a job</span><button class="btn sm" type="button" data-restore="${q.spId}">Put back</button></div></article>`;
+  if (S.conv?.spId !== q.spId) return `<article class="qcard">${head}<div class="actions"><button class="btn pri" type="button" data-start="${q.spId}">Turn into a job</button>
+    <button class="btn" type="button" data-dismiss="${q.spId}" title="Stop offering this quote here. The quote itself is not changed.">Not a job</button></div></article>`;
   if (S.conv.loading) return `<article class="qcard">${head}<div class="note">Reading the quote lines…</div></article>`;
   const c = S.conv;
   const lines = c.lines.map(l => `<tr><td>${esc(describeLine(l))}</td><td>${l.qty}</td><td>${unit(unitPrice(l.sellTotal, l.qty))}</td><td>${gbp(l.sellTotal, 2)}</td></tr>`).join('');
@@ -341,7 +375,8 @@ function renderDrawer() {
   const money = office();
   const edit = money ? `<form class="panel" data-editjob><h3>Order details</h3>
       <div class="row2"><label class="fl">Customer PO<input type="text" id="ej-po" value="${esc(j.po)}"></label>
-      <label class="fl">${j.calloffs.length ? 'Last call-off' : 'Due date'}<input type="date" id="ej-due" value="${esc(j.due)}" ${j.calloffs.length ? 'disabled' : ''}></label></div>
+      ${j.calloffs.length ? '' : `<label class="fl">Due date<input type="date" id="ej-due" value="${esc(j.due)}"></label>`}</div>
+      ${j.calloffs.length ? `<div class="fl">Call-off dates</div><div class="cdates">${j.calloffs.map((c, i) => `<label class="fl">${i + 1}${i < j.despatches.length ? ' (sent)' : ''}<input type="date" id="ej-c${i}" value="${esc(c)}" ${i < j.despatches.length ? 'disabled' : ''}></label>`).join('')}</div>` : ''}
       <label class="fl">Notes<input type="text" id="ej-notes" value="${esc(j.notes)}"></label>
       <details><summary class="note">Change which processes this job needs</summary><div class="pchecks" style="margin-top:8px">${PROCESSES.map(p => `<label><input type="checkbox" name="ej-p" value="${esc(p)}" ${j.procs[p] ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div></details>
       <div class="actions"><button class="btn" type="submit">Save changes</button></div></form>` : '';
@@ -363,7 +398,11 @@ function renderDrawer() {
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement</button>` : ''}
       ${stage(j) !== 'completed' ? `<button class="btn pri" type="button" data-desp="${j.id}">Despatch…</button>` : ''}
       ${j.despatches.map(d => `<button class="btn" type="button" data-dn="${d.id}" data-job="${j.id}">${esc(d.dn)}</button>`).join('')}
-    </div>${edit}`;
+    </div>${edit}
+    ${money && !j.despatches.length ? (S.cancelAsk === j.id
+      ? `<div class="panel warnbox"><b>Cancel ${esc(j.so)}?</b><span class="note">The job, its parts and ticks are removed. ${j.spQuoteId ? 'The quote goes back to the Quotes tab. ' : ''}The number ${esc(j.so)} is not used again.</span>
+         <div class="actions"><button class="btn danger" type="button" data-confirmcancel="${j.id}">Yes, cancel ${esc(j.so)}</button><button class="btn" type="button" data-keepjob>Keep it</button></div></div>`
+      : `<div><button class="btn link" type="button" data-canceljob="${j.id}">Cancel this job</button> <span class="note">Only while nothing has been despatched.</span></div>`) : ''}`;
 }
 async function saveJob(form) {
   const j = job(S.open);
@@ -372,6 +411,11 @@ async function saveJob(form) {
   const add = want.filter(p => !j.procs[p]), remove = needed(j).filter(p => !want.includes(p));
   const patch = { customer_po: $('ej-po').value.trim(), notes: $('ej-notes').value.trim() };
   if (!j.calloffs.length && $('ej-due').value) patch.due_date = $('ej-due').value;
+  if (j.calloffs.length) {
+    const dates = j.calloffs.map((c, i) => $('ej-c' + i).value || c);
+    if (dates.some((d, i) => i && d < dates[i - 1])) { toast('Call-off dates must be in order, earliest first.', null, true); return; }
+    patch.calloff_dates = dates; patch.due_date = dates[dates.length - 1];
+  }
   try { await data.updateJob(j.id, patch); await data.setJobProcesses(j.id, add, remove); toast(`${j.so} saved.`); }
   catch (e) { toast(e.message, null, true); }
   reload();
@@ -456,13 +500,18 @@ document.addEventListener('click', e => {
   if ('reload' in d) return location.reload();
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
-  if (d.stage) { S.stage = d.stage; return render(); }
+  if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; try { localStorage.setItem('clj.station', d.station); } catch { /* not kept */ } return render(); }
-  if (d.open) { S.open = +d.open; keepInputs = false; return render(); }
+  if (d.open) { S.open = +d.open; S.cancelAsk = null; keepInputs = false; return render(); }
   if ('close' in d) { S.open = null; return render(); }
   if (d.start) { keepInputs = false; return startConvert(+d.start); }
   if ('cancel' in d) { S.conv = null; return render(); }
-  if ('reloadquotes' in d) { S.quotes = null; render(); return loadQuotes(); }
+  if ('reloadquotes' in d) { S.quotesRaw = null; render(); return loadQuotes(); }
+  if (d.dismiss) return dismiss(+d.dismiss);
+  if (d.restore) return restore(+d.restore);
+  if (d.canceljob) { S.cancelAsk = +d.canceljob; return render(); }
+  if ('keepjob' in d) { S.cancelAsk = null; return render(); }
+  if (d.confirmcancel) return cancelJob(+d.confirmcancel);
   if (d.soa) return showDoc('soa', +d.soa);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if (d.desp) { S.desp = +d.desp; S.open = null; S.tab = 'despatch'; history.replaceState(null, '', '#despatch'); return render(); }

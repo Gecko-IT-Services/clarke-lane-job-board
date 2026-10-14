@@ -216,6 +216,14 @@ td.p{text-align:center}
 
 html,body{margin:0}
 [hidden]{display:none!important}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.warnbox{border-color:var(--bad)}
+.cdates{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+details.gone>summary{cursor:pointer;list-style:none}
+details.gone>summary::-webkit-details-marker{display:none}
+details.gone>summary::before{content:'▸ ';font-size:14px}
+details.gone[open]>summary::before{content:'▾ '}
+details.gone .qgrid{margin-top:12px}
 .btn.ghost{background:transparent;border-color:#3A3A3F;color:#fff}
 .who{color:#C8C8CC;font-weight:600;gap:10px}
 .err{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}

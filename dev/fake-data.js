@@ -13,12 +13,18 @@ const hide = j => role === 'office' ? j : { ...j, lines: j.lines.map(l => ({ ...
 export const whoAmI = async () => ({ email: 'x', name: role === 'office' ? 'Levi' : 'Shop Floor', role });
 export const loadJobs = async () => structuredClone(jobs).map(hide);
 export const setProcess = async (id, p, done, by) => { jobs.find(j => j.id === id).procs[p] = done ? { done, by, at: new Date().toISOString() } : { done: false }; };
-export const setJobProcesses = async () => {}; export const updateJob = async () => {};
+export const setJobProcesses = async () => {};
 export const createJob = async p => { const id = jobs.length + 1; jobs.push({ id, so: 'SO-97' + (29 + id), quote: p.quote_no, spQuoteId: p.sp_quote_id, customer: p.customer, contactName: '', contactEmail: '', po: p.customer_po, ordered: '2026-10-14', due: p.due_date, calloffs: p.calloff_dates, notes: p.notes, lines: p.lines.map((l, i) => ({ id: id * 100 + i, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price })), procs: Object.fromEntries(p.processes.map(x => [x, { done: false }])), despatches: [] }); return { id, so_number: 'SO-97' + (29 + id) }; };
 let dn = 2;
 export const createDespatch = async (jobId, lines) => { const j = jobs.find(x => x.id === jobId); const d = { id: dn, dn: 'DN-000' + dn++, date: '2026-10-14', lines: Object.fromEntries(lines.map(l => [l.job_line_id, l.qty])), xero: null }; j.despatches.push(d); return { id: d.id, dn_number: d.dn }; };
 export const markInvoiced = async (id, no) => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) d.xero = { no }; };
 export const onChange = async () => {};
+let dismissed = [];
+export const loadDismissed = async () => [...dismissed];
+export const dismissQuote = async id => { dismissed.push(id); };
+export const restoreQuote = async id => { dismissed = dismissed.filter(x => x !== id); };
+export const deleteJob = async id => { const j = jobs.find(x => x.id === id); if (j.despatches.length) throw new Error('This job has despatch notes, so it cannot be cancelled.'); jobs = jobs.filter(x => x !== j); };
+export const updateJob = async (id, patch) => { const j = jobs.find(x => x.id === id); if (patch.calloff_dates) j.calloffs = patch.calloff_dates; if (patch.due_date) j.due = patch.due_date; if ('customer_po' in patch) j.po = patch.customer_po; if ('notes' in patch) j.notes = patch.notes; };
 export const orderedQuotes = async () => [
   { spId: 301, quoteNo: 'Q-0301', customer: 'Example Customer Ltd', status: 'Ordered', carriage: 0, sellTotal: 393, deliveryDays: 10 },
   { spId: 303, quoteNo: 'Q-0303', customer: 'Third Example Ltd', status: 'Ordered', carriage: 12.5, sellTotal: 290.25, deliveryDays: 0, quoteDate: '2026-10-12' }];

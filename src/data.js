@@ -91,11 +91,40 @@ export async function markInvoiced(despatchId, invoiceNo) {
   if (!count) throw new Error('Not saved. Only Levi and Mandy can mark despatches as invoiced.');
 }
 
+/** sp_quote_id of every quote marked "Not a job". Office only. */
+export async function loadDismissed() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('quote_dismissals').select('sp_quote_id');
+  if (error) fail('Could not load the dismissed quotes', error);
+  return data.map(r => r.sp_quote_id);
+}
+export async function dismissQuote(spQuoteId, quoteNo) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('quote_dismissals').upsert({ sp_quote_id: spQuoteId, quote_no: quoteNo });
+  if (error) fail('Not saved', error);
+}
+export async function restoreQuote(spQuoteId) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('quote_dismissals').delete().eq('sp_quote_id', spQuoteId);
+  if (error) fail('Not saved', error);
+}
+
+/** Cancel a job made by mistake. Refused once anything has been despatched. */
+export async function deleteJob(jobId) {
+  const sb = await getSupabase();
+  const { error, count } = await sb.from('jobs').delete({ count: 'exact' }).eq('id', jobId);
+  if (error) {
+    if (error.code === '23503') throw new Error('This job has despatch notes, so it cannot be cancelled.');
+    fail('The job was not cancelled', error);
+  }
+  if (!count) throw new Error('The job was not cancelled. Only Levi and Mandy can cancel jobs.');
+}
+
 /** Calls back on any change to jobs, ticks or despatches by anyone. */
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_processes', 'despatches']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_processes', 'despatches', 'quote_dismissals']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

@@ -96,3 +96,26 @@ export function describeLine(l) {
 export const unitPrice = (sellTotal, qty) => qty > 0 ? Math.round((sellTotal / qty) * 1e6) / 1e6 : 0;
 
 export const round2 = n => Math.round(n * 100) / 100;
+
+/** A date n working days (Mon–Fri) after `from`. The quote calculator's DeliveryDays are working days. */
+export function addWorkingDays(from, n) {
+  const d = new Date(from + 'T12:00:00Z');
+  let left = Math.max(0, Math.round(n));
+  while (left > 0) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6) left--; }
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Where each Ordered quote stands, worked out fresh from the jobs and the dismissals every
+ * time (so a job created or cancelled on another screen shows straight away).
+ * Returns the quotes with { state: 'waiting' | 'job' | 'dismissed', jobId, so }.
+ */
+export function quoteStates(quotes, jobs, dismissedIds) {
+  const bySp = new Map(jobs.filter(j => j.spQuoteId).map(j => [j.spQuoteId, j]));
+  const gone = new Set(dismissedIds);
+  return quotes.map(q => {
+    const j = bySp.get(q.spId);
+    if (j) return { ...q, state: 'job', jobId: j.id, so: j.so };
+    return { ...q, state: gone.has(q.spId) ? 'dismissed' : 'waiting', jobId: null, so: null };
+  });
+}
