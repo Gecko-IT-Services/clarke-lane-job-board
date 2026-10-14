@@ -107,6 +107,11 @@ no network). `?role=floor` shows the shop-floor view. Serve with
   leaves the rest outstanding on that line. The despatch note lists this delivery and what is still
   to come; the board shows "Delivery 2 of 5".
 
+- **Customer from Xero** (15 Oct): the order form's customer box lists Clarke Lane's Xero contacts.
+  Picking one fills the contact person and delivery address (if empty) from Xero (`xero/contact`) and
+  saves the customer→contact match, so Send to Xero never asks for that customer. A name not in Xero
+  is allowed but flagged.
+
 ## Quotes that are not jobs, and cancelling
 - **Not a job** (office): an Ordered quote that should never become a job here (e.g. finished in
   Sage) is recorded in `quote_dismissals` and leaves the Ordered list; the quote itself is never

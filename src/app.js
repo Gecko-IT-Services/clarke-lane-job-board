@@ -281,6 +281,7 @@ function openOrderForm(prefill = {}, amendId = null) {
   S.form = { mode: amendId ? 'amend' : 'new', jobId: amendId, so: '', customer: '', po: '', contact: '', contactEmail: '',
     address: '', notes: '', due, lines: [blankLine(due)], procs: [], xeroQuoteId: null, spQuoteId: null, quoteNo: '', from: '', ...prefill };
   S.open = null; S.tab = 'jobs'; history.replaceState(null, '', '#jobs'); keepInputs = false; render(); window.scrollTo(0, 0);
+  if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
 }
 function openAmend(id) {
   const j = job(id);
@@ -312,7 +313,8 @@ function orderForm() {
     ${amend ? `<td class="num">${l.sent || 0}</td>` : ''}
     <td>${n.lines.length > 1 && !l.sent ? `<button class="btn sm" type="button" data-oldel="${i}" aria-label="Remove line ${i + 1}">Remove</button>` : ''}</td></tr>`).join('');
   return `<form class="panel newjob" data-orderform><h3>${amend ? `Amend ${esc(n.so)}` : 'New sales order'}${n.from ? ` <span class="note">from ${esc(n.from)}</span>` : ''}</h3>
-    <div class="row2"><label class="fl">Customer<input type="text" id="of-cust" value="${esc(n.customer)}" ${amend ? 'disabled' : 'required'}></label>
+    <div class="row2"><label class="fl">Customer${amend ? '' : ' (from Xero)'}<input type="text" id="of-cust" value="${esc(n.customer)}" ${amend ? 'disabled' : 'required list="xero-customers" autocomplete="off"'}>
+      ${amend ? '' : `<datalist id="xero-customers">${(S.xc?.contacts || []).map(c => `<option value="${esc(c.name)}"></option>`).join('')}</datalist><span class="note" id="of-custnote">${customerNote(n)}</span>`}</label>
       ${amend ? `<label class="fl">Order number<input type="text" value="${esc(n.so)}" disabled></label>`
         : `<label class="fl">Order number<input type="text" id="of-so" value="${esc(n.so)}" placeholder="Blank = next SO number"></label>`}</div>
     ${amend ? '' : '<p class="note">Leave the order number blank for a new order. For one that already has a number, type it: SO-9726 raised in Xero, SAGE-9701 carried over from Sage.</p>'}
@@ -334,6 +336,35 @@ function orderForm() {
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
     <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button></div>
     <p class="note" id="of-msg"></p></form>`;
+}
+/** Under the customer box: whether the order is on a Xero contact, as Sage insists on an account. */
+function customerNote(n) {
+  if (!S.xero) return 'Connect Xero on the Xero tab to pick customers from it.';
+  if (S.xcErr) return 'Could not read the customers from Xero: ' + S.xcErr;
+  if (!S.xc) return 'Reading the customers from Xero…';
+  const m = n.customer.trim() && contactFor(n.customer);
+  if (m) return `✓ Xero contact: ${m.name}`;
+  return n.customer.trim() ? 'Not a Xero customer yet. Pick one from the list, or add them in Xero first, so the invoice lands on the right account.'
+    : `Start typing to pick from ${S.xc.contacts.length} Xero contacts.`;
+}
+/** Picking a Xero contact fills in the contact person and delivery address (if empty) and
+ *  remembers the match, so Send to Xero never has to ask for this customer. */
+async function customerPicked(name) {
+  const n = S.form; if (!n || !S.xc) return;
+  const c = S.xc.contacts.find(x => x.name === name); 
+  if (!c) { $('of-custnote').textContent = customerNote({ ...n, customer: name }); return; }
+  collectForm();
+  S.xcMap.set(normName(c.name), c); S.forcePick.delete(normName(c.name));
+  data.saveContact(normName(c.name), c).catch(() => {});
+  $('of-custnote').textContent = 'Fetching the contact details from Xero…';
+  try {
+    const d = await data.xero('contact', { id: c.id });
+    if (S.form !== n) return;
+    if (!n.address.trim() && d.address) n.address = d.address;
+    if (!n.contact.trim() && d.person) n.contact = d.person;
+    if (!n.contactEmail && d.email) n.contactEmail = d.email;
+  } catch { /* details are a convenience; the match itself is saved */ }
+  keepInputs = false; render();
 }
 function splitLines() {
   collectForm();
@@ -535,7 +566,7 @@ function contactFor(customer) {
   return matchContact(customer, S.xc.contacts, S.xcMap);
 }
 async function loadXeroContacts() {
-  S.xcErr = null;
+  S.xcErr = null; if (S.form) collectForm();
   try { [S.xc, S.xcMap] = await Promise.all([data.xero('contacts'), data.loadContactMap()]); }
   catch (e) { S.xcErr = e.message; }
   render();
@@ -791,6 +822,7 @@ document.addEventListener('change', e => {
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
   if (e.target.id === 'ofilter') { S.orderFilter = e.target.value; render(); }
+  if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
 });
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();

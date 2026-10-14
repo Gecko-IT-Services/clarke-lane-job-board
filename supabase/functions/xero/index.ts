@@ -5,6 +5,7 @@
 //   GET  callback  Xero redirects here; stores tokens; sends the browser back to the board
 //   POST read      office only → sales orders (Xero quotes) and sales invoices since go-live
 //   POST contacts  office only → Xero contacts + the sales account/VAT Clarke Lane's invoices use
+//   POST contact   office only → one contact's details (contact person, email, delivery address)
 //   POST send      office only → one DRAFT sales invoice per despatch (never approved or sent)
 //   POST disconnect office only
 //
@@ -166,6 +167,21 @@ async function contacts() {
   return { contacts: list.map(c => ({ id: c.ContactID, name: c.Name })).sort((a, b) => a.name.localeCompare(b.name)), defaults: d };
 }
 
+/** One Xero contact, for filling in a new order the way Sage does when you pick the account. */
+async function contact(id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id || '')) throw new HttpError(400, 'Not a Xero contact id.');
+  const s = await session();
+  const c = (await xero(s, `Contacts/${id}`)).Contacts?.[0];
+  if (!c) throw new HttpError(404, 'That contact is not in Xero.');
+  const addrs: any[] = c.Addresses || [];
+  const a = addrs.find(x => x.AddressType === 'DELIVERY' && x.AddressLine1) || addrs.find(x => x.AddressType === 'STREET' && x.AddressLine1)
+    || addrs.find(x => x.AddressLine1);
+  const address = a ? [a.AttentionTo ? `FAO ${a.AttentionTo}` : '', a.AddressLine1, a.AddressLine2, a.AddressLine3, a.AddressLine4,
+    a.City, a.Region, a.PostalCode].filter(Boolean).join('\n') : '';
+  const person = [c.FirstName, c.LastName].filter(Boolean).join(' ');
+  return { id: c.ContactID, name: c.Name, email: c.EmailAddress || '', person, address };
+}
+
 /** items: [{ despatchId, contactId }] → one draft invoice each, recorded on the despatch. */
 async function send(items: { despatchId: number; contactId: string }[]) {
   if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Nothing chosen to send.');
@@ -242,6 +258,7 @@ Deno.serve(async req => {
     if (route === 'connect') return cors(req, json({ url: await connectUrl(me.email) }));
     if (route === 'read') return cors(req, json(await read()));
     if (route === 'contacts') return cors(req, json(await contacts()));
+    if (route === 'contact') return cors(req, json(await contact((await req.json().catch(() => ({}))).id)));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }
     throw new HttpError(404, 'Not found');

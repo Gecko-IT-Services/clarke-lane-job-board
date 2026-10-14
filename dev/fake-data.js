@@ -55,8 +55,9 @@ export const xero = async (route, body) => {
     quotes: [{ id: 'q1', number: 'SO-9776', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
       lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] }],
     invoices: [] };
-  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited' }, { id: 'c2', name: 'Second Example Ltd' }],
+  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited' }, { id: 'c2', name: 'Second Example Ltd' }, { id: 'c3', name: 'Third Example Engineering' }],
     defaults: { accountCode: '200', taxType: 'OUTPUT2', from: 'your last 100 invoices' } };
+  if (route === 'contact') return { id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
