@@ -50,7 +50,11 @@ async function boot() {
   try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   fromHash();
   await reload();
-  if (office()) { loadQuotes(); loadXeroStatus(); }
+  if (office()) {
+    loadQuotes();
+    loadXeroStatus().then(readXero);
+    setInterval(() => { if (!document.hidden) readXero(); }, 10 * 60000);
+  }
   const back = new URLSearchParams(location.search).get('xero');
   if (back) {
     history.replaceState(null, '', location.pathname + '#xero'); S.tab = 'xero';
@@ -205,7 +209,7 @@ function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero).length, 0);
   $('tabs').innerHTML = TABS.filter(([k]) => office() || (k !== 'quotes' && k !== 'xero')).map(([k, t]) => {
-    const b = k === 'quotes' ? ready : k === 'despatch' && office() ? toXero : 0;
+    const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'despatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${b ? `<span class="badge">${b}</span>` : ''}</a>`;
   }).join('');
 }
@@ -422,11 +426,26 @@ async function loadXeroStatus() {
   try { S.xero = await data.xeroStatus(); } catch (e) { S.xeroErr = e.message; }
   render();
 }
+/** Xero's sales orders and invoices, read automatically when the board opens and every
+ *  10 minutes after, so nobody has to press anything. */
+let xeroReading = false;
+async function readXero() {
+  if (!S.xero || xeroReading) return;
+  xeroReading = true;
+  try { S.xeroRead = await data.xero('read'); S.xeroReadAt = new Date(); S.xeroErr = null; }
+  catch (e) { S.xeroErr = e.message; }
+  xeroReading = false; render();
+}
+/** Xero sales orders since go-live that are not on the board yet. */
+function xeroWaiting() {
+  if (!S.xeroRead) return [];
+  return S.xeroRead.quotes.filter(q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED', 'INVOICED'].includes(q.status) && !onBoard(q));
+}
 async function xeroAction(route) {
   S.xeroBusy = true; S.xeroErr = null; render();
   try {
     if (route === 'connect') { location.href = (await data.xero('connect')).url; return; }
-    if (route === 'read') { S.xeroRead = await data.xero('read'); await loadXeroStatus(); }
+    if (route === 'read') { await loadXeroStatus(); S.xeroBusy = false; await readXero(); return; }
     if (route === 'disconnect') { await data.xero('disconnect'); S.xero = null; S.xeroRead = null; toast('Xero disconnected.'); }
   } catch (e) { S.xeroErr = e.message; }
   S.xeroBusy = false; render();
@@ -436,7 +455,8 @@ function renderXero() {
   const x = S.xero, r = S.xeroRead, busy = S.xeroBusy ? 'disabled' : '';
   const head = x
     ? `<p>Connected to <b>${esc(x.tenant_name)}</b> by ${esc(x.connected_by)} on ${fmtLong(x.connected_at)}.</p>
-       <div class="actions"><button class="btn pri" type="button" data-xero="read" ${busy}>${S.xeroBusy ? 'Reading Xero…' : 'Read from Xero'}</button>
+       <p class="note">${S.xeroReadAt ? `Read from Xero at ${S.xeroReadAt.toTimeString().slice(0, 5)}. It refreshes by itself every 10 minutes.` : 'Reading from Xero…'}</p>
+       <div class="actions"><button class="btn" type="button" data-xero="read" ${busy || xeroReading ? 'disabled' : ''}>Refresh now</button>
        <button class="btn" type="button" data-xero="connect" ${busy}>Reconnect</button></div>`
     : `<p>Not connected. Connecting lets the board read Clarke Lane's sales orders and invoices in Xero, and later create draft invoices for Keith. It never approves, sends or deletes anything in Xero.</p>
        <div class="actions"><button class="btn pri" type="button" data-xero="connect" ${busy}>Connect to Xero</button></div>
@@ -444,7 +464,7 @@ function renderXero() {
   let body = '';
   if (r) {
     const sos = r.quotes.filter(q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED'].includes(q.status));
-    const waiting = sos.filter(q => !onBoard(q) && q.status !== 'INVOICED');
+    const waiting = xeroWaiting();
     const done = sos.filter(q => onBoard(q));
     body = `<div class="panel"><h3>Sales order numbers</h3>
         <p>The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none yet'}</b>. The next job made on the board will be <b>SO-${r.counterNext ?? '…'}</b>.</p>
@@ -519,11 +539,23 @@ function renderQuotes() {
     const gone = qs.filter(q => q.state === 'dismissed');
     body = `<div class="group-h">Ordered, ready to become a job <span class="note">${waiting.length}</span></div>
       <div class="qgrid">${waiting.map(quoteCard).join('') || '<div class="empty">Nothing waiting. When Levi presses Mark as Ordered on a quote, it appears here.</div>'}</div>
+      ${xeroInbox()}
       ${made.length ? `<div class="group-h">Already jobs <span class="note">latest ${made.length}</span></div><div class="qgrid">${made.map(quoteCard).join('')}</div>` : ''}
       ${gone.length ? `<details class="gone"><summary class="group-h">Marked not a job <span class="note">${gone.length}</span></summary><div class="qgrid">${gone.map(quoteCard).join('')}</div></details>` : ''}`;
   }
-  $('v-quotes').innerHTML = `<div class="sec-h"><h2>Quotes</h2><span class="sub">Levi keeps quoting in the quote calculator. When he presses Mark as Ordered, the quote appears here with its lines, ready to become a job.</span>
+  $('v-quotes').innerHTML = `<div class="sec-h"><h2>New orders</h2><span class="sub">Everything waiting to go on the board: quotes Levi has marked Ordered in the quote calculator, and sales orders raised in Xero. Both refresh by themselves.</span>
     <span class="right"><button class="btn sm" type="button" data-reloadquotes>Refresh</button></span></div>${body}`;
+}
+/** Sales orders raised in Xero that are not on the board: the second inbox beside Levi's quotes. */
+function xeroInbox() {
+  if (!S.xero) return '';
+  const w = xeroWaiting();
+  if (!S.xeroRead) return '<div class="group-h">Sales orders raised in Xero <span class="note">reading…</span></div>';
+  return `<div class="group-h">Sales orders raised in Xero, not on the board <span class="note">${w.length}</span></div>
+    <div class="qgrid">${w.map(q => `<article class="qcard"><div class="h"><span class="mono">${esc(q.number)} · ${fmt(q.date)}</span><span class="amt num">${gbp(q.subTotal, 2)}</span></div>
+      <div class="cust">${esc(q.customer)}</div>${q.reference ? `<div class="note">Ref ${esc(q.reference)}</div>` : ''}
+      <div class="actions"><span class="chip">${esc(q.status.toLowerCase())} in Xero</span><button class="btn pri" type="button" data-fromxero="${esc(q.id)}">Make job</button></div></article>`).join('')
+      || '<div class="empty">None. Every sales order in Xero is on the board.</div>'}</div>`;
 }
 function quoteCard(q) {
   const head = `<div class="h"><span class="mono">${esc(q.quoteNo)}${q.quoteDate ? ' · ' + fmt(q.quoteDate) : ''}</span>${q.sellTotal != null ? `<span class="amt num">${gbp(q.sellTotal + (q.carriage || 0), 2)}</span>` : ''}</div>

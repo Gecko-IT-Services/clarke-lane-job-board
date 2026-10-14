@@ -112,6 +112,10 @@ no network). `?role=floor` shows the shop-floor view. Serve with
   saves the customer→contact match, so Send to Xero never asks for that customer. A name not in Xero
   is allowed but flagged.
 
+- **Xero read is automatic** (15 Oct): on opening the board (office) and every 10 minutes while it is
+  visible; "Refresh now" on the Xero tab. Xero sales orders not on the board appear on the Quotes tab
+  (titled "New orders") beside Levi's ordered quotes, each with Make job; the tab badge counts both.
+
 ## Quotes that are not jobs, and cancelling
 - **Not a job** (office): an Ordered quote that should never become a job here (e.g. finished in
   Sage) is recorded in `quote_dismissals` and leaves the Ordered list; the quote itself is never
