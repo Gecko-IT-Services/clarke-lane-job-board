@@ -23,7 +23,9 @@ Mockup agreed with Philip: https://claude.ai/artifact/AG5aXVQL7FPDu9AFNZFEeY (pr
    soonest first. Each tick records who and when. Undo is one tap.
 5. **Despatch**, whole or part, including call-offs. Each despatch is a numbered despatch note
    (ordered / previously sent / this delivery / still to come, signature boxes, no prices).
-6. **Send to Xero.** Each despatch not yet sent becomes a **draft** sales invoice in Xero for
+6. **Waiting for Xero (until phase 2).** Office sees every despatch not yet invoiced, with its
+   net value and reference; Mandy raises it in Xero by hand and types the invoice number in.
+7. **Send to Xero (phase 2).** Each despatch not yet sent becomes a **draft** sales invoice in Xero for
    exactly what went out, referenced SO / customer PO / DN. Keith approves in Xero as usual.
    The board never approves, emails or deletes anything in Xero.
 
@@ -73,6 +75,19 @@ Supabase account** (Philip, 14 Oct), with Gecko invited to manage it.
 - **Xero (phase 2)** needs OAuth with a client secret and refresh token, so it runs in a
   Supabase Edge Function with the secret in its environment, never in the browser. Contact names must match Xero
   contacts; unknown names surface as "not matched" rather than being guessed.
+
+## Sign-in setup (done 14 Oct)
+Entra app "Clarke Lane Job Board" (client 5b796cc6-c5c9-4500-a84c-07e7952c421f, tenant
+d59ce9e8-b410-44cb-894e-9e65dfe021f4): SPA redirects for the Pages URL and http://localhost:8080/,
+delegated User.Read + Sites.ReadWrite.All with admin consent, optional claim `email` on the ID token.
+Supabase › Authentication › Azure is on with that client ID and tenant URL. **The client secret in
+Supabase's Azure form expires October 2028 — renew it in Entra and paste the new value into Supabase
+before then.** The board itself never uses the secret.
+
+## Testing without a Clarke Lane sign-in
+`dev/smoke.html` loads the real app with `dev/fake-auth.js` and `dev/fake-data.js` (made-up jobs,
+no network). `?role=floor` shows the shop-floor view. Serve with
+`python3 -m http.server 8080` and open http://localhost:8080/dev/smoke.html.
 
 ## Phases
 1. Board: jobs, ticks, shop floor, quote → job, SOA, despatch notes, call-offs.
