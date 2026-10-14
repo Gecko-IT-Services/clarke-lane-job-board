@@ -204,7 +204,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'Quotes'], ['despatch', 'Despatch'], ['xero', 'Xero']];
+const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'New orders'], ['despatch', 'Despatch'], ['xero', 'Xero']];
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero).length, 0);
@@ -527,44 +527,52 @@ function renderFloor() {
     <div class="floor">${cards || `<div class="empty">${st === 'all' ? 'No open jobs.' : `Nothing waiting for ${esc(st)}.`}</div>`}</div>`;
 }
 
-/* ---------- quotes ---------- */
-function renderQuotes() {
-  const qs = quotes();
-  let body;
-  if (S.quotesErr) body = `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(S.quotesErr)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>`;
-  else if (!qs) body = '<div class="empty">Reading the quote calculator…</div>';
-  else {
-    const waiting = qs.filter(q => q.state === 'waiting');
-    const made = qs.filter(q => q.state === 'job').sort((a, b) => b.jobId - a.jobId).slice(0, 12);
-    const gone = qs.filter(q => q.state === 'dismissed');
-    body = `<div class="group-h">Ordered, ready to become a job <span class="note">${waiting.length}</span></div>
-      <div class="qgrid">${waiting.map(quoteCard).join('') || '<div class="empty">Nothing waiting. When Levi presses Mark as Ordered on a quote, it appears here.</div>'}</div>
-      ${xeroInbox()}
-      ${made.length ? `<div class="group-h">Already jobs <span class="note">latest ${made.length}</span></div><div class="qgrid">${made.map(quoteCard).join('')}</div>` : ''}
-      ${gone.length ? `<details class="gone"><summary class="group-h">Marked not a job <span class="note">${gone.length}</span></summary><div class="qgrid">${gone.map(quoteCard).join('')}</div></details>` : ''}`;
+/* ---------- new orders: Levi's ordered quotes and Xero sales orders, as Sage-style rows ---------- */
+/** Both inboxes as one list of rows: { kind: 'quote' | 'xero', date, ref, customer, who, net, state, ... }. */
+function inboxRows() {
+  const rows = [];
+  for (const q of quotes() || []) rows.push({ kind: 'quote', key: 'q' + q.spId, date: q.quoteDate, ref: q.quoteNo, customer: q.customer,
+    who: q.contactName, net: q.sellTotal != null ? q.sellTotal + (q.carriage || 0) : null, state: q.state, so: q.so, jobId: q.jobId, spId: q.spId });
+  if (S.xeroRead) for (const x of S.xeroRead.quotes.filter(q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED'].includes(q.status))) {
+    const j = onBoard(x);
+    if (!j && x.status === 'INVOICED') continue;
+    rows.push({ kind: 'xero', key: 'x' + x.id, date: x.date, ref: x.number, customer: x.customer, who: x.reference ? 'Ref ' + x.reference : '',
+      net: x.subTotal, state: j ? 'job' : 'waiting', so: j?.so, jobId: j?.id, xeroId: x.id, xeroStatus: x.status });
   }
-  $('v-quotes').innerHTML = `<div class="sec-h"><h2>New orders</h2><span class="sub">Everything waiting to go on the board: quotes Levi has marked Ordered in the quote calculator, and sales orders raised in Xero. Both refresh by themselves.</span>
-    <span class="right"><button class="btn sm" type="button" data-reloadquotes>Refresh</button></span></div>${body}`;
+  return rows.sort((p, q) => ((q.date || '') < (p.date || '') ? -1 : (q.date || '') > (p.date || '') ? 1 : p.ref < q.ref ? 1 : -1));
 }
-/** Sales orders raised in Xero that are not on the board: the second inbox beside Levi's quotes. */
-function xeroInbox() {
-  if (!S.xero) return '';
-  const w = xeroWaiting();
-  if (!S.xeroRead) return '<div class="group-h">Sales orders raised in Xero <span class="note">reading…</span></div>';
-  return `<div class="group-h">Sales orders raised in Xero, not on the board <span class="note">${w.length}</span></div>
-    <div class="qgrid">${w.map(q => `<article class="qcard"><div class="h"><span class="mono">${esc(q.number)} · ${fmt(q.date)}</span><span class="amt num">${gbp(q.subTotal, 2)}</span></div>
-      <div class="cust">${esc(q.customer)}</div>${q.reference ? `<div class="note">Ref ${esc(q.reference)}</div>` : ''}
-      <div class="actions"><span class="chip">${esc(q.status.toLowerCase())} in Xero</span><button class="btn pri" type="button" data-fromxero="${esc(q.id)}">Make job</button></div></article>`).join('')
-      || '<div class="empty">None. Every sales order in Xero is on the board.</div>'}</div>`;
+function inboxRow(r) {
+  const src = r.kind === 'quote' ? 'Quote' : `Xero${r.xeroStatus ? ' · ' + esc(r.xeroStatus.toLowerCase()) : ''}`;
+  let act;
+  if (r.state === 'job') act = `<button class="btn link" type="button" data-open="${r.jobId}">${esc(r.so)}</button>`;
+  else if (r.state === 'dismissed') act = `<button class="btn sm" type="button" data-restore="${r.spId}">Put back</button>`;
+  else if (r.kind === 'xero') act = `<button class="btn sm pri" type="button" data-fromxero="${esc(r.xeroId)}">Make job</button>`;
+  else if (S.conv?.spId === r.spId) act = '<span class="note">Reading the lines…</span>';
+  else act = `<button class="btn sm pri" type="button" data-start="${r.spId}">Make job</button>
+    <button class="btn sm" type="button" data-dismiss="${r.spId}" title="Stop offering this quote here. The quote itself is not changed.">Not a job</button>`;
+  return `<tr><td>${r.date ? fmtLong(r.date) : '—'}</td><td class="mono">${esc(r.ref)}</td><td>${src}</td>
+    <td style="text-align:left"><b>${esc(r.customer)}</b></td><td style="text-align:left">${esc(r.who) || ''}</td>
+    <td class="num">${r.net != null ? gbp(r.net, 2) : ''}</td><td><div class="acts">${act}</div></td></tr>`;
 }
-function quoteCard(q) {
-  const head = `<div class="h"><span class="mono">${esc(q.quoteNo)}${q.quoteDate ? ' · ' + fmt(q.quoteDate) : ''}</span>${q.sellTotal != null ? `<span class="amt num">${gbp(q.sellTotal + (q.carriage || 0), 2)}</span>` : ''}</div>
-    <div class="cust">${esc(q.customer)}</div>${q.contactName ? `<div class="note">${esc(q.contactName)}</div>` : ''}`;
-  if (q.state === 'job') return `<article class="qcard">${head}<div class="actions"><span class="chip ok">Now ${esc(q.so)}</span><button class="btn link" type="button" data-open="${q.jobId}">Open job</button></div></article>`;
-  if (q.state === 'dismissed') return `<article class="qcard">${head}<div class="actions"><span class="chip">Not a job</span><button class="btn sm" type="button" data-restore="${q.spId}">Put back</button></div></article>`;
-  if (S.conv?.spId !== q.spId) return `<article class="qcard">${head}<div class="actions"><button class="btn pri" type="button" data-start="${q.spId}">Turn into a job</button>
-    <button class="btn" type="button" data-dismiss="${q.spId}" title="Stop offering this quote here. The quote itself is not changed.">Not a job</button></div></article>`;
-  return `<article class="qcard">${head}<div class="note">Reading the quote lines…</div></article>`;
+function inboxTable(rows, empty) {
+  return `<div class="tbl-wrap"><table class="lines inbox"><thead><tr><th>Date</th><th>Number</th><th>From</th><th style="text-align:left">Customer</th><th style="text-align:left">Contact / ref</th><th>Net</th><th></th></tr></thead>
+    <tbody>${rows.map(inboxRow).join('') || `<tr><td colspan="7" class="empty">${empty}</td></tr>`}</tbody></table></div>`;
+}
+function renderQuotes() {
+  const rows = inboxRows();
+  const waiting = rows.filter(r => r.state === 'waiting'), made = rows.filter(r => r.state === 'job').slice(0, 20), gone = rows.filter(r => r.state === 'dismissed');
+  const reading = [];
+  if (!S.quotesRaw && !S.quotesErr) reading.push('the quote calculator');
+  if (S.xero && !S.xeroRead && !S.xeroErr) reading.push('Xero');
+  const errs = [S.quotesErr ? `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(S.quotesErr)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>` : '',
+    S.xero && S.xeroErr ? `<div class="err"><b>Could not read the sales orders from Xero.</b> ${esc(S.xeroErr)} <button class="btn sm" type="button" data-xero="read">Try again</button></div>` : ''].join('');
+  $('v-quotes').innerHTML = `<div class="sec-h"><h2>New orders</h2><span class="sub">Quotes Levi has marked Ordered in the quote calculator, and sales orders raised in Xero, newest first. Both refresh by themselves.</span>
+      <span class="right"><button class="btn sm" type="button" data-reloadquotes>Refresh</button></span></div>
+    ${errs}${reading.length ? `<p class="note">Reading ${reading.join(' and ')}…</p>` : ''}
+    <div class="group-h">Waiting to go on the board <span class="note">${waiting.length}</span></div>
+    ${inboxTable(waiting, reading.length ? 'Reading…' : 'Nothing waiting. Quotes marked Ordered and sales orders raised in Xero appear here.')}
+    ${made.length ? `<details class="gone"><summary class="group-h">Already on the board <span class="note">latest ${made.length}</span></summary>${inboxTable(made, '')}</details>` : ''}
+    ${gone.length ? `<details class="gone"><summary class="group-h">Marked not a job <span class="note">${gone.length}</span></summary>${inboxTable(gone, '')}</details>` : ''}`;
 }
 
 /* ---------- despatch ---------- */
@@ -826,7 +834,7 @@ document.addEventListener('click', e => {
   if ('olcancel' in d) { const back = S.form.jobId; S.form = null; if (back) S.open = back; return render(); }
   if ('close' in d) { S.open = null; return render(); }
   if (d.start) { keepInputs = false; return startConvert(+d.start); }
-  if ('reloadquotes' in d) { S.quotesRaw = null; render(); return loadQuotes(); }
+  if ('reloadquotes' in d) { S.quotesRaw = null; render(); loadQuotes(); return readXero(); }
   if (d.dismiss) return dismiss(+d.dismiss);
   if (d.restore) return restore(+d.restore);
   if (d.soa) return showDoc('soa', +d.soa);
