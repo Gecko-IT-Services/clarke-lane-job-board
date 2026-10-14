@@ -1,0 +1,5 @@
+# Only what differs from Supabase's defaults.
+[functions.xero]
+# Xero's redirect back (…/xero/callback) carries no Supabase token; the function checks
+# the caller itself on every other route.
+verify_jwt = false

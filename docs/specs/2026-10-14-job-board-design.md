@@ -99,6 +99,23 @@ no network). `?role=floor` shows the shop-floor view. Serve with
 - Delivery date defaults to the quote's DeliveryDays in **working** days (10 if none).
 - Office can move call-off dates that have not been sent yet; they must stay in order.
 
+## Xero (built 15 Oct, read side first)
+- Edge function `supabase/functions/xero` (verify_jwt off; checks the caller is office itself).
+  Xero app at developer.xero.com, Web app, redirect
+  `https://rdvkkftgjyrmraotcrfz.supabase.co/functions/v1/xero/callback`. Secrets in Supabase:
+  `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` (optional `XERO_SCOPES`).
+- Tokens live in `private.xero_tokens` (schema not exposed), reached only through
+  service-role functions. The board sees only `xero_status()` (organisation, who, when).
+- Connect: office presses Connect → Xero consent → callback checks a one-use state (15 min),
+  stores tokens, insists the organisation is Clarke Lane. Refresh tokens rotate and lapse after
+  60 days unused; then the board says to reconnect.
+- Read: Xero quotes since 1 Oct (Mandy's SO-97xx sales orders) and sales invoices. The SO counter
+  is raised past the highest SO in Xero on every read, so the two never clash. Each sales order not
+  on the board can be made a job ("Make job") keeping its number and the Xero quote id.
+- **New job** (office): jobs not from a quote — phone orders, Sage carry-over (number SAGE-9701),
+  Xero sales orders (SO-9726). A typed SO number moves the counter past it.
+- Next: write side — despatch → draft ACCREC invoice (never approved or sent by the board).
+
 ## Money
 Unit price = quote line total ÷ quantity, kept to 6dp so qty × unit gives back the quoted total
 (Q-0078: 4000 × £3.01044 = £12,041.76; at 4dp it would be £12,041.60). Values are summed per line

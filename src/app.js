@@ -21,7 +21,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
+const S = { xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -49,7 +49,12 @@ async function boot() {
   try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   fromHash();
   await reload();
-  if (office()) loadQuotes();
+  if (office()) { loadQuotes(); loadXeroStatus(); }
+  const back = new URLSearchParams(location.search).get('xero');
+  if (back) {
+    history.replaceState(null, '', location.pathname + '#xero'); S.tab = 'xero';
+    if (back === 'connected') toast('Xero connected.'); else toast(back, null, true);
+  }
   data.onChange(debounce(reload, 400)).catch(() => {});
   setInterval(() => { if (!document.hidden) reload(); }, 60000);   // backstop if realtime drops
 }
@@ -202,11 +207,11 @@ async function cancelJob(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'Quotes'], ['despatch', 'Despatch']];
+const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'Quotes'], ['despatch', 'Despatch'], ['xero', 'Xero']];
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero).length, 0);
-  $('tabs').innerHTML = TABS.filter(([k]) => office() || k !== 'quotes').map(([k, t]) => {
+  $('tabs').innerHTML = TABS.filter(([k]) => office() || (k !== 'quotes' && k !== 'xero')).map(([k, t]) => {
     const b = k === 'quotes' ? ready : k === 'despatch' && office() ? toXero : 0;
     return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${b ? `<span class="badge">${b}</span>` : ''}</a>`;
   }).join('');
@@ -241,13 +246,136 @@ function renderJobs() {
   const empty = S.jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
     : (office() ? 'No jobs yet. Turn an ordered quote into a job on the Quotes tab.' : 'No jobs yet. They appear here once the office creates them.');
   $('v-jobs').innerHTML = `
-    <div class="sec-h"><h2>Jobs</h2><span class="sub">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to despatch.` : ''}</span></div>
+    <div class="sec-h"><h2>Jobs</h2><span class="sub">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to despatch.` : ''}</span>
+      ${money && !S.newJob ? '<span class="right"><button class="btn pri" type="button" data-newjob>New job</button></span>' : ''}</div>
+    ${S.newJob ? newJobForm() : ''}
     <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
       <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
     <div class="tbl-wrap"><table class="jobs"><thead><tr><th>Customer</th><th>Sales order</th><th>Customer PO</th><th>${S.stage === 'completed' ? 'Despatched' : 'Due'}</th>
       ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? `<th style="text-align:right">${S.stage === 'completed' ? 'Value' : 'Left to send'}</th>` : ''}</tr></thead>
       <tbody>${rows || `<tr><td colspan="15" class="empty">${empty}</td></tr>`}</tbody></table></div>
     <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full job, the order acknowledgement and despatch notes.</p>`;
+}
+
+/* ---------- new job (not from a quote: phone orders, Sage carry-over, Xero sales orders) ---------- */
+const blankLine = () => ({ part: '', qty: '', price: '' });
+function openNewJob(prefill = {}) {
+  S.newJob = { so: '', customer: '', po: '', contact: '', due: addWorkingDays(todayIso(), 10), notes: '',
+    lines: [blankLine()], procs: [], xeroQuoteId: null, from: '', ...prefill };
+  S.tab = 'jobs'; history.replaceState(null, '', '#jobs'); keepInputs = false; render(); window.scrollTo(0, 0);
+}
+/** Copy what is typed into S.newJob, so adding or removing a line keeps everything else. */
+function collectNewJob() {
+  const n = S.newJob, v = id => $(id)?.value ?? '';
+  Object.assign(n, { so: v('nj-so'), customer: v('nj-cust'), po: v('nj-po'), contact: v('nj-contact'), due: v('nj-due'), notes: v('nj-notes') });
+  n.lines = n.lines.map((l, i) => ({ part: v('nj-part' + i), qty: v('nj-qty' + i), price: v('nj-price' + i) }));
+  n.procs = [...document.querySelectorAll('input[name=nj-p]:checked')].map(i => i.value);
+  n.calloffs = $('nj-co')?.checked; n.coN = v('nj-n'); n.coEvery = v('nj-every');
+}
+function newJobForm() {
+  const n = S.newJob;
+  const rows = n.lines.map((l, i) => `<tr><td><input type="text" id="nj-part${i}" value="${esc(l.part)}" placeholder="Part and spec" aria-label="Part, line ${i + 1}" style="width:100%"></td>
+    <td><input type="number" id="nj-qty${i}" value="${esc(l.qty)}" min="1" step="1" aria-label="Quantity, line ${i + 1}"></td>
+    <td><input type="number" id="nj-price${i}" value="${esc(l.price)}" min="0" step="any" aria-label="Unit price, line ${i + 1}"></td>
+    <td>${n.lines.length > 1 ? `<button class="btn sm" type="button" data-njdel="${i}" aria-label="Remove line ${i + 1}">Remove</button>` : ''}</td></tr>`).join('');
+  return `<form class="panel newjob" data-newjobform><h3>New job${n.from ? ` <span class="note">from ${esc(n.from)}</span>` : ''}</h3>
+    <div class="row2"><label class="fl">Customer<input type="text" id="nj-cust" value="${esc(n.customer)}" required></label>
+      <label class="fl">Order number<input type="text" id="nj-so" value="${esc(n.so)}" placeholder="Leave blank for the next SO number"></label></div>
+    <p class="note">Leave the order number blank for a new order. For an order that already has a number, type it: SO-9726 for one raised in Xero, SAGE-9701 for one carried over from Sage.</p>
+    <div class="row2"><label class="fl">Customer PO<input type="text" id="nj-po" value="${esc(n.po)}"></label>
+      <label class="fl">Contact<input type="text" id="nj-contact" value="${esc(n.contact)}"></label></div>
+    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div><button class="btn sm" type="button" data-njadd>Add a line</button></div>
+    <div class="row2"><label class="fl">Promised delivery<input type="date" id="nj-due" value="${esc(n.due)}" required></label></div>
+    <div class="fl">Processes this job needs</div>
+    <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="nj-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="nj-co" ${n.calloffs ? 'checked' : ''}> Delivered in call-offs</label>
+    <div class="row2" id="nj-co-row" ${n.calloffs ? '' : 'hidden'}><label class="fl">How many call-offs<input type="number" id="nj-n" min="2" max="24" value="${esc(n.coN || 4)}"></label>
+      <label class="fl">How often<select class="f" id="nj-every">${[['7', 'Weekly'], ['14', 'Every 2 weeks'], ['m', 'Monthly']].map(([v, t]) => `<option value="${v}" ${n.coEvery === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <p class="note" style="grid-column:1/-1">The first call-off is on the promised delivery date.</p></div>
+    <label class="fl">Notes for the job (optional)<input type="text" id="nj-notes" value="${esc(n.notes)}"></label>
+    <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>Create job</button><button class="btn" type="button" data-njcancel>Cancel</button></div>
+    <p class="note" id="nj-msg"></p></form>`;
+}
+async function submitNewJob() {
+  collectNewJob();
+  const n = S.newJob, msg = t => { $('nj-msg').textContent = t; };
+  const lines = n.lines.filter(l => l.part.trim() || l.qty || l.price);
+  if (!n.customer.trim()) return msg('Enter the customer.');
+  if (!lines.length) return msg('Add at least one part.');
+  const bad = lines.find(l => !l.part.trim() || !(Number(l.qty) > 0) || !Number.isInteger(Number(l.qty)) || l.price === '' || Number(l.price) < 0);
+  if (bad) return msg('Every line needs a part, a whole-number quantity and a unit price (0 is allowed).');
+  if (!n.procs.length) return msg('Tick at least one process so the shop floor knows what the job needs.');
+  if (!n.due) return msg('Enter the promised delivery date.');
+  if (n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
+  const calloffs = n.calloffs ? calloffDates(n.due, Math.max(2, Math.min(24, +n.coN || 2)), n.coEvery || '7') : [];
+  S.busy = true; render();
+  try {
+    const j = await data.createJob({ so_number: n.so.trim().toUpperCase(), customer: n.customer.trim(), customer_po: n.po.trim(),
+      contact_name: n.contact.trim(), xero_quote_id: n.xeroQuoteId, quote_no: '', notes: n.notes.trim(),
+      due_date: calloffs.length ? calloffs[calloffs.length - 1] : n.due, calloff_dates: calloffs, processes: n.procs,
+      lines: lines.map(l => ({ part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price) })) });
+    const who = n.customer.trim();
+    S.newJob = null; keepInputs = false; await reload();
+    if (S.tab === 'jobs') showDoc('soa', j.id);
+    toast(`${j.so_number} created for ${who}.`);
+  } catch (e) { toast(e.message, null, true); }
+  S.busy = false; render();
+}
+
+/* ---------- Xero ---------- */
+async function loadXeroStatus() {
+  try { S.xero = await data.xeroStatus(); } catch (e) { S.xeroErr = e.message; }
+  render();
+}
+async function xeroAction(route) {
+  S.xeroBusy = true; S.xeroErr = null; render();
+  try {
+    if (route === 'connect') { location.href = (await data.xero('connect')).url; return; }
+    if (route === 'read') { S.xeroRead = await data.xero('read'); await loadXeroStatus(); }
+    if (route === 'disconnect') { await data.xero('disconnect'); S.xero = null; S.xeroRead = null; toast('Xero disconnected.'); }
+  } catch (e) { S.xeroErr = e.message; }
+  S.xeroBusy = false; render();
+}
+const onBoard = q => S.jobs.find(j => j.xeroQuoteId === q.id || j.so.toUpperCase() === String(q.number).toUpperCase());
+function renderXero() {
+  const x = S.xero, r = S.xeroRead, busy = S.xeroBusy ? 'disabled' : '';
+  const head = x
+    ? `<p>Connected to <b>${esc(x.tenant_name)}</b> by ${esc(x.connected_by)} on ${fmtLong(x.connected_at)}.</p>
+       <div class="actions"><button class="btn pri" type="button" data-xero="read" ${busy}>${S.xeroBusy ? 'Reading Xero…' : 'Read from Xero'}</button>
+       <button class="btn" type="button" data-xero="connect" ${busy}>Reconnect</button></div>`
+    : `<p>Not connected. Connecting lets the board read Clarke Lane's sales orders and invoices in Xero, and later create draft invoices for Keith. It never approves, sends or deletes anything in Xero.</p>
+       <div class="actions"><button class="btn pri" type="button" data-xero="connect" ${busy}>Connect to Xero</button></div>
+       <p class="note">You will be sent to Xero to sign in. Pick Clarke Lane Engineering when it asks which organisation.</p>`;
+  let body = '';
+  if (r) {
+    const sos = r.quotes.filter(q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED'].includes(q.status));
+    const waiting = sos.filter(q => !onBoard(q) && q.status !== 'INVOICED');
+    const done = sos.filter(q => onBoard(q));
+    body = `<div class="panel"><h3>Sales order numbers</h3>
+        <p>The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none yet'}</b>. The next job made on the board will be <b>SO-${r.counterNext ?? '…'}</b>.</p>
+        <p class="note">The board always keeps its next number past anything raised in Xero, so the two never clash. Once everyone uses the board, stop raising sales orders as quotes in Xero.</p></div>
+      <div class="panel"><h3>Sales orders in Xero, not on the board yet <span class="note">${waiting.length}</span></h3>
+        ${waiting.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th>Order</th><th style="text-align:left">Customer</th><th style="text-align:left">Reference</th><th>Status</th><th>Date</th><th>Net</th><th></th></tr></thead><tbody>
+          ${waiting.map(q => `<tr><td class="mono">${esc(q.number)}</td><td style="text-align:left">${esc(q.customer)}</td><td style="text-align:left">${esc(q.reference)}</td>
+            <td><span class="chip">${esc(q.status.toLowerCase())}</span></td><td>${fmt(q.date)}</td><td>${gbp(q.subTotal, 2)}</td>
+            <td><button class="btn sm" type="button" data-fromxero="${esc(q.id)}">Make job</button></td></tr>`).join('')}</tbody></table></div>`
+          : '<div class="empty">Every sales order in Xero is on the board.</div>'}
+        ${done.length ? `<p class="note">${done.length} more already on the board.</p>` : ''}</div>
+      <details class="panel"><summary><b>Invoices in Xero since 1 October</b> <span class="note">${r.invoices.length}</span></summary>
+        <div style="overflow-x:auto;margin-top:10px"><table class="lines"><thead><tr><th>Invoice</th><th style="text-align:left">Customer</th><th style="text-align:left">Reference</th><th>Status</th><th>Date</th><th>Net</th></tr></thead><tbody>
+        ${r.invoices.map(i => `<tr><td class="mono">${esc(i.number)}</td><td style="text-align:left">${esc(i.customer)}</td><td style="text-align:left">${esc(i.reference)}</td><td>${esc(i.status.toLowerCase())}</td><td>${fmt(i.date)}</td><td>${gbp(i.subTotal, 2)}</td></tr>`).join('')}
+        </tbody></table></div></details>`;
+  }
+  $('v-xero').innerHTML = `<div class="sec-h"><h2>Xero</h2><span class="sub">Clarke Lane's Xero, read through the board's own connection.</span></div>
+    ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
+    <div class="panel"><h3>Connection</h3>${head}</div>${body}`;
+}
+function makeJobFromXero(id) {
+  const q = S.xeroRead.quotes.find(x => x.id === id);
+  openNewJob({ from: `Xero ${q.number}`, so: q.number.toUpperCase().replace(/^SO(\d)/, 'SO-$1'), customer: q.customer, po: q.reference,
+    due: q.expiry && q.expiry >= todayIso() ? q.expiry : addWorkingDays(todayIso(), 10), xeroQuoteId: q.id,
+    lines: q.lines.filter(l => l.qty > 0).map(l => ({ part: l.description, qty: String(l.qty), price: String(l.unit) })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine()]) });
 }
 
 /* ---------- shop floor ---------- */
@@ -475,17 +603,18 @@ function restoreInputs(m) {
     if (!m.has(k)) return;
     if (el.type === 'checkbox') el.checked = m.get(k); else el.value = m.get(k);
     if (el.id === 'cv-co') $('cv-co-row').hidden = !el.checked;
+    if (el.id === 'nj-co') $('nj-co-row').hidden = !el.checked;
   });
 }
 function render() {
   if (!S.me) return;
   const kept = snapshotInputs();
-  if (!office() && S.tab === 'quotes') S.tab = 'jobs';
+  if (!office() && (S.tab === 'quotes' || S.tab === 'xero')) S.tab = 'jobs';
   renderTabs();
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, despatch: renderDespatch })[S.tab]();
+  ({ jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, despatch: renderDespatch, xero: renderXero })[S.tab]();
   renderDrawer();
   restoreInputs(kept);
 }
@@ -518,6 +647,12 @@ document.addEventListener('click', e => {
   if ('print' in d) return window.print();
   if ('closedoc' in d) return closeDoc();
   if (t.id === 'mkdn') return makeDespatch();
+  if ('newjob' in d) return openNewJob();
+  if ('njcancel' in d) { S.newJob = null; return render(); }
+  if ('njadd' in d) { collectNewJob(); S.newJob.lines.push(blankLine()); keepInputs = false; return render(); }
+  if (d.njdel) { collectNewJob(); S.newJob.lines.splice(+d.njdel, 1); keepInputs = false; return render(); }
+  if (d.xero) return xeroAction(d.xero);
+  if (d.fromxero) return makeJobFromXero(d.fromxero);
 });
 $('scrim').addEventListener('click', () => { S.open = null; render(); });
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
@@ -528,11 +663,13 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
   if (e.target.id === 'cv-co') $('cv-co-row').hidden = !e.target.checked;
+  if (e.target.id === 'nj-co') $('nj-co-row').hidden = !e.target.checked;
 });
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('convert' in f.dataset) return submitConvert(f);
   if ('editjob' in f.dataset) return saveJob(f);
+  if ('newjobform' in f.dataset) return submitNewJob();
   if (f.dataset.inv) {
     const no = f.querySelector('input').value.trim(); if (!no) return;
     try { await data.markInvoiced(+f.dataset.inv, no); toast(`Recorded as ${no}.`); } catch (err) { toast(err.message, null, true); }

@@ -29,7 +29,7 @@ export async function loadJobs({ office }) {
   for (const r of [jobs, lines, prices, procs, desps, dlines]) if (r.error) fail('Could not load the jobs', r.error);
   const price = new Map(prices.data.map(p => [p.job_line_id, Number(p.unit_price)]));
   const byJob = new Map(jobs.data.map(j => [j.id, {
-    id: j.id, so: j.so_number, quote: j.quote_no, spQuoteId: j.sp_quote_id, customer: j.customer,
+    id: j.id, so: j.so_number, quote: j.quote_no, spQuoteId: j.sp_quote_id, xeroQuoteId: j.xero_quote_id, customer: j.customer,
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
     ordered: j.ordered_on, due: j.due_date, calloffs: j.calloff_dates || [], notes: j.notes,
     lines: [], procs: {}, despatches: [],
@@ -126,6 +126,29 @@ export async function onChange(cb) {
   const ch = sb.channel('board');
   for (const table of ['jobs', 'job_processes', 'despatches', 'quote_dismissals']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
+}
+
+/* ---------- Xero (through the edge function; no token ever reaches the browser) ---------- */
+
+export async function xeroStatus() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('xero_status');
+  if (error) fail('Could not read the Xero connection', error);
+  return data?.[0] || null;
+}
+
+/** route: 'connect' | 'read' | 'disconnect' */
+export async function xero(route) {
+  const sb = await getSupabase();
+  const { data: { session } } = await sb.auth.getSession();
+  let res;
+  try {
+    res = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/xero/${route}`, { method: 'POST',
+      headers: { Authorization: `Bearer ${session?.access_token}`, apikey: CONFIG.SUPABASE_KEY } });
+  } catch { throw new Error('Could not reach the Xero connection. Check the internet connection and try again.'); }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `The Xero connection failed (${res.status}).`);
+  return body;
 }
 
 /* ---------- Levi's quotes (SharePoint) ---------- */

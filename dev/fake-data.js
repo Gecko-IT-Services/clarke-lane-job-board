@@ -14,7 +14,7 @@ export const whoAmI = async () => ({ email: 'x', name: role === 'office' ? 'Levi
 export const loadJobs = async () => structuredClone(jobs).map(hide);
 export const setProcess = async (id, p, done, by) => { jobs.find(j => j.id === id).procs[p] = done ? { done, by, at: new Date().toISOString() } : { done: false }; };
 export const setJobProcesses = async () => {};
-export const createJob = async p => { const id = jobs.length + 1; jobs.push({ id, so: 'SO-97' + (29 + id), quote: p.quote_no, spQuoteId: p.sp_quote_id, customer: p.customer, contactName: '', contactEmail: '', po: p.customer_po, ordered: '2026-10-14', due: p.due_date, calloffs: p.calloff_dates, notes: p.notes, lines: p.lines.map((l, i) => ({ id: id * 100 + i, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price })), procs: Object.fromEntries(p.processes.map(x => [x, { done: false }])), despatches: [] }); return { id, so_number: 'SO-97' + (29 + id) }; };
+export const createJob = async p => { const id = jobs.length + 1; const so = p.so_number || 'SO-97' + (29 + id); jobs.push({ id, so, xeroQuoteId: p.xero_quote_id, quote: p.quote_no, spQuoteId: p.sp_quote_id, customer: p.customer, contactName: '', contactEmail: '', po: p.customer_po, ordered: '2026-10-14', due: p.due_date, calloffs: p.calloff_dates, notes: p.notes, lines: p.lines.map((l, i) => ({ id: id * 100 + i, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price })), procs: Object.fromEntries(p.processes.map(x => [x, { done: false }])), despatches: [] }); return { id, so_number: so }; };
 let dn = 2;
 export const createDespatch = async (jobId, lines) => { const j = jobs.find(x => x.id === jobId); const d = { id: dn, dn: 'DN-000' + dn++, date: '2026-10-14', lines: Object.fromEntries(lines.map(l => [l.job_line_id, l.qty])), xero: null }; j.despatches.push(d); return { id: d.id, dn_number: d.dn }; };
 export const markInvoiced = async (id, no) => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) d.xero = { no }; };
@@ -29,3 +29,13 @@ export const orderedQuotes = async () => [
   { spId: 301, quoteNo: 'Q-0301', customer: 'Example Customer Ltd', status: 'Ordered', carriage: 0, sellTotal: 393, deliveryDays: 10 },
   { spId: 303, quoteNo: 'Q-0303', customer: 'Third Example Ltd', status: 'Ordered', carriage: 12.5, sellTotal: 290.25, deliveryDays: 0, quoteDate: '2026-10-12' }];
 export const quoteLines = async () => [{ lineNo: 1, qty: 10, sellTotal: 290.25, desc: 'Valve guard', thickness: 2, material: 'Zintec', process: 'Laser', folds: 3, weld: 0, inserts: 0, paint: true, plating: 0, holes: 0 }];
+export const xeroStatus = async () => sessionStorage.getItem('fakeXero') ? { tenant_name: 'Clarke Lane Engineering Ltd', connected_by: 'levi@clarke-lane.co.uk', connected_at: '2026-10-15T09:00:00Z' } : null;
+export const xero = async route => {
+  if (route === 'connect') { sessionStorage.setItem('fakeXero', '1'); return { url: location.pathname + '?xero=connected#xero' }; }
+  if (route === 'read') return { organisation: 'Clarke Lane Engineering Ltd', highestSo: 9728, counterNext: 9729,
+    quotes: [{ id: 'q1', number: 'SO-9726', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
+      lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] },
+      { id: 'q2', number: 'SO-9725', status: 'DRAFT', customer: 'Second Example Ltd', reference: 'P31608', date: '2026-10-01', expiry: '', subTotal: 526.29, lines: [] }],
+    invoices: [{ id: 'i1', number: 'INV-31933', status: 'PAID', customer: 'Example Customer Ltd', reference: '9724', date: '2026-10-01', subTotal: 71.4 }] };
+  if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
+};
