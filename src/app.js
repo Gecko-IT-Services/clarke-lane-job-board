@@ -7,7 +7,7 @@ import * as data from './data.js';
 import { normName, matchContact } from './core/xero.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
-  addWorkingDays, quoteStates } from './core/jobs.js';
+  addWorkingDays, quoteStates, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -22,7 +22,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
+const S = { view: 'board', orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -102,18 +102,22 @@ function dueChip(due) {
 }
 function statusChips(j) {
   const st = stage(j), out = [];
+  if (j.status === 'held') out.push('<span class="chip late">On hold</span>');
+  if (st === 'cancelled') return '<span class="chip">Cancelled</span>';
   if (st === 'completed') {
     if (office()) out.push(j.despatches.some(d => !d.xero) ? '<span class="chip soon">Waiting for Xero</span>' : '<span class="chip ok">Invoiced</span>');
     else out.push('<span class="chip ok">All sent</span>');
     return out.join('');
   }
-  if (j.calloffs.length) out.push(`<span class="chip">Call-off ${Math.min(j.despatches.length + 1, j.calloffs.length)} of ${j.calloffs.length}</span>`);
+  const del = deliveryLabel(j);
+  if (del) out.push(`<span class="chip">${del}</span>`);
   else if (j.despatches.length) out.push('<span class="chip">Part despatched</span>');
   if (allDone(j)) out.push('<span class="chip ok">Ready to despatch</span>');
   else if (st === 'current') out.push(`<span class="chip">${doneCount(j)} of ${needed(j).length} done</span>`);
   if (S.quotesRaw && j.spQuoteId && !S.quotesRaw.some(q => q.spId === j.spQuoteId)) out.push('<span class="chip late" title="The quote is no longer marked Ordered in the quote calculator">Quote no longer Ordered</span>');
   return out.join('');
 }
+const onBoardStage = j => ['upcoming', 'current'].includes(stage(j));
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
 
 /* ---------- actions ---------- */
@@ -135,41 +139,21 @@ async function startConvert(spId) {
   try {
     const lines = await data.quoteLines(spId);
     if (!lines.length) throw new Error(`${q.quoteNo} has no lines in QuoteLines, so there is nothing to make.`);
-    S.conv = { spId, lines, procs: suggestProcesses(lines),
-      due: addWorkingDays(todayIso(), q.deliveryDays > 0 ? q.deliveryDays : 10), carriage: q.carriage > 0 };
-  } catch (e) { S.conv = null; toast(e.message, null, true); }
-  render();
-}
-
-async function submitConvert(form) {
-  const q = S.quotesRaw.find(x => x.spId === S.conv.spId);
-  const procs = [...form.querySelectorAll('input[name=cv-p]:checked')].map(i => i.value);
-  const due = $('cv-due').value;
-  if (!procs.length) { $('cv-msg').textContent = 'Tick at least one process so the shop floor knows what the job needs.'; return; }
-  if (!due) { $('cv-msg').textContent = 'Enter the promised delivery date.'; return; }
-  let calloffs = [];
-  if ($('cv-co').checked) calloffs = calloffDates(due, Math.max(2, Math.min(24, +$('cv-n').value || 2)), $('cv-every').value);
-  const lines = S.conv.lines.map(l => ({ part: describeLine(l), qty: l.qty, unit_price: unitPrice(l.sellTotal, l.qty) }));
-  if ($('cv-carr')?.checked) lines.push({ part: 'Carriage', qty: 1, unit_price: q.carriage });
-  const bad = lines.find(l => !(l.qty > 0));
-  if (bad) { $('cv-msg').textContent = `"${bad.part}" has no quantity on the quote. Fix it in the quote calculator first.`; return; }
-  S.busy = true; render();
-  try {
-    const j = await data.createJob({ sp_quote_id: q.spId, quote_no: q.quoteNo, customer: q.customer,
-      contact_name: q.contactName, contact_email: q.contactEmail, customer_po: $('cv-po').value.trim(),
-      due_date: calloffs.length ? calloffs[calloffs.length - 1] : due, calloff_dates: calloffs,
-      notes: $('cv-notes').value.trim(), processes: procs, lines });
-    S.conv = null; keepInputs = false; await reload();
-    showDoc('soa', j.id);
-    toast(`${j.so_number} created for ${q.customer}. It is in Upcoming on the Jobs tab.`);
-  } catch (e) { toast(e.message, null, true); }
-  S.busy = false; render();
+    const bad = lines.find(l => !(l.qty > 0));
+    if (bad) throw new Error(`"${describeLine(bad)}" has no quantity on ${q.quoteNo}. Fix it in the quote calculator first.`);
+    const due = addWorkingDays(todayIso(), q.deliveryDays > 0 ? q.deliveryDays : 10);
+    S.conv = null;
+    openOrderForm({ from: `quote ${q.quoteNo}`, spQuoteId: q.spId, quoteNo: q.quoteNo, customer: q.customer,
+      contact: q.contactName, contactEmail: q.contactEmail, due, procs: suggestProcesses(lines),
+      lines: lines.map(l => ({ part: describeLine(l), qty: String(l.qty), price: String(unitPrice(l.sellTotal, l.qty)), due }))
+        .concat(q.carriage > 0 ? [{ part: 'Carriage', qty: '1', price: String(q.carriage), due }] : []) });
+  } catch (e) { S.conv = null; toast(e.message, null, true); render(); }
 }
 
 async function makeDespatch() {
   const j = job(S.desp);
-  const lines = j.lines.map(l => {
-    const v = Math.floor(+document.querySelector(`[data-dq="${l.id}"]`).value || 0);
+  const lines = j.lines.filter(l => left(j, l) > 0).map(l => {
+    const v = Math.floor(+document.querySelector(`[data-dq="${l.id}"]`)?.value || 0);
     return { job_line_id: l.id, qty: Math.max(0, Math.min(v, left(j, l))) };
   }).filter(l => l.qty > 0);
   if (!lines.length) { $('dn-msg').textContent = 'Enter a quantity for at least one part.'; return; }
@@ -180,7 +164,7 @@ async function makeDespatch() {
     const done = stage(job(j.id)) === 'completed';
     if (done) S.desp = null;
     showDoc('dn', j.id, d.id);
-    toast(`${d.dn_number} created.` + (done ? ` ${j.so} is complete.` : ' The rest stays on the job.'));
+    toast(`${d.dn_number} created.` + (done ? ` ${j.so} is fully despatched.` : ' The rest stays outstanding on the order.'));
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
 }
@@ -200,9 +184,17 @@ async function restore(spId) {
   try { await data.restoreQuote(spId); toast(`${q?.quoteNo || 'Quote'} is back in Ordered, ready to become a job.`); }
   catch (e) { toast(e.message, null, true); reload(); }
 }
-async function cancelJob(id) {
+async function setStatus(id, status) {
   const j = job(id);
-  try { await data.deleteJob(id); S.open = null; S.cancelAsk = null; toast(`${j.so} cancelled.`); }
+  try {
+    await data.setJobStatus(id, status); S.ask = null;
+    toast({ held: `${j.so} is on hold. It cannot be despatched until it is released.`, open: `${j.so} released.`, cancelled: `${j.so} cancelled. It stays in the Sales orders list.` }[status]);
+  } catch (e) { toast(e.message, null, true); }
+  reload();
+}
+async function deleteOrder(id) {
+  const j = job(id);
+  try { await data.deleteJob(id); S.open = null; S.ask = null; toast(`${j.so} deleted.`); }
   catch (e) { toast(e.message, null, true); }
   reload();
 }
@@ -225,9 +217,17 @@ function procCell(j, p) {
   return `<button type="button" class="tick ${s.done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(title)}" aria-label="${esc(title)}">${s.done ? TICK : ''}</button>`;
 }
 function renderJobs() {
+  const money = office();
+  const head = `<div class="sec-h"><h2>${S.view === 'orders' ? 'Sales orders' : 'Jobs'}</h2>
+      ${money ? `<div class="seg" role="group" aria-label="View"><button type="button" data-view="board" aria-pressed="${S.view === 'board'}">Job board</button><button type="button" data-view="orders" aria-pressed="${S.view === 'orders'}">Sales orders</button></div>` : ''}
+      ${money && !S.form ? '<span class="right"><button class="btn pri" type="button" data-neworder>New order</button></span>' : ''}</div>
+    ${S.form ? orderForm() : ''}`;
+  $('v-jobs').innerHTML = head + (S.view === 'orders' && money ? salesOrders() : jobBoard());
+}
+function jobBoard() {
   const q = S.search.toLowerCase();
   const by = { upcoming: [], current: [], completed: [] };
-  S.jobs.forEach(j => by[stage(j)].push(j));
+  S.jobs.forEach(j => by[stage(j)]?.push(j));
   const list = by[S.stage].filter(j => !q || [j.so, j.customer, j.po, j.quote, ...j.lines.map(l => l.part)].some(s => (s || '').toLowerCase().includes(q)));
   list.sort(S.stage === 'completed' ? (a, b) => (lastDespatch(b) < lastDespatch(a) ? -1 : 1) : byDue);
   const money = office();
@@ -243,83 +243,141 @@ function renderJobs() {
       ${PROCESSES.map(p => `<td class="p">${procCell(j, p)}</td>`).join('')}
       ${money ? `<td class="val num">${gbp(S.stage === 'completed' ? value(j) : value(j, { remaining: true }))}</td>` : ''}</tr>`;
   }).join('');
-  const blurb = { upcoming: 'Confirmed jobs nobody has started yet.', current: 'At least one process done, or part despatched.', completed: 'Everything despatched.' }[S.stage];
+  const blurb = { upcoming: 'Confirmed orders nobody has started yet.', current: 'At least one process done, or part despatched.', completed: 'Everything despatched.' }[S.stage];
   const empty = S.jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
-    : (office() ? 'No jobs yet. Turn an ordered quote into a job on the Quotes tab.' : 'No jobs yet. They appear here once the office creates them.');
-  $('v-jobs').innerHTML = `
-    <div class="sec-h"><h2>Jobs</h2><span class="sub">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to despatch.` : ''}</span>
-      ${money && !S.newJob ? '<span class="right"><button class="btn pri" type="button" data-newjob>New job</button></span>' : ''}</div>
-    ${S.newJob ? newJobForm() : ''}
+    : (money ? 'No orders yet. Turn an ordered quote into one on the Quotes tab, or press New order.' : 'No jobs yet. They appear here once the office creates them.');
+  return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to despatch.` : ''}</p>
     <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
       <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
     <div class="tbl-wrap"><table class="jobs"><thead><tr><th>Customer</th><th>Sales order</th><th>Customer PO</th><th>${S.stage === 'completed' ? 'Despatched' : 'Due'}</th>
-      ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? `<th style="text-align:right">${S.stage === 'completed' ? 'Value' : 'Left to send'}</th>` : ''}</tr></thead>
+      ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? `<th style="text-align:right">${S.stage === 'completed' ? 'Value' : 'Outstanding'}</th>` : ''}</tr></thead>
       <tbody>${rows || `<tr><td colspan="15" class="empty">${empty}</td></tr>`}</tbody></table></div>
-    <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full job, the order acknowledgement and despatch notes.</p>`;
+    <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full order.</p>`;
+}
+/** The Sage-style list of sales orders, with despatch and invoice status. Office only. */
+function salesOrders() {
+  const q = S.search.toLowerCase();
+  const f = S.orderFilter;
+  const keep = j => f === 'all' ? true : f === 'cancelled' ? j.status === 'cancelled' : f === 'held' ? j.status === 'held'
+    : f === 'complete' ? stage(j) === 'completed' : stage(j) !== 'completed' && j.status !== 'cancelled';
+  const list = S.jobs.filter(keep).filter(j => !q || [j.so, j.customer, j.po, j.quote].some(s => (s || '').toLowerCase().includes(q)))
+    .sort((a, b) => (a.so < b.so ? 1 : -1));
+  const rows = list.map(j => `<tr data-open="${j.id}"><td class="mono">${esc(j.so)}</td><td>${fmt(j.ordered)}</td><td style="text-align:left"><b>${esc(j.customer)}</b></td>
+      <td style="text-align:left">${esc(j.po) || '—'}</td><td class="num">${gbp(value(j), 2)}</td><td>${stage(j) === 'completed' || j.status === 'cancelled' ? '' : dueChip(nextDue(j))}</td>
+      <td>${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Despatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}${j.status === 'held' ? ' <span class="chip late">On hold</span>' : ''}</td>
+      <td><span class="chip ${invoiceStatus(j) === 'Invoiced' ? 'ok' : ''}">${invoiceStatus(j)}</span></td></tr>`).join('');
+  const filters = [['outstanding', 'Outstanding'], ['complete', 'Despatched'], ['held', 'On hold'], ['cancelled', 'Cancelled'], ['all', 'All']]
+    .map(([k, t]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${t}</option>`).join('');
+  return `<div class="sec-h" style="gap:10px"><label class="fl" style="flex-direction:row;align-items:center;gap:8px">Show <select class="f" id="ofilter">${filters}</select></label>
+      <input type="search" id="search" placeholder="Search order, customer or PO" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
+    <div class="tbl-wrap"><table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer order no.</th><th>Net</th><th>Next due</th><th>Despatched</th><th>Invoiced</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="8" class="empty">No orders here.</td></tr>`}</tbody></table></div>`;
 }
 
-/* ---------- new job (not from a quote: phone orders, Sage carry-over, Xero sales orders) ---------- */
-const blankLine = () => ({ part: '', qty: '', price: '' });
-function openNewJob(prefill = {}) {
-  S.newJob = { so: '', customer: '', po: '', contact: '', due: addWorkingDays(todayIso(), 10), notes: '',
-    lines: [blankLine()], procs: [], xeroQuoteId: null, from: '', ...prefill };
-  S.tab = 'jobs'; history.replaceState(null, '', '#jobs'); keepInputs = false; render(); window.scrollTo(0, 0);
+/* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
+const blankLine = due => ({ part: '', qty: '', price: '', due: due || '' });
+function openOrderForm(prefill = {}, amendId = null) {
+  const due = prefill.due || addWorkingDays(todayIso(), 10);
+  S.form = { mode: amendId ? 'amend' : 'new', jobId: amendId, so: '', customer: '', po: '', contact: '', contactEmail: '',
+    address: '', notes: '', due, lines: [blankLine(due)], procs: [], xeroQuoteId: null, spQuoteId: null, quoteNo: '', from: '', ...prefill };
+  S.open = null; S.tab = 'jobs'; history.replaceState(null, '', '#jobs'); keepInputs = false; render(); window.scrollTo(0, 0);
 }
-/** Copy what is typed into S.newJob, so adding or removing a line keeps everything else. */
-function collectNewJob() {
-  const n = S.newJob, v = id => $(id)?.value ?? '';
-  Object.assign(n, { so: v('nj-so'), customer: v('nj-cust'), po: v('nj-po'), contact: v('nj-contact'), due: v('nj-due'), notes: v('nj-notes') });
-  n.lines = n.lines.map((l, i) => ({ part: v('nj-part' + i), qty: v('nj-qty' + i), price: v('nj-price' + i) }));
-  n.procs = [...document.querySelectorAll('input[name=nj-p]:checked')].map(i => i.value);
-  n.calloffs = $('nj-co')?.checked; n.coN = v('nj-n'); n.coEvery = v('nj-every');
+function openAmend(id) {
+  const j = job(id);
+  openOrderForm({ so: j.so, customer: j.customer, po: j.po, contact: j.contactName, address: j.address, notes: j.notes,
+    due: nextDue(j), procs: needed(j),
+    lines: j.lines.map(l => ({ id: l.id, part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, sent: sent(j, l) })) }, id);
 }
-function newJobForm() {
-  const n = S.newJob;
-  const rows = n.lines.map((l, i) => `<tr><td><input type="text" id="nj-part${i}" value="${esc(l.part)}" placeholder="Part and spec" aria-label="Part, line ${i + 1}" style="width:100%"></td>
-    <td><input type="number" id="nj-qty${i}" value="${esc(l.qty)}" min="1" step="1" aria-label="Quantity, line ${i + 1}"></td>
-    <td><input type="number" id="nj-price${i}" value="${esc(l.price)}" min="0" step="any" aria-label="Unit price, line ${i + 1}"></td>
-    <td>${n.lines.length > 1 ? `<button class="btn sm" type="button" data-njdel="${i}" aria-label="Remove line ${i + 1}">Remove</button>` : ''}</td></tr>`).join('');
-  return `<form class="panel newjob" data-newjobform><h3>New job${n.from ? ` <span class="note">from ${esc(n.from)}</span>` : ''}</h3>
-    <div class="row2"><label class="fl">Customer<input type="text" id="nj-cust" value="${esc(n.customer)}" required></label>
-      <label class="fl">Order number<input type="text" id="nj-so" value="${esc(n.so)}" placeholder="Leave blank for the next SO number"></label></div>
-    <p class="note">Leave the order number blank for a new order. For an order that already has a number, type it: SO-9726 for one raised in Xero, SAGE-9701 for one carried over from Sage.</p>
-    <div class="row2"><label class="fl">Customer PO<input type="text" id="nj-po" value="${esc(n.po)}"></label>
-      <label class="fl">Contact<input type="text" id="nj-contact" value="${esc(n.contact)}"></label></div>
-    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div><button class="btn sm" type="button" data-njadd>Add a line</button></div>
-    <div class="row2"><label class="fl">Promised delivery<input type="date" id="nj-due" value="${esc(n.due)}" required></label></div>
-    <div class="fl">Processes this job needs</div>
-    <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="nj-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
-    <label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="nj-co" ${n.calloffs ? 'checked' : ''}> Delivered in call-offs</label>
-    <div class="row2" id="nj-co-row" ${n.calloffs ? '' : 'hidden'}><label class="fl">How many call-offs<input type="number" id="nj-n" min="2" max="24" value="${esc(n.coN || 4)}"></label>
-      <label class="fl">How often<select class="f" id="nj-every">${[['7', 'Weekly'], ['14', 'Every 2 weeks'], ['m', 'Monthly']].map(([v, t]) => `<option value="${v}" ${n.coEvery === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-      <p class="note" style="grid-column:1/-1">The first call-off is on the promised delivery date.</p></div>
-    <label class="fl">Notes for the job (optional)<input type="text" id="nj-notes" value="${esc(n.notes)}"></label>
-    <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>Create job</button><button class="btn" type="button" data-njcancel>Cancel</button></div>
-    <p class="note" id="nj-msg"></p></form>`;
+/** Copy what is typed into S.form, so adding, removing or splitting lines keeps everything else. */
+function collectForm() {
+  const n = S.form, v = id => $(id)?.value ?? '';
+  Object.assign(n, { so: v('of-so'), customer: v('of-cust') || n.customer, po: v('of-po'), contact: v('of-contact'), address: v('of-addr'),
+    due: v('of-due') || n.due, notes: v('of-notes') });
+  n.lines = n.lines.map((l, i) => ({ ...l, part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i) }));
+  n.procs = [...document.querySelectorAll('input[name=of-p]:checked')].map(i => i.value);
+  n.splitN = v('of-sn'); n.splitEvery = v('of-se'); n.splitFrom = v('of-sf');
 }
-async function submitNewJob() {
-  collectNewJob();
-  const n = S.newJob, msg = t => { $('nj-msg').textContent = t; };
+const lineNet = l => round2((Number(l.qty) || 0) * (Number(l.price) || 0));
+function formTotals(lines) {
+  const net = round2(lines.reduce((a, l) => a + lineNet(l), 0)), vat = round2(net * 0.2);
+  return `Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(vat, 2)} · Total <b>${gbp(net + vat, 2)}</b>`;
+}
+function orderForm() {
+  const n = S.form, amend = n.mode === 'amend';
+  const rows = n.lines.map((l, i) => `<tr><td><input type="text" id="of-part${i}" value="${esc(l.part)}" placeholder="Part and spec" aria-label="Part, line ${i + 1}"></td>
+    <td><input type="number" id="of-qty${i}" value="${esc(l.qty)}" min="${l.sent || 1}" step="1" aria-label="Quantity, line ${i + 1}"></td>
+    <td><input type="number" id="of-price${i}" value="${esc(l.price)}" min="0" step="any" aria-label="Unit price, line ${i + 1}"></td>
+    <td><input type="date" id="of-ldue${i}" value="${esc(l.due)}" aria-label="Due date, line ${i + 1}"></td>
+    <td class="num" id="of-net${i}">${gbp(lineNet(l), 2)}</td>
+    ${amend ? `<td class="num">${l.sent || 0}</td>` : ''}
+    <td>${n.lines.length > 1 && !l.sent ? `<button class="btn sm" type="button" data-oldel="${i}" aria-label="Remove line ${i + 1}">Remove</button>` : ''}</td></tr>`).join('');
+  return `<form class="panel newjob" data-orderform><h3>${amend ? `Amend ${esc(n.so)}` : 'New sales order'}${n.from ? ` <span class="note">from ${esc(n.from)}</span>` : ''}</h3>
+    <div class="row2"><label class="fl">Customer<input type="text" id="of-cust" value="${esc(n.customer)}" ${amend ? 'disabled' : 'required'}></label>
+      ${amend ? `<label class="fl">Order number<input type="text" value="${esc(n.so)}" disabled></label>`
+        : `<label class="fl">Order number<input type="text" id="of-so" value="${esc(n.so)}" placeholder="Blank = next SO number"></label>`}</div>
+    ${amend ? '' : '<p class="note">Leave the order number blank for a new order. For one that already has a number, type it: SO-9726 raised in Xero, SAGE-9701 carried over from Sage.</p>'}
+    <div class="row2"><label class="fl">Customer order no. (PO)<input type="text" id="of-po" value="${esc(n.po)}"></label>
+      <label class="fl">Contact<input type="text" id="of-contact" value="${esc(n.contact)}"></label></div>
+    <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
+      <label class="fl">Promised delivery (default for new lines)<input type="date" id="of-due" value="${esc(n.due)}"></label></div>
+    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th>Net</th>${amend ? '<th>Despatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="actions"><button class="btn sm" type="button" data-oladd>Add a line</button>
+      <details class="splitter"><summary class="btn sm">Split into call-offs…</summary>
+        <div class="row3"><label class="fl">Deliveries<input type="number" id="of-sn" min="2" max="24" value="${esc(n.splitN || 4)}"></label>
+          <label class="fl">How often<select class="f" id="of-se">${[['7', 'Weekly'], ['14', 'Every 2 weeks'], ['m', 'Monthly']].map(([v, t]) => `<option value="${v}" ${n.splitEvery === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="fl">First delivery<input type="date" id="of-sf" value="${esc(n.splitFrom || n.due)}"></label></div>
+        <p class="note">Each line becomes one line per delivery, with the quantity shared out. Adjust any quantity or date afterwards, as you would in Sage.</p>
+        <button class="btn sm" type="button" data-olsplit>Split the lines</button></details></div>
+    <p class="note" id="of-tot">${formTotals(n.lines)}</p>
+    <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap or C/Sink if needed.' : ''}</div>
+    <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
+    <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
+    <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button></div>
+    <p class="note" id="of-msg"></p></form>`;
+}
+function splitLines() {
+  collectForm();
+  const n = S.form;
+  if (n.lines.some(l => l.sent)) return toast('Some lines have despatches already. Add new lines for the remaining deliveries instead.', null, true);
+  const count = Math.max(2, Math.min(24, +n.splitN || 2));
+  const dates = calloffDates(n.splitFrom || n.due, count, n.splitEvery || '7');
+  const real = n.lines.filter(l => l.part.trim() && Number(l.qty) > 0);
+  if (!real.length) return toast('Enter the parts and quantities first, then split them.', null, true);
+  n.lines = splitIntoCalloffs(real, dates).map(l => ({ ...l, qty: String(l.qty) }));
+  n.due = dates[0]; keepInputs = false; render();
+  toast(`Split into ${count} deliveries from ${fmt(dates[0])} to ${fmt(dates[dates.length - 1])}.`);
+}
+async function submitOrder() {
+  collectForm();
+  const n = S.form, msg = t => { $('of-msg').textContent = t; };
   const lines = n.lines.filter(l => l.part.trim() || l.qty || l.price);
   if (!n.customer.trim()) return msg('Enter the customer.');
-  if (!lines.length) return msg('Add at least one part.');
-  const bad = lines.find(l => !l.part.trim() || !(Number(l.qty) > 0) || !Number.isInteger(Number(l.qty)) || l.price === '' || Number(l.price) < 0);
-  if (bad) return msg('Every line needs a part, a whole-number quantity and a unit price (0 is allowed).');
-  if (!n.procs.length) return msg('Tick at least one process so the shop floor knows what the job needs.');
-  if (!n.due) return msg('Enter the promised delivery date.');
-  if (n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
-  const calloffs = n.calloffs ? calloffDates(n.due, Math.max(2, Math.min(24, +n.coN || 2)), n.coEvery || '7') : [];
+  if (!lines.length) return msg('Add at least one line.');
+  const bad = lines.find(l => !l.part.trim() || !(Number(l.qty) > 0) || !Number.isInteger(Number(l.qty)) || l.price === '' || Number(l.price) < 0 || !l.due);
+  if (bad) return msg('Every line needs a part, a whole-number quantity, a unit price (0 is allowed) and a due date.');
+  const under = lines.find(l => l.sent && Number(l.qty) < l.sent);
+  if (under) return msg(`"${under.part}" has ${under.sent} despatched already, so its quantity cannot go below that.`);
+  if (!n.procs.length) return msg('Tick at least one process so the shop floor knows what the order needs.');
+  if (n.mode === 'new' && n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
+  const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due }));
   S.busy = true; render();
   try {
-    const j = await data.createJob({ so_number: n.so.trim().toUpperCase(), customer: n.customer.trim(), customer_po: n.po.trim(),
-      contact_name: n.contact.trim(), xero_quote_id: n.xeroQuoteId, quote_no: '', notes: n.notes.trim(),
-      due_date: calloffs.length ? calloffs[calloffs.length - 1] : n.due, calloff_dates: calloffs, processes: n.procs,
-      lines: lines.map(l => ({ part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price) })) });
-    const who = n.customer.trim();
-    S.newJob = null; keepInputs = false; await reload();
-    if (S.tab === 'jobs') showDoc('soa', j.id);
-    toast(`${j.so_number} created for ${who}.`);
+    if (n.mode === 'amend') {
+      const j = job(n.jobId);
+      await data.amendJob(n.jobId, { customer_po: n.po.trim(), contact_name: n.contact.trim(), delivery_address: n.address.trim(), notes: n.notes.trim(), lines: payloadLines });
+      await data.setJobProcesses(n.jobId, n.procs.filter(p => !j.procs[p]), needed(j).filter(p => !n.procs.includes(p)));
+      S.form = null; keepInputs = false; await reload(); S.open = n.jobId;
+      toast(`${j.so} amended.`);
+    } else {
+      const j = await data.createJob({ so_number: n.so.trim().toUpperCase(), customer: n.customer.trim(), customer_po: n.po.trim(),
+        contact_name: n.contact.trim(), contact_email: n.contactEmail || '', delivery_address: n.address.trim(), notes: n.notes.trim(),
+        xero_quote_id: n.xeroQuoteId, sp_quote_id: n.spQuoteId, quote_no: n.quoteNo || '',
+        due_date: lines.map(l => l.due).sort().pop(), processes: n.procs, lines: payloadLines });
+      const who = n.customer.trim();
+      S.form = null; keepInputs = false; await reload();
+      showDoc('soa', j.id);
+      toast(`${j.so_number} created for ${who}. It is in Upcoming on the job board.`);
+    }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
 }
@@ -374,9 +432,10 @@ function renderXero() {
 }
 function makeJobFromXero(id) {
   const q = S.xeroRead.quotes.find(x => x.id === id);
-  openNewJob({ from: `Xero ${q.number}`, so: q.number.toUpperCase().replace(/^SO(\d)/, 'SO-$1'), customer: q.customer, po: q.reference,
-    due: q.expiry && q.expiry >= todayIso() ? q.expiry : addWorkingDays(todayIso(), 10), xeroQuoteId: q.id,
-    lines: q.lines.filter(l => l.qty > 0).map(l => ({ part: l.description, qty: String(l.qty), price: String(l.unit) })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine()]) });
+  const due = q.expiry && q.expiry >= todayIso() ? q.expiry : addWorkingDays(todayIso(), 10);
+  openOrderForm({ from: `Xero ${q.number}`, so: q.number.toUpperCase().replace(/^SO(\d)/, 'SO-$1'), customer: q.customer, po: q.reference,
+    due, xeroQuoteId: q.id,
+    lines: q.lines.filter(l => l.qty > 0).map(l => ({ part: l.description, qty: String(l.qty), price: String(l.unit), due })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine(due)]) });
 }
 
 /* ---------- shop floor ---------- */
@@ -384,8 +443,15 @@ function procButtons(j, focus) {
   return needed(j).map(p => { const s = j.procs[p];
     return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
 }
+/** Outstanding parts, one row per part however many delivery lines it is split over. */
+function floorParts(j) {
+  const by = new Map();
+  for (const l of j.lines) { const k = l.part; const r = by.get(k) || { left: 0, next: 0 }; r.left += left(j, l); if (l.due <= nextDue(j)) r.next += left(j, l); by.set(k, r); }
+  return [...by.entries()].filter(([, r]) => r.left > 0).map(([part, r]) =>
+    `<div><b>${r.left}</b> × ${esc(part)}${r.next && r.next !== r.left ? ` <span>(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
+}
 function renderFloor() {
-  const open = S.jobs.filter(j => stage(j) !== 'completed').sort(byDue);
+  const open = S.jobs.filter(onBoardStage).sort(byDue);
   const st = S.station;
   const count = p => open.filter(j => j.procs[p] && !j.procs[p].done).length;
   const btns = [['all', 'All jobs', open.length], ...PROCESSES.map(p => [p, p, count(p)])]
@@ -394,9 +460,9 @@ function renderFloor() {
   const cards = list.map(j => `<article class="fcard ${allDone(j) ? 'ready' : ''}">
       <div class="h"><span class="so">${esc(j.so)}</span>${dueChip(nextDue(j))}</div>
       <div class="cust">${esc(j.customer)}</div>
-      <div class="parts">${j.lines.map(l => `<div><b>${left(j, l)}</b> × ${esc(l.part)}${j.despatches.length ? ` <span>(of ${l.qty})</span>` : ''}</div>`).join('')}
-        ${j.calloffs.length ? `<div>Call-off ${Math.min(j.despatches.length + 1, j.calloffs.length)} of ${j.calloffs.length}</div>` : ''}
-        ${j.po ? `<div>PO ${esc(j.po)}</div>` : ''}</div>
+      <div class="parts">${floorParts(j)}
+        ${deliveryLabel(j) ? `<div>${deliveryLabel(j)}, due ${fmt(nextDue(j))}</div>` : ''}
+        ${j.po ? `<div>PO ${esc(j.po)}</div>` : ''}${j.status === 'held' ? '<div class="bad"><b>On hold</b></div>' : ''}</div>
       ${allDone(j) ? '<div class="readybar">All processes done. Ready to despatch.</div>' : ''}
       <div class="pbtns">${procButtons(j, st)}</div>
       <button type="button" class="btn link" data-open="${j.id}" style="align-self:flex-start">Job details</button></article>`).join('');
@@ -431,24 +497,7 @@ function quoteCard(q) {
   if (q.state === 'dismissed') return `<article class="qcard">${head}<div class="actions"><span class="chip">Not a job</span><button class="btn sm" type="button" data-restore="${q.spId}">Put back</button></div></article>`;
   if (S.conv?.spId !== q.spId) return `<article class="qcard">${head}<div class="actions"><button class="btn pri" type="button" data-start="${q.spId}">Turn into a job</button>
     <button class="btn" type="button" data-dismiss="${q.spId}" title="Stop offering this quote here. The quote itself is not changed.">Not a job</button></div></article>`;
-  if (S.conv.loading) return `<article class="qcard">${head}<div class="note">Reading the quote lines…</div></article>`;
-  const c = S.conv;
-  const lines = c.lines.map(l => `<tr><td>${esc(describeLine(l))}</td><td>${l.qty}</td><td>${unit(unitPrice(l.sellTotal, l.qty))}</td><td>${gbp(l.sellTotal, 2)}</td></tr>`).join('');
-  return `<article class="qcard wide">${head}
-    <form class="convert" data-convert>
-      <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>${lines}
-        ${q.carriage > 0 ? `<tr><td colspan="3"><label><input type="checkbox" id="cv-carr" ${c.carriage ? 'checked' : ''}> Carriage as its own line</label></td><td>${gbp(q.carriage, 2)}</td></tr>` : ''}</tbody></table></div>
-      <div class="row"><label class="fl">Customer PO number<input type="text" id="cv-po" placeholder="From the customer's order"></label>
-        <label class="fl">Promised delivery<input type="date" id="cv-due" value="${c.due}" required></label></div>
-      <div class="fl">Processes this job needs. Ticked from the quote lines (folds, welds, inserts, holes, paint, plating). Check them and add Tap or C/Sink if needed.</div>
-      <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="cv-p" value="${esc(p)}" ${c.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
-      <label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="cv-co"> Delivered in call-offs</label>
-      <div class="row" id="cv-co-row" hidden><label class="fl">How many call-offs<input type="number" id="cv-n" min="2" max="24" value="4"></label>
-        <label class="fl">How often<select class="f" id="cv-every"><option value="7">Weekly</option><option value="14">Every 2 weeks</option><option value="m">Monthly</option></select></label>
-        <p class="note" style="grid-column:1/-1">The first call-off is on the promised delivery date.</p></div>
-      <label class="fl">Notes for the job (optional)<input type="text" id="cv-notes"></label>
-      <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>Create job</button><button class="btn" type="button" data-cancel>Cancel</button></div>
-      <p class="note" id="cv-msg"></p></form></article>`;
+  return `<article class="qcard">${head}<div class="note">Reading the quote lines…</div></article>`;
 }
 
 /* ---------- despatch ---------- */
@@ -515,27 +564,31 @@ async function sendToXero() {
   S.busy = false; await reload();
 }
 
-function callRow(j) {
+function deliveryRow(j) {
   const today = todayIso();
-  return `<div class="callrow">${j.calloffs.map((c, i) => { const done = i < j.despatches.length, late = !done && c < today;
-    return `<div class="call ${done ? 'done' : late ? 'late' : ''}"><i>${i + 1}</i><b>${fmt(c)}</b>${done ? 'sent ' + fmt(j.despatches[i].date) : late ? 'late' : 'due'}</div>`; }).join('')}</div>`;
+  const dates = deliveryDates(j);
+  if (dates.length < 2) return '';
+  return `<div class="callrow">${dates.map((c, i) => { const ls = j.lines.filter(l => l.due === c);
+    const done = ls.every(l => left(j, l) === 0), part = !done && ls.some(l => sent(j, l) > 0), late = !done && c < today;
+    return `<div class="call ${done ? 'done' : late ? 'late' : ''}"><i>${i + 1}</i><b>${fmt(c)}</b>${done ? 'sent' : part ? 'part sent' : late ? 'late' : 'due'}</div>`; }).join('')}</div>`;
 }
 function renderDespatch() {
-  const open = S.jobs.filter(j => stage(j) !== 'completed').sort(byDue);
+  const open = S.jobs.filter(j => onBoardStage(j) && j.status === 'open').sort(byDue);
+  const held = S.jobs.filter(j => onBoardStage(j) && j.status === 'held');
   if (S.desp && !open.some(j => j.id === S.desp)) S.desp = null;
   const j = S.desp ? job(S.desp) : null;
   const money = office();
   let form = '';
   if (j) {
     const missing = needed(j).filter(p => !j.procs[p].done);
-    const callN = j.calloffs.length ? j.despatches.length + 1 : 0;
+    const del = deliveryLabel(j);
     form = `${missing.length ? `<div class="warn">Not ticked yet: ${esc(missing.join(', '))}. Check the parts are finished before they go.</div>` : ''}
-      ${j.calloffs.length ? callRow(j) : ''}
-      <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Ordered</th><th>Sent before</th><th>Left</th><th>This despatch</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td><input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} this despatch"></td></tr>`).join('')}
+      ${deliveryRow(j)}
+      <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Despatched</th><th>Outstanding</th><th>This despatch</th></tr></thead><tbody>
+      ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this despatch">` : '—'}</td></tr>`).join('')}
       </tbody></table></div>
-      <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create despatch note${callN ? ` (call-off ${callN})` : ''}</button></div>
-      <p class="note" id="dn-msg">Anything left stays on the job for the next despatch.</p>`;
+      <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create despatch note${del ? ` (${del.toLowerCase()})` : ''}</button></div>
+      <p class="note" id="dn-msg">The quantities default to everything due by ${fmt(nextDue(j))}. Anything not sent stays outstanding on the order, as in Sage.</p>`;
   }
   const all = []; S.jobs.forEach(x => x.despatches.forEach(d => all.push([x, d])));
   all.sort((a, b) => (a[1].id < b[1].id ? 1 : -1));
@@ -545,6 +598,7 @@ function renderDespatch() {
     <div class="panel"><h3>Despatch goods</h3>
       <label class="fl">Job
       <select class="f" id="dsel"><option value="">Choose a job…</option>${open.map(x => `<option value="${x.id}" ${x.id === S.desp ? 'selected' : ''}>${esc(x.so)} · ${esc(x.customer)}${x.po ? ' · PO ' + esc(x.po) : ''}${allDone(x) ? ' · ready' : ''}</option>`).join('')}</select></label>
+      ${held.length ? `<p class="note">On hold, so not listed: ${held.map(h => esc(h.so)).join(', ')}.</p>` : ''}
       ${form}</div>
     ${money ? waitingForXero(pend) : ''}
     <div class="panel"><h3>Despatch notes</h3>
@@ -558,53 +612,45 @@ function renderDrawer() {
   const j = S.open ? job(S.open) : null;
   $('drawer').hidden = $('scrim').hidden = !j;
   if (!j) return;
-  const money = office();
-  const edit = money ? `<form class="panel" data-editjob><h3>Order details</h3>
-      <div class="row2"><label class="fl">Customer PO<input type="text" id="ej-po" value="${esc(j.po)}"></label>
-      ${j.calloffs.length ? '' : `<label class="fl">Due date<input type="date" id="ej-due" value="${esc(j.due)}"></label>`}</div>
-      ${j.calloffs.length ? `<div class="fl">Call-off dates</div><div class="cdates">${j.calloffs.map((c, i) => `<label class="fl">${i + 1}${i < j.despatches.length ? ' (sent)' : ''}<input type="date" id="ej-c${i}" value="${esc(c)}" ${i < j.despatches.length ? 'disabled' : ''}></label>`).join('')}</div>` : ''}
-      <label class="fl">Notes<input type="text" id="ej-notes" value="${esc(j.notes)}"></label>
-      <details><summary class="note">Change which processes this job needs</summary><div class="pchecks" style="margin-top:8px">${PROCESSES.map(p => `<label><input type="checkbox" name="ej-p" value="${esc(p)}" ${j.procs[p] ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div></details>
-      <div class="actions"><button class="btn" type="submit">Save changes</button></div></form>` : '';
+  const money = office(), st = stage(j), net = value(j);
+  const ask = S.ask && S.ask.id === j.id ? S.ask.what : null;
+  const actions = money && j.status !== 'cancelled' ? `<div class="actions">
+      <button class="btn" type="button" data-amend="${j.id}">Amend order</button>
+      ${j.status === 'held' ? `<button class="btn" type="button" data-status="open" data-job="${j.id}">Release from hold</button>`
+        : st !== 'completed' ? `<button class="btn" type="button" data-status="held" data-job="${j.id}">Put on hold</button>` : ''}
+      ${st !== 'completed' ? `<button class="btn" type="button" data-ask="cancel" data-job="${j.id}">Cancel order</button>` : ''}
+      ${!j.despatches.length ? `<button class="btn link" type="button" data-ask="delete" data-job="${j.id}">Delete (made by mistake)</button>` : ''}</div>` : '';
+  const confirm = ask === 'cancel'
+    ? `<div class="panel warnbox"><b>Cancel ${esc(j.so)}?</b><span class="note">${j.despatches.length ? 'What has been despatched stays, with its despatch notes and invoices. The outstanding quantity is cancelled.' : 'Nothing has been despatched.'} The order stays in the Sales orders list as Cancelled and leaves the job board.</span>
+       <div class="actions"><button class="btn danger" type="button" data-status="cancelled" data-job="${j.id}">Yes, cancel ${esc(j.so)}</button><button class="btn" type="button" data-noask>Keep it</button></div></div>`
+    : ask === 'delete'
+    ? `<div class="panel warnbox"><b>Delete ${esc(j.so)}?</b><span class="note">For an order created by mistake. It is removed completely. ${j.spQuoteId ? 'The quote goes back to the Quotes tab. ' : ''}The number ${esc(j.so)} is not used again.</span>
+       <div class="actions"><button class="btn danger" type="button" data-confirmdelete="${j.id}">Yes, delete ${esc(j.so)}</button><button class="btn" type="button" data-noask>Keep it</button></div></div>` : '';
   $('drawer').innerHTML = `
-    <div class="dh"><div><div class="mono note">${esc(j.so)}${j.quote ? ' · from ' + esc(j.quote) : ''}</div><h2>${esc(j.customer)}</h2><div class="actions" style="margin-top:6px">${statusChips(j)}</div></div>
+    <div class="dh"><div><div class="mono note">${esc(j.so)}${j.quote ? ' · from ' + esc(j.quote) : ''}</div><h2>${esc(j.customer)}</h2>
+      <div class="actions" style="margin-top:6px">${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Despatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}
+        ${money ? `<span class="chip ${invoiceStatus(j) === 'Invoiced' ? 'ok' : ''}">${invoiceStatus(j)}</span>` : ''}${j.status === 'held' ? '<span class="chip late">On hold</span>' : ''}${deliveryLabel(j) && st !== 'completed' ? `<span class="chip">${deliveryLabel(j)}</span>` : ''}</div></div>
       <button class="btn sm x" type="button" data-close>Close</button></div>
     <div class="facts">
-      <div class="fact"><div class="k">Customer PO</div><div class="v mono">${esc(j.po) || '—'}</div></div>
-      <div class="fact"><div class="k">${stage(j) === 'completed' ? 'Finished' : j.calloffs.length ? 'Next call-off' : 'Due'}</div><div class="v">${fmtLong(stage(j) === 'completed' ? lastDespatch(j) : nextDue(j))}</div></div>
-      <div class="fact"><div class="k">Ordered</div><div class="v">${fmtLong(j.ordered)}</div></div>
-      ${money ? `<div class="fact"><div class="k">Order value</div><div class="v num">${gbp(value(j), 2)}</div></div>` : ''}
+      <div class="fact"><div class="k">Customer order no.</div><div class="v mono">${esc(j.po) || '—'}</div></div>
+      <div class="fact"><div class="k">Order date</div><div class="v">${fmtLong(j.ordered)}</div></div>
+      <div class="fact"><div class="k">${st === 'completed' ? 'Despatched' : 'Next due'}</div><div class="v">${fmtLong(st === 'completed' ? lastDespatch(j) : nextDue(j))}</div></div>
+      <div class="fact"><div class="k">Contact</div><div class="v">${esc(j.contactName) || '—'}</div></div>
+      ${j.address ? `<div class="fact" style="grid-column:1/-1"><div class="k">Deliver to</div><div class="v" style="white-space:pre-line;font-weight:500">${esc(j.address)}</div></div>` : ''}
     </div>
     ${j.notes ? `<div class="panel"><div class="note">Notes</div>${esc(j.notes)}</div>` : ''}
+    <div class="panel"><h3>Lines</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Desp.</th><th>Outst.</th>${money ? '<th>Unit</th><th>Net</th>' : ''}</tr></thead><tbody>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+      ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
+      ${deliveryRow(j)}</div>
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div></div>
-    <div class="panel"><h3>Parts</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Ordered</th><th>Sent</th><th>Left</th>${money ? '<th>Unit</th>' : ''}</tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
-      ${j.calloffs.length ? callRow(j) : ''}</div>
+    <div class="panel"><h3>Despatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
+      ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>${money ? `<td>${gbp(despatchValue(j, d), 2)}</td><td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : '<span class="chip soon">not yet</span>'}</td>` : ''}
+        <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>` : '<div class="note">Nothing despatched yet.</div>'}</div>
     <div class="actions">
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement</button>` : ''}
-      ${stage(j) !== 'completed' ? `<button class="btn pri" type="button" data-desp="${j.id}">Despatch…</button>` : ''}
-      ${j.despatches.map(d => `<button class="btn" type="button" data-dn="${d.id}" data-job="${j.id}">${esc(d.dn)}</button>`).join('')}
-    </div>${edit}
-    ${money && !j.despatches.length ? (S.cancelAsk === j.id
-      ? `<div class="panel warnbox"><b>Cancel ${esc(j.so)}?</b><span class="note">The job, its parts and ticks are removed. ${j.spQuoteId ? 'The quote goes back to the Quotes tab. ' : ''}The number ${esc(j.so)} is not used again.</span>
-         <div class="actions"><button class="btn danger" type="button" data-confirmcancel="${j.id}">Yes, cancel ${esc(j.so)}</button><button class="btn" type="button" data-keepjob>Keep it</button></div></div>`
-      : `<div><button class="btn link" type="button" data-canceljob="${j.id}">Cancel this job</button> <span class="note">Only while nothing has been despatched.</span></div>`) : ''}`;
-}
-async function saveJob(form) {
-  const j = job(S.open);
-  const want = [...form.querySelectorAll('input[name=ej-p]:checked')].map(i => i.value);
-  if (!want.length) { toast('A job needs at least one process.', null, true); return; }
-  const add = want.filter(p => !j.procs[p]), remove = needed(j).filter(p => !want.includes(p));
-  const patch = { customer_po: $('ej-po').value.trim(), notes: $('ej-notes').value.trim() };
-  if (!j.calloffs.length && $('ej-due').value) patch.due_date = $('ej-due').value;
-  if (j.calloffs.length) {
-    const dates = j.calloffs.map((c, i) => $('ej-c' + i).value || c);
-    if (dates.some((d, i) => i && d < dates[i - 1])) { toast('Call-off dates must be in order, earliest first.', null, true); return; }
-    patch.calloff_dates = dates; patch.due_date = dates[dates.length - 1];
-  }
-  try { await data.updateJob(j.id, patch); await data.setJobProcesses(j.id, add, remove); toast(`${j.so} saved.`); }
-  catch (e) { toast(e.message, null, true); }
-  reload();
+      ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">Despatch…</button>` : ''}
+    </div>${actions}${confirm}`;
 }
 
 /* ---------- documents (print / save as PDF) ---------- */
@@ -619,22 +665,23 @@ function showDoc(kind, jobId, despId) {
       <div class="two"><div><div class="k">Customer</div><b>${esc(j.customer)}</b>${j.contactName ? `<div>${esc(j.contactName)}</div>` : ''}</div>
         <div class="kv"><span class="k">Date</span><span>${fmtLong(j.ordered)}</span><span class="k">Your order</span><span>${esc(j.po) || '—'}</span>
         <span class="k">Our quote</span><span>${esc(j.quote) || '—'}</span>
-        <span class="k">Delivery</span><span>${j.calloffs.length ? `${j.calloffs.length} call-offs, ${fmtLong(j.calloffs[0])} to ${fmtLong(j.calloffs[j.calloffs.length - 1])}` : fmtLong(j.due)}</span></div></div>
+        <span class="k">Delivery</span><span>${deliveryDates(j).length > 1 ? `${deliveryDates(j).length} deliveries, ${fmtLong(deliveryDates(j)[0])} to ${fmtLong(deliveryDates(j).pop())}` : fmtLong(nextDue(j))}</span></div></div>
+      ${j.address ? `<div><div class="k">Deliver to</div><div style="white-space:pre-line">${esc(j.address)}</div></div>` : ''}
       <p>Thank you for your order. We confirm the following.</p>
-      <table><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Net</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
+      <table><thead><tr><th>Description</th><th>Due</th><th>Qty</th><th>Unit price</th><th>Net</th></tr></thead><tbody>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${fmtLong(l.due)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
       <div class="tot"><span>Net</span><span>${gbp(net, 2)}</span><span>VAT 20%</span><span>${gbp(vat, 2)}</span><span class="g">Total</span><span class="g">${gbp(net + vat, 2)}</span></div>
-      ${j.calloffs.length ? `<div><div class="k">Call-off schedule</div>${j.calloffs.map((c, i) => `${i + 1}. ${fmtLong(c)}`).join(' &nbsp; ')}</div>` : ''}
       <div class="foot">Clarke Lane Engineering Ltd. Please quote ${esc(j.so)} on any correspondence about this order.</div>`;
   } else {
     const di = j.despatches.findIndex(d => d.id === despId), d = j.despatches[di];
     const before = l => j.despatches.slice(0, di).reduce((a, x) => a + (x.lines[l.id] || 0), 0);
     body = head('Despatch note', esc(d.dn)) + `
-      <div class="two"><div><div class="k">Deliver to</div><b>${esc(j.customer)}</b>${j.contactName ? `<div>FAO ${esc(j.contactName)}</div>` : ''}</div>
+      <div class="two"><div><div class="k">Deliver to</div><b>${esc(j.customer)}</b>${j.address ? `<div style="white-space:pre-line">${esc(j.address)}</div>` : ''}${j.contactName ? `<div>FAO ${esc(j.contactName)}</div>` : ''}</div>
         <div class="kv"><span class="k">Date</span><span>${fmtLong(d.date)}</span><span class="k">Your order</span><span>${esc(j.po) || '—'}</span>
-        <span class="k">Our order</span><span>${esc(j.so)}</span>${j.calloffs.length ? `<span class="k">Call-off</span><span>${di + 1} of ${j.calloffs.length}</span>` : ''}</div></div>
-      <table><thead><tr><th>Description</th><th>Ordered</th><th>Previously sent</th><th>This delivery</th><th>Still to come</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${before(l)}</td><td><b>${d.lines[l.id] || 0}</b></td><td>${l.qty - before(l) - (d.lines[l.id] || 0)}</td></tr>`).join('')}</tbody></table>
+        <span class="k">Our order</span><span>${esc(j.so)}</span></div></div>
+      <table><thead><tr><th>Description</th><th>Ordered</th><th>Previously sent</th><th>This delivery</th><th>Outstanding</th></tr></thead><tbody>
+      ${j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => `<tr><td>${esc(l.part)}${deliveryDates(j).length > 1 ? ` <span style="color:var(--paper-mute)">(due ${fmt(l.due)})</span>` : ''}</td><td>${l.qty}</td><td>${before(l)}</td><td><b>${d.lines[l.id]}</b></td><td>${l.qty - before(l) - d.lines[l.id]}</td></tr>`).join('')}</tbody></table>
+      ${stillToCome(j, di)}
       <div class="sign"><div>Received by (print)</div><div>Signature</div><div>Date</div></div>
       <div class="foot">Please check the goods on delivery and report any shortage or damage within 48 hours, quoting ${esc(d.dn)}.</div>`;
   }
@@ -642,13 +689,24 @@ function showDoc(kind, jobId, despId) {
   $('doc').hidden = false;
   document.body.classList.add('doc-open');
 }
+/** On a despatch note: what is still to come on the order after this delivery, per part. */
+function stillToCome(j, di) {
+  const upto = j.despatches.slice(0, di + 1);
+  const by = new Map();
+  for (const l of j.lines) {
+    const out = l.qty - upto.reduce((a, x) => a + (x.lines[l.id] || 0), 0);
+    if (out > 0) { const r = by.get(l.part) || { qty: 0, next: l.due }; r.qty += out; if (l.due < r.next) r.next = l.due; by.set(l.part, r); }
+  }
+  if (!by.size) return '<p>This completes the order.</p>';
+  return `<div><div class="k">Still to come on this order</div>${[...by.entries()].map(([p, r]) => `${r.qty} × ${esc(p)} (next due ${fmtLong(r.next)})`).join('<br>')}</div>`;
+}
 function closeDoc() { $('doc').hidden = true; document.body.classList.remove('doc-open'); }
 
 /* ---------- render + events ---------- */
 let keepInputs = true;
 function snapshotInputs() {
   const m = new Map();
-  if (keepInputs) document.querySelectorAll('#views input, #views select, #drawer input').forEach(el => {
+  if (keepInputs) document.querySelectorAll('#views input, #views select, #views textarea, #drawer input').forEach(el => {
     const k = el.id || (el.name ? el.name + '=' + el.value : '');
     if (k && el.type !== 'search') m.set(k, el.type === 'checkbox' ? el.checked : el.value);
   });
@@ -656,12 +714,10 @@ function snapshotInputs() {
   return m;
 }
 function restoreInputs(m) {
-  document.querySelectorAll('#views input, #views select, #drawer input').forEach(el => {
+  document.querySelectorAll('#views input, #views select, #views textarea, #drawer input').forEach(el => {
     const k = el.id || (el.name ? el.name + '=' + el.value : '');
     if (!m.has(k)) return;
     if (el.type === 'checkbox') el.checked = m.get(k); else el.value = m.get(k);
-    if (el.id === 'cv-co') $('cv-co-row').hidden = !el.checked;
-    if (el.id === 'nj-co') $('nj-co-row').hidden = !el.checked;
   });
 }
 function render() {
@@ -689,26 +745,29 @@ document.addEventListener('click', e => {
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; try { localStorage.setItem('clj.station', d.station); } catch { /* not kept */ } return render(); }
-  if (d.open) { S.open = +d.open; S.cancelAsk = null; keepInputs = false; return render(); }
+  if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; return render(); }
+  if (d.view) { S.view = d.view; return render(); }
+  if ('neworder' in d) return openOrderForm();
+  if (d.amend) return openAmend(+d.amend);
+  if (d.ask) { S.ask = { id: +d.job, what: d.ask }; return render(); }
+  if ('noask' in d) { S.ask = null; return render(); }
+  if (d.status) return setStatus(+d.job, d.status);
+  if (d.confirmdelete) return deleteOrder(+d.confirmdelete);
+  if ('oladd' in d) { collectForm(); S.form.lines.push(blankLine(S.form.due)); keepInputs = false; return render(); }
+  if (d.oldel) { collectForm(); S.form.lines.splice(+d.oldel, 1); keepInputs = false; return render(); }
+  if ('olsplit' in d) return splitLines();
+  if ('olcancel' in d) { const back = S.form.jobId; S.form = null; if (back) S.open = back; return render(); }
   if ('close' in d) { S.open = null; return render(); }
   if (d.start) { keepInputs = false; return startConvert(+d.start); }
-  if ('cancel' in d) { S.conv = null; return render(); }
   if ('reloadquotes' in d) { S.quotesRaw = null; render(); return loadQuotes(); }
   if (d.dismiss) return dismiss(+d.dismiss);
   if (d.restore) return restore(+d.restore);
-  if (d.canceljob) { S.cancelAsk = +d.canceljob; return render(); }
-  if ('keepjob' in d) { S.cancelAsk = null; return render(); }
-  if (d.confirmcancel) return cancelJob(+d.confirmcancel);
   if (d.soa) return showDoc('soa', +d.soa);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if (d.desp) { S.desp = +d.desp; S.open = null; S.tab = 'despatch'; history.replaceState(null, '', '#despatch'); return render(); }
   if ('print' in d) return window.print();
   if ('closedoc' in d) return closeDoc();
   if (t.id === 'mkdn') return makeDespatch();
-  if ('newjob' in d) return openNewJob();
-  if ('njcancel' in d) { S.newJob = null; return render(); }
-  if ('njadd' in d) { collectNewJob(); S.newJob.lines.push(blankLine()); keepInputs = false; return render(); }
-  if (d.njdel) { collectNewJob(); S.newJob.lines.splice(+d.njdel, 1); keepInputs = false; return render(); }
   if (d.xero) return xeroAction(d.xero);
   if (d.fromxero) return makeJobFromXero(d.fromxero);
   if ('sendxero' in d) return sendToXero();
@@ -720,19 +779,22 @@ $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc();
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) { S.open = null; render(); } } });
 document.addEventListener('input', e => {
   if (e.target.id === 'search') { S.search = e.target.value; const pos = e.target.selectionStart; renderJobs(); const s = $('search'); s.focus(); s.setSelectionRange(pos, pos); }
+  const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);
+  if (m && S.form) {   // keep line nets and the order total current while typing
+    collectForm();
+    const i = +m[2]; if ($('of-net' + i)) $('of-net' + i).textContent = gbp(lineNet(S.form.lines[i]), 2);
+    $('of-tot').innerHTML = formTotals(S.form.lines);
+  }
 });
 document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
-  if (e.target.id === 'cv-co') $('cv-co-row').hidden = !e.target.checked;
-  if (e.target.id === 'nj-co') $('nj-co-row').hidden = !e.target.checked;
+  if (e.target.id === 'ofilter') { S.orderFilter = e.target.value; render(); }
 });
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
-  if ('convert' in f.dataset) return submitConvert(f);
-  if ('editjob' in f.dataset) return saveJob(f);
-  if ('newjobform' in f.dataset) return submitNewJob();
+  if ('orderform' in f.dataset) return submitOrder();
   if (f.dataset.inv) {
     const no = f.querySelector('input').value.trim(); if (!no) return;
     try { await data.markInvoiced(+f.dataset.inv, no); toast(`Recorded as ${no}.`); } catch (err) { toast(err.message, null, true); }

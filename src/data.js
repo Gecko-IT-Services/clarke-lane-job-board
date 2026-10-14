@@ -31,11 +31,12 @@ export async function loadJobs({ office }) {
   const byJob = new Map(jobs.data.map(j => [j.id, {
     id: j.id, so: j.so_number, quote: j.quote_no, spQuoteId: j.sp_quote_id, xeroQuoteId: j.xero_quote_id, customer: j.customer,
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
-    ordered: j.ordered_on, due: j.due_date, calloffs: j.calloff_dates || [], notes: j.notes,
+    ordered: j.ordered_on, due: j.due_date, notes: j.notes, address: j.delivery_address, status: j.status,
+    createdBy: j.created_by,
     lines: [], procs: {}, despatches: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
-    { id: l.id, lineNo: l.line_no, part: l.part, qty: l.qty, price: office ? (price.get(l.id) ?? null) : null });
+    { id: l.id, lineNo: l.line_no, part: l.part, qty: l.qty, due: l.due_date, price: office ? (price.get(l.id) ?? null) : null });
   for (const p of procs.data) { const j = byJob.get(p.job_id); if (j) j.procs[p.process] = { done: !!p.done_at, by: p.done_by, at: p.done_at }; }
   const dById = new Map();
   for (const d of desps.data) {
@@ -73,6 +74,22 @@ export async function createJob(payload) {
   const { data, error } = await sb.rpc('create_job', { payload });
   if (error) fail('The job was not created', error);
   return data;
+}
+
+/** Sage "Amend": header fields and lines (with their ids; new lines without). */
+export async function amendJob(jobId, payload) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('amend_job', { p_job_id: jobId, payload });
+  if (error) fail('The order was not amended', error);
+  return data;
+}
+
+/** 'open' | 'held' | 'cancelled' */
+export async function setJobStatus(jobId, status) {
+  const sb = await getSupabase();
+  const { error, count } = await sb.from('jobs').update({ status }, { count: 'exact' }).eq('id', jobId);
+  if (error) fail('Not saved', error);
+  if (!count) throw new Error('Not saved. Only Levi and Mandy can change an order.');
 }
 
 export async function createDespatch(jobId, lines) {
@@ -124,7 +141,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_processes', 'despatches', 'quote_dismissals']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

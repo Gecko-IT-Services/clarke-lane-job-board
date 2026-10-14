@@ -177,23 +177,17 @@ async function send(items: { despatchId: number; contactId: string }[]) {
       // Amounts come from the database, never from the browser.
       const { data: row, error } = await admin.from('despatches')
         .select('id, dn_number, despatched_on, xero_invoice_id, xero_invoice_no, job_id, ' +
-          'jobs(so_number, customer_po, calloff_dates), despatch_lines(qty, job_lines(part, line_no, job_line_prices(unit_price)))')
+          'jobs(so_number, customer_po), despatch_lines(qty, job_lines(part, line_no, job_line_prices(unit_price)))')
         .eq('id', it.despatchId).single();
       if (error || !row) throw new Error('Despatch not found.');
       if (row.xero_invoice_id || row.xero_invoice_no) { out.push({ despatchId: it.despatchId, ok: true, invoiceNo: row.xero_invoice_no, already: true }); continue; }
       if (!it.contactId) throw new Error('Choose the Xero contact first.');
       const job: any = row.jobs;
-      const calloffs: string[] = job.calloff_dates || [];
-      let calloff = '';
-      if (calloffs.length) {
-        const { count } = await admin.from('despatches').select('id', { count: 'exact', head: true }).eq('job_id', row.job_id).lte('id', row.id);
-        calloff = `${count} of ${calloffs.length}`;
-      }
       const lines = (row.despatch_lines as any[])
         .sort((a, b) => a.job_lines.line_no - b.job_lines.line_no)
         .map(l => ({ part: l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
       if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this despatch has no price.');
-      const inv = buildInvoice({ dn: row.dn_number, date: row.despatched_on, so: job.so_number, po: job.customer_po, calloff, lines },
+      const inv = buildInvoice({ dn: row.dn_number, date: row.despatched_on, so: job.so_number, po: job.customer_po, calloff: '', lines },
         it.contactId, d.accountCode, d.taxType);
       const r = await xeroPost(s, 'Invoices', { Invoices: [inv] }, `clj-despatch-${row.id}`);
       const made = r.Invoices?.[0];

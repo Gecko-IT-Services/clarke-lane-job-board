@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
+import { deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs, addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
   suggestProcesses, describeLine, unitPrice, allDone } from '../src/core/jobs.js';
 
 const job = over => ({
-  id: 1, so: 'SO-9729', customer: 'BSA Regal Group Ltd', po: 'M32991', due: '2026-10-30', calloffs: [],
-  lines: [{ id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 13.1 }, { id: 11, lineNo: 2, part: 'Plate', qty: 5, price: 2 }],
+  id: 1, so: 'SO-9729', customer: 'BSA Regal Group Ltd', po: 'M32991', due: '2026-10-30', status: 'open',
+  lines: [{ id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 13.1, due: '2026-10-30' }, { id: 11, lineNo: 2, part: 'Plate', qty: 5, price: 2, due: '2026-10-30' }],
   procs: { 'Laser': { done: false }, 'Fold': { done: false } }, despatches: [], ...over
 });
 
@@ -23,16 +23,36 @@ assert.equal(value(j, { remaining: true }), 75.5);
 assert.equal(despatchValue(j, j.despatches[0]), 196.5);
 assert.equal(value(job({ lines: [{ id: 1, qty: 2, price: null }] })), null);
 
-// — Call-offs. —
+// — Call-offs, Sage style: the same part on several lines with their own due dates. —
 assert.deepEqual(calloffDates('2026-10-16', 3, 7), ['2026-10-16', '2026-10-23', '2026-10-30']);
-assert.deepEqual(calloffDates('2026-01-31', 2, 'm').length, 2);
 assert.deepEqual(calloffDates('2026-10-16', 2, 14), ['2026-10-16', '2026-10-30']);
-const c = job({ calloffs: ['2026-10-16', '2026-10-23', '2026-10-30'] });
+const split = splitIntoCalloffs([{ part: 'Bezel LH', qty: 152, price: 76.26 }, { part: 'Bezel RH', qty: 2, price: 76.26 }], ['2026-10-16', '2026-10-23', '2026-10-30']);
+assert.deepEqual(split.map(l => `${l.part} ${l.qty} ${l.due}`), ['Bezel LH 51 2026-10-16', 'Bezel RH 1 2026-10-16',
+  'Bezel LH 51 2026-10-23', 'Bezel RH 1 2026-10-23', 'Bezel LH 50 2026-10-30'], 'remainder on the earliest; no zero lines');
+assert.equal(split.filter(l => l.part === 'Bezel LH').reduce((a, l) => a + l.qty, 0), 152, 'nothing lost in the split');
+
+const c = job({ lines: [{ id: 1, part: 'Bezel', qty: 60, price: 1, due: '2026-10-16' }, { id: 2, part: 'Bezel', qty: 60, price: 1, due: '2026-10-23' },
+  { id: 3, part: 'Bezel', qty: 60, price: 1, due: '2026-10-30' }] });
+assert.deepEqual(deliveryDates(c), ['2026-10-16', '2026-10-23', '2026-10-30']);
 assert.equal(nextDue(c), '2026-10-16');
-assert.equal(nextDue({ ...c, despatches: [{ lines: {} }] }), '2026-10-23');
-assert.equal(nextDue({ ...c, despatches: [{}, {}, {}, {}].map(() => ({ lines: {} })) }), '2026-10-30', 'past the last call-off stays on it');
-assert.equal(defaultDespatchQty(c, c.lines[0]), 7);
-assert.equal(defaultDespatchQty(job(), job().lines[0]), 20);
+assert.equal(deliveryLabel(c), 'Delivery 1 of 3');
+assert.deepEqual(c.lines.map(l => defaultDespatchQty(c, l)), [60, 0, 0], 'only what is due next is offered');
+const c2 = { ...c, despatches: [{ lines: { 1: 60 } }] };
+assert.equal(nextDue(c2), '2026-10-23');
+assert.equal(deliveryLabel(c2), 'Delivery 2 of 3');
+assert.deepEqual(c2.lines.map(l => defaultDespatchQty(c2, l)), [0, 60, 0]);
+const short = { ...c, despatches: [{ lines: { 1: 50 } }] };
+assert.equal(nextDue(short), '2026-10-16', 'a short delivery keeps that date outstanding (Sage leaves it on the order)');
+assert.equal(deliveryLabel(job()), '');
+
+// — Sage statuses. —
+assert.equal(despatchStatus(job()), 'Not despatched');
+assert.equal(despatchStatus(c2), 'Part despatched');
+assert.equal(despatchStatus(job({ despatches: [{ lines: { 10: 20, 11: 5 } }] })), 'Despatched');
+assert.equal(invoiceStatus(job()), 'Not invoiced');
+assert.equal(invoiceStatus({ ...c2, despatches: [{ lines: { 1: 60 }, xero: { no: 'INV-1' } }] }), 'Part invoiced');
+assert.equal(invoiceStatus(job({ despatches: [{ lines: { 10: 20, 11: 5 }, xero: { no: 'INV-1' } }] })), 'Invoiced');
+assert.equal(stage(job({ status: 'cancelled' })), 'cancelled');
 
 // — Pre-ticks from quote lines. —
 assert.deepEqual(suggestProcesses([{ process: 'Laser', folds: 2, weld: 0, inserts: 4, paint: true, plating: 0, holes: 0 }]),

@@ -89,15 +89,31 @@ before then.** The board itself never uses the secret.
 no network). `?role=floor` shows the shop-floor view. Serve with
 `python3 -m http.server 8080` and open http://localhost:8080/dev/smoke.html.
 
+## Orders the Sage 50 way (15 Oct, Philip: "as similar to Sage sales order as possible")
+- **Each line has its own due date.** Call-offs are the same part on several lines with their own
+  dates and quantities, as keyed in Sage. "Split into call-offs…" in the order form turns lines into
+  n deliveries (weekly / 2-weekly / monthly), sharing the quantity out (remainder on the earliest);
+  every quantity and date can then be changed. `jobs.calloff_dates` is gone.
+- Order form (New / Amend) has Sage's header: customer, order number, customer order no., contact,
+  delivery address, notes; lines with qty, unit price, due, net; Net / VAT / Total.
+- **Amend** (`amend_job`): any line can change, new lines can be added; a line can't go below what has
+  been despatched and a despatched line can't be removed.
+- **Hold / Release / Cancel**: held and cancelled orders cannot be despatched (`create_despatch`
+  refuses). Cancel keeps the order (and anything already despatched/invoiced) in the Sales orders
+  list; "Delete (made by mistake)" only while nothing has been despatched.
+- **Statuses** as Sage shows them: Not despatched / Part despatched / Despatched; Not invoiced /
+  Part invoiced / Invoiced (by despatch). Office has a **Sales orders** list beside the job board.
+- **Despatch** defaults to everything outstanding on lines due by the next due date; a short delivery
+  leaves the rest outstanding on that line. The despatch note lists this delivery and what is still
+  to come; the board shows "Delivery 2 of 5".
+
 ## Quotes that are not jobs, and cancelling
 - **Not a job** (office): an Ordered quote that should never become a job here (e.g. finished in
   Sage) is recorded in `quote_dismissals` and leaves the Ordered list; the quote itself is never
   touched. "Put back" removes the row. Quote state (waiting / job / not a job) is derived every
   render from jobs + dismissals (`quoteStates`), so other screens update live.
-- **Cancel this job** (office): only while nothing has been despatched (despatches have no cascade,
-  so the database refuses otherwise). The SO number is not reused; the quote returns to Ordered.
+- Superseded 15 Oct by Hold / Cancel / Delete (see "Orders the Sage 50 way").
 - Delivery date defaults to the quote's DeliveryDays in **working** days (10 if none).
-- Office can move call-off dates that have not been sent yet; they must stay in order.
 
 ## Xero (built 15 Oct, read side first)
 - Edge function `supabase/functions/xero` (verify_jwt off; checks the caller is office itself).

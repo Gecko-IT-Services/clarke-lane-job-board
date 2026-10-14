@@ -224,6 +224,18 @@ html,body{margin:0}
 .newjob{border-color:var(--ink)}
 .rowerr td{background:var(--bad-soft)}
 .note.bad{color:var(--bad)}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-block:8px}
+details.splitter>summary{list-style:none;display:inline-flex}
+details.splitter>summary::-webkit-details-marker{display:none}
+details.splitter[open]{flex-basis:100%;background:var(--field);border-radius:10px;padding:10px}
+.njlines input[type=text]{width:100%}
+.njlines input[type=date]{width:150px}
+.newjob textarea{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:inherit;resize:vertical}
+table.solist tbody tr{cursor:pointer}
+table.solist tbody tr:hover td{background:var(--field)}
+tr.muted td{color:var(--muted)}
+.bad{color:var(--bad)}
+@media (max-width:560px){.row3{grid-template-columns:minmax(0,1fr)}}
 .cdates{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 details.gone>summary{cursor:pointer;list-style:none}
 details.gone>summary::-webkit-details-marker{display:none}

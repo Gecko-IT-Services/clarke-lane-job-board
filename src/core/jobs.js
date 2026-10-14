@@ -2,9 +2,10 @@
  * Pure job logic: no window, no network, so it runs under Node in tests/jobs.mjs.
  *
  * A job, as the app holds it:
- * { id, so, quote, spQuoteId, customer, contactName, contactEmail, po, ordered, due,
- *   calloffs: ['YYYY-MM-DD'], notes,
- *   lines: [{ id, lineNo, part, qty, price }],            price is null for the floor role
+ * { id, so, quote, spQuoteId, customer, contactName, contactEmail, po, ordered, due, notes,
+ *   address, status: 'open' | 'held' | 'cancelled',
+ *   lines: [{ id, lineNo, part, qty, price, due }],       price is null for the floor role;
+ *                                                          each line has its own due date (Sage)
  *   procs: { 'Laser': { done, by, at }, … },               only the processes the job needs
  *   despatches: [{ id, dn, date, by, lines: { [lineId]: qty }, xero: { no, at } | null }] }
  */
@@ -32,16 +33,43 @@ export const despatchValue = (job, d) =>
   job.lines.some(l => l.price == null) ? null
     : round2(job.lines.reduce((a, l) => a + round2((d.lines[l.id] || 0) * l.price), 0));
 
-/** upcoming: nothing ticked or sent · current: something ticked or part sent · completed: all sent */
+/** upcoming: nothing ticked or sent · current: something ticked or part sent · completed: all sent.
+ *  Cancelled orders are off the board altogether (they stay in the Sales orders list). */
 export function stage(job) {
+  if (job.status === 'cancelled') return 'cancelled';
   if (job.lines.every(l => left(job, l) === 0)) return 'completed';
   return (doneCount(job) || job.despatches.length) ? 'current' : 'upcoming';
 }
 
-/** The date that matters next: the next call-off, else the job's due date. */
+/** The date that matters next: the earliest due date of a line not yet fully despatched. */
 export function nextDue(job) {
-  if (!job.calloffs.length) return job.due;
-  return job.calloffs[job.despatches.length] || job.calloffs[job.calloffs.length - 1];
+  const open = job.lines.filter(l => left(job, l) > 0).map(l => l.due).sort();
+  return open[0] || job.lines.map(l => l.due).sort().pop() || job.due;
+}
+
+/** The order's delivery dates (one per distinct line due date), earliest first. */
+export const deliveryDates = job => [...new Set(job.lines.map(l => l.due))].sort();
+
+/** "Delivery 2 of 5" for an order delivered on several dates; '' for a single delivery. */
+export function deliveryLabel(job) {
+  const dates = deliveryDates(job);
+  if (dates.length < 2) return '';
+  const i = Math.max(0, dates.indexOf(nextDue(job)));
+  return `Delivery ${i + 1} of ${dates.length}`;
+}
+
+/** Sage's despatch status for the order. */
+export function despatchStatus(job) {
+  const sentAny = job.lines.some(l => sent(job, l) > 0);
+  if (job.lines.every(l => left(job, l) === 0)) return 'Despatched';
+  return sentAny ? 'Part despatched' : 'Not despatched';
+}
+
+/** Sage's invoice status: by despatch, since only what went out is invoiced. */
+export function invoiceStatus(job) {
+  const ds = job.despatches;
+  if (!ds.length || ds.every(d => !d.xero)) return 'Not invoiced';
+  return ds.every(d => d.xero) && despatchStatus(job) === 'Despatched' ? 'Invoiced' : 'Part invoiced';
 }
 
 export const lastDespatch = job => job.despatches.length ? job.despatches[job.despatches.length - 1].date : '';
@@ -58,11 +86,28 @@ export function calloffDates(first, count, every) {
   return out;
 }
 
-/** Default quantity for the next despatch: an even share per call-off, else everything left. */
+/** Default quantity for the next despatch: everything outstanding on lines due by the next
+ *  delivery date; later deliveries stay at 0 until their turn (Mandy can still change it). */
 export function defaultDespatchQty(job, line) {
   const l = left(job, line);
-  if (!job.calloffs.length) return l;
-  return Math.min(l, Math.ceil(line.qty / job.calloffs.length));
+  return l > 0 && line.due <= nextDue(job) ? l : 0;
+}
+
+/**
+ * Split lines into call-offs the Sage way: each line becomes one line per delivery date,
+ * the quantity shared as evenly as whole numbers allow (any remainder on the earliest).
+ * lines: [{ part, qty, price, ... }] → [{ ...line, qty, due }]
+ */
+export function splitIntoCalloffs(lines, dates) {
+  const out = [];
+  for (const l of lines) {
+    const q = Number(l.qty) || 0, n = dates.length, base = Math.floor(q / n), extra = q - base * n;
+    dates.forEach((due, i) => {
+      const qty = base + (i < extra ? 1 : 0);
+      if (qty > 0) out.push({ ...l, qty, due });
+    });
+  }
+  return out.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
 }
 
 /**
