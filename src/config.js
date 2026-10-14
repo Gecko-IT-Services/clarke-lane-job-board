@@ -9,4 +9,7 @@ export const CONFIG = {
   // Delegated, admin-consented on the Entra app. Do not add scopes here without consent:
   // an unconsented scope stops everyone signing in.
   GRAPH_SCOPES: ['User.Read', 'Sites.ReadWrite.All'],
+  // Asked for only when someone emails a document (never at sign-in), so a missing consent
+  // cannot stop anyone signing in. Admin-consented on the Entra app.
+  MAIL_SCOPES: ['Mail.ReadWrite'],
 };

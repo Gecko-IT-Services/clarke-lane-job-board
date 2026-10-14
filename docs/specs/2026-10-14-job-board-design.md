@@ -116,6 +116,17 @@ no network). `?role=floor` shows the shop-floor view. Serve with
   visible; "Refresh now" on the Xero tab. Xero sales orders not on the board appear on the Quotes tab
   (titled "New orders") beside Levi's ordered quotes, each with Make job; the tab badge counts both.
 
+## Emailing documents and confirming delivery (15 Oct)
+- Order acknowledgement (office) and delivery note (anyone) have **Email to customer**: the page is
+  drawn with html2canvas, made into an A4 PDF with jsPDF, and created as an **Outlook draft** in the
+  signed-in person's mailbox (Graph `/me/messages`, delegated `Mail.ReadWrite`, asked for only when
+  emailing so it can never block sign-in). The draft opens in Outlook; the person checks and sends.
+  The board never sends email itself. Recipient = the order's contact email (from Xero).
+- Flow: despatch → **Out for delivery** (email the delivery note) → **Mark delivered** (optional
+  "signed by") → **Waiting for Xero** → draft invoice. `xero_mark_sent` and the edge function both
+  refuse a despatch that is not delivered. "undo" a delivery only before it is invoiced.
+- Printed heading is "Delivery note" (the despatch number stays DN-xxxx).
+
 ## Quotes that are not jobs, and cancelling
 - **Not a job** (office): an Ordered quote that should never become a job here (e.g. finished in
   Sage) is recorded in `quote_dismissals` and leaves the Ordered list; the quote itself is never

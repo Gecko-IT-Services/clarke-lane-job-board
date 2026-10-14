@@ -188,6 +188,11 @@ async function restore(spId) {
   try { await data.restoreQuote(spId); toast(`${q?.quoteNo || 'Quote'} is back in Ordered, ready to become a job.`); }
   catch (e) { toast(e.message, null, true); reload(); }
 }
+async function markDelivery(id, what, receivedBy = '') {
+  try { await data.markDespatch(id, what, receivedBy); toast(what === 'delivered' ? 'Marked delivered. It is now waiting for Xero.' : 'Set back to out for delivery.'); }
+  catch (e) { toast(e.message, null, true); }
+  reload();
+}
 async function setStatus(id, status) {
   const j = job(id);
   try {
@@ -207,7 +212,7 @@ async function deleteOrder(id) {
 const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'New orders'], ['despatch', 'Despatch'], ['xero', 'Xero']];
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
-  const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero).length, 0);
+  const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
   $('tabs').innerHTML = TABS.filter(([k]) => office() || (k !== 'quotes' && k !== 'xero')).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'despatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${b ? `<span class="badge">${b}</span>` : ''}</a>`;
@@ -577,7 +582,7 @@ function renderQuotes() {
 
 /* ---------- despatch ---------- */
 function waitingForXero(pend) {
-  if (!pend.length) return `<div class="panel"><h3>Waiting for Xero</h3><div class="empty">Nothing waiting. Every despatch is in Xero.</div></div>`;
+  if (!pend.length) return `<div class="panel"><h3>Waiting for Xero</h3><div class="empty">Nothing waiting. Every delivered despatch is in Xero.</div></div>`;
   const connected = !!S.xero;
   if (connected && !S.xc && !S.xcErr) loadXeroContacts();
   const rows = pend.map(([x, d]) => {
@@ -622,7 +627,7 @@ async function pickContact(key, id) {
   catch (e) { S.xcMap.delete(key); render(); toast(e.message, null, true); }
 }
 async function sendToXero() {
-  const pend = []; S.jobs.forEach(x => x.despatches.forEach(d => { if (!d.xero) pend.push([x, d]); }));
+  const pend = []; S.jobs.forEach(x => x.despatches.forEach(d => { if (!d.xero && d.deliveredOn) pend.push([x, d]); }));
   const items = pend.map(([x, d]) => ({ x, d, m: contactFor(x.customer) }))
     .filter(({ d, m }) => m && (S.sendPick[d.id] ?? true))
     .map(({ d, m }) => ({ despatchId: d.id, contactId: m.id }));
@@ -647,6 +652,17 @@ function deliveryRow(j) {
     const done = ls.every(l => left(j, l) === 0), part = !done && ls.some(l => sent(j, l) > 0), late = !done && c < today;
     return `<div class="call ${done ? 'done' : late ? 'late' : ''}"><i>${i + 1}</i><b>${fmt(c)}</b>${done ? 'sent' : part ? 'part sent' : late ? 'late' : 'due'}</div>`; }).join('')}</div>`;
 }
+/** Despatch notes with their email, delivery and Xero state, and the buttons to move them on. */
+function despatchTable(rows, money) {
+  return `<div style="overflow-x:auto;margin-top:8px"><table class="lines dtable"><thead><tr><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Order</th><th>Despatched</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
+    ${rows.map(([x, d]) => `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
+      <td>${d.emailedAt ? `<span class="chip ok">${fmt(d.emailedAt.slice(0, 10))}</span>` : `<button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">Email…</button>`}</td>
+      <td>${d.deliveredOn ? `<span class="chip ok">${fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : ''}</span>${!d.xero ? ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>` : ''}`
+        : `<form class="inv" data-deliver="${d.id}"><input type="text" id="rcv-${d.id}" placeholder="Signed by (optional)" aria-label="Who signed for ${esc(d.dn)}"><button class="btn sm pri" type="submit">Mark delivered</button></form>`}</td>
+      ${money ? `<td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : d.deliveredOn ? '<span class="chip soon">waiting</span>' : '<span class="note">after delivery</span>'}</td>` : ''}
+      <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">View</button></td></tr>`).join('')}
+    </tbody></table></div>`;
+}
 function renderDespatch() {
   const open = S.jobs.filter(j => onBoardStage(j) && j.status === 'open').sort(byDue);
   const held = S.jobs.filter(j => onBoardStage(j) && j.status === 'held');
@@ -667,7 +683,8 @@ function renderDespatch() {
   }
   const all = []; S.jobs.forEach(x => x.despatches.forEach(d => all.push([x, d])));
   all.sort((a, b) => (a[1].id < b[1].id ? 1 : -1));
-  const pend = all.filter(([, d]) => !d.xero).reverse();
+  const pend = all.filter(([, d]) => !d.xero && d.deliveredOn).reverse();
+  const undelivered = all.filter(([, d]) => !d.deliveredOn && !d.xero);
   $('v-despatch').innerHTML = `
     <div class="sec-h"><h2>Despatch</h2><span class="sub">Send all of a job or part of it. Each despatch gets its own note, and only what went out is invoiced.</span></div>
     <div class="panel"><h3>Despatch goods</h3>
@@ -675,11 +692,12 @@ function renderDespatch() {
       <select class="f" id="dsel"><option value="">Choose a job…</option>${open.map(x => `<option value="${x.id}" ${x.id === S.desp ? 'selected' : ''}>${esc(x.so)} · ${esc(x.customer)}${x.po ? ' · PO ' + esc(x.po) : ''}${allDone(x) ? ' · ready' : ''}</option>`).join('')}</select></label>
       ${held.length ? `<p class="note">On hold, so not listed: ${held.map(h => esc(h.so)).join(', ')}.</p>` : ''}
       ${form}</div>
+    <div class="panel"><h3>Out for delivery <span class="note">${undelivered.length}</span></h3>
+      <p class="note">Email the delivery note to the customer, then mark it delivered once the goods have arrived. Only delivered notes go to Xero.</p>
+      ${undelivered.length ? despatchTable(undelivered, money) : '<div class="empty">Nothing out for delivery.</div>'}</div>
     ${money ? waitingForXero(pend) : ''}
-    <div class="panel"><h3>Despatch notes</h3>
-      ${all.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Sales order</th><th>Date</th>${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
-      ${all.slice(0, 50).map(([x, d]) => `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>${money ? `<td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : '<span class="chip soon">not yet</span>'}</td>` : ''}<td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">View</button></td></tr>`).join('')}
-      </tbody></table></div>` : '<div class="empty">No despatch notes yet.</div>'}</div>`;
+    <details class="panel"><summary><b>All despatch notes</b> <span class="note">${all.length}</span></summary>
+      ${all.length ? despatchTable(all.slice(0, 100), money) : '<div class="empty">No despatch notes yet.</div>'}</details>`;
 }
 
 /* ---------- job drawer ---------- */
@@ -719,18 +737,21 @@ function renderDrawer() {
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div></div>
-    <div class="panel"><h3>Despatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
-      ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>${money ? `<td>${gbp(despatchValue(j, d), 2)}</td><td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : '<span class="chip soon">not yet</span>'}</td>` : ''}
-        <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>` : '<div class="note">Nothing despatched yet.</div>'}</div>
+    <div class="panel"><h3>Despatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
+      ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>
+        <td>${d.emailedAt ? fmt(d.emailedAt.slice(0, 10)) : '—'}</td><td>${d.deliveredOn ? fmt(d.deliveredOn) : '<span class="note">not yet</span>'}</td>
+        ${money ? `<td>${gbp(despatchValue(j, d), 2)}</td><td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : d.deliveredOn ? '<span class="chip soon">waiting</span>' : '<span class="note">after delivery</span>'}</td>` : ''}
+        <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>
+      <p class="note">Mark deliveries on the Despatch tab.</p>` : '<div class="note">Nothing despatched yet.</div>'}</div>
     <div class="actions">
-      ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement</button>` : ''}
+      ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
       ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">Despatch…</button>` : ''}
     </div>${actions}${confirm}`;
 }
 
 /* ---------- documents (print / save as PDF) ---------- */
-function showDoc(kind, jobId, despId) {
-  const j = job(jobId); if (!j) return;
+function docHtml(kind, jobId, despId) {
+  const j = job(jobId); if (!j) return '';
   const logo = document.querySelector('.top .logo').outerHTML;
   const head = (title, no) => `<div class="ph">${logo}<div><h1>${title}</h1><div class="dno">${no}</div></div></div>`;
   let body;
@@ -750,7 +771,7 @@ function showDoc(kind, jobId, despId) {
   } else {
     const di = j.despatches.findIndex(d => d.id === despId), d = j.despatches[di];
     const before = l => j.despatches.slice(0, di).reduce((a, x) => a + (x.lines[l.id] || 0), 0);
-    body = head('Despatch note', esc(d.dn)) + `
+    body = head('Delivery note', esc(d.dn)) + `
       <div class="two"><div><div class="k">Deliver to</div><b>${esc(j.customer)}</b>${j.address ? `<div style="white-space:pre-line">${esc(j.address)}</div>` : ''}${j.contactName ? `<div>FAO ${esc(j.contactName)}</div>` : ''}</div>
         <div class="kv"><span class="k">Date</span><span>${fmtLong(d.date)}</span><span class="k">Your order</span><span>${esc(j.po) || '—'}</span>
         <span class="k">Our order</span><span>${esc(j.so)}</span></div></div>
@@ -760,9 +781,75 @@ function showDoc(kind, jobId, despId) {
       <div class="sign"><div>Received by (print)</div><div>Signature</div><div>Date</div></div>
       <div class="foot">Please check the goods on delivery and report any shortage or damage within 48 hours, quoting ${esc(d.dn)}.</div>`;
   }
-  $('doc').innerHTML = `<div class="docbar"><span>Print it, or choose "Save as PDF" in the print window to email it.</span><button class="btn pri" type="button" data-print>Print</button><button class="btn" type="button" data-closedoc>Close</button></div><div class="paper">${body}</div>`;
+  return body;
+}
+function showDoc(kind, jobId, despId) {
+  const j = job(jobId); if (!j) return;
+  const d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
+  const sentAt = kind === 'soa' ? j.ackEmailedAt : d?.emailedAt;
+  const canEmail = kind === 'dn' || office();
+  $('doc').innerHTML = `<div class="docbar"><span>${sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>
+      ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
+      <button class="btn" type="button" data-print>Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
+    <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
   $('doc').hidden = false;
   document.body.classList.add('doc-open');
+}
+
+/* ---------- emailing documents: an Outlook draft with the PDF attached, never sent by the board ---------- */
+// html2pdf's own renderer gave blank pages here, so: html2canvas draws the page, jsPDF makes the A4.
+const PDF_LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+let pdfLib;
+function loadScript(src) {
+  return new Promise((ok, no) => { const t = document.createElement('script'); t.src = src; t.onload = ok;
+    t.onerror = () => no(new Error('Could not load the PDF maker. Check the internet connection and try again.')); document.head.append(t); });
+}
+function loadPdfLib() { pdfLib ??= Promise.all(PDF_LIBS.map(loadScript)).catch(e => { pdfLib = null; throw e; }); return pdfLib; }
+/** The document as an A4 PDF (base64), split over pages if it is longer than one. */
+async function pdfBase64(html) {
+  await loadPdfLib();
+  const el = document.createElement('div');
+  el.className = 'paper pdf'; el.innerHTML = html;
+  el.style.cssText = 'position:absolute;left:0;top:0;width:794px;max-width:none;box-shadow:none;border-radius:0;z-index:-1';
+  document.body.append(el);
+  try {
+    const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+    if (!canvas.height) throw new Error('The PDF came out empty. Try again.');
+    const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const margin = 10, w = 210 - 2 * margin, pageH = 297 - 2 * margin;
+    const pxPerMm = canvas.width / w, slice = Math.floor(pageH * pxPerMm);
+    for (let y = 0, page = 0; y < canvas.height; y += slice, page++) {
+      const part = document.createElement('canvas');
+      part.width = canvas.width; part.height = Math.min(slice, canvas.height - y);
+      part.getContext('2d').drawImage(canvas, 0, y, canvas.width, part.height, 0, 0, canvas.width, part.height);
+      if (page) pdf.addPage();
+      pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', margin, margin, w, part.height / pxPerMm);
+    }
+    return pdf.output('datauristring').split(',')[1];
+  } finally { el.remove(); }
+}
+async function emailDoc(kind, jobId, despId) {
+  const j = job(jobId), d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
+  const btn = document.querySelector('[data-emaildoc]'); if (btn) { btn.disabled = true; btn.textContent = 'Making the PDF…'; }
+  try {
+    const no = kind === 'soa' ? j.so : d.dn;
+    const pdf = await pdfBase64(docHtml(kind, jobId, despId));
+    const hello = j.contactName ? `Dear ${esc(j.contactName.split(' ')[0])},` : 'Hello,';
+    const ref = j.po ? ` (your order ${esc(j.po)})` : '';
+    const html = kind === 'soa'
+      ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached our sales order acknowledgement ${esc(j.so)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
+      : `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} have been despatched. Please find attached delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
+    const subject = kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${j.po ? ' / ' + j.po : ''}`;
+    const link = await data.draftEmail({ to: j.contactEmail, subject, html, fileName: `${no}.pdf`, pdfBase64: pdf });
+    if (kind === 'soa') await data.markAckEmailed(jobId); else await data.markDespatch(despId, 'emailed');
+    await reload(); showDoc(kind, jobId, despId);
+    toast(`Draft ready in your Outlook Drafts${j.contactEmail ? ` to ${j.contactEmail}` : ' (no email address on the order: add one in Outlook)'}. Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (e) {
+    toast(/Mail\.ReadWrite|consent|AADSTS65001/i.test(e.message) ? 'Emailing needs a one-off permission in Microsoft 365 (Mail.ReadWrite). Ask Gecko IT to grant it.' : e.message, null, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Email to customer'; }
+  }
 }
 /** On a despatch note: what is still to come on the order after this delivery, per part. */
 function stillToCome(j, di) {
@@ -841,6 +928,8 @@ document.addEventListener('click', e => {
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if (d.desp) { S.desp = +d.desp; S.open = null; S.tab = 'despatch'; history.replaceState(null, '', '#despatch'); return render(); }
   if ('print' in d) return window.print();
+  if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
+  if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
   if ('closedoc' in d) return closeDoc();
   if (t.id === 'mkdn') return makeDespatch();
   if (d.xero) return xeroAction(d.xero);
@@ -871,6 +960,7 @@ document.addEventListener('change', e => {
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('orderform' in f.dataset) return submitOrder();
+  if (f.dataset.deliver) return markDelivery(+f.dataset.deliver, 'delivered', f.querySelector('input').value.trim());
   if (f.dataset.inv) {
     const no = f.querySelector('input').value.trim(); if (!no) return;
     try { await data.markInvoiced(+f.dataset.inv, no); toast(`Recorded as ${no}.`); } catch (err) { toast(err.message, null, true); }

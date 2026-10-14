@@ -32,7 +32,7 @@ export async function loadJobs({ office }) {
     id: j.id, so: j.so_number, quote: j.quote_no, spQuoteId: j.sp_quote_id, xeroQuoteId: j.xero_quote_id, customer: j.customer,
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
     ordered: j.ordered_on, due: j.due_date, notes: j.notes, address: j.delivery_address, status: j.status,
-    createdBy: j.created_by,
+    createdBy: j.created_by, ackEmailedAt: j.ack_emailed_at,
     lines: [], procs: {}, despatches: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
@@ -41,7 +41,8 @@ export async function loadJobs({ office }) {
   const dById = new Map();
   for (const d of desps.data) {
     const o = { id: d.id, dn: d.dn_number, date: d.despatched_on, by: d.despatched_by, lines: {},
-      xero: d.xero_invoice_no ? { no: d.xero_invoice_no, at: d.sent_to_xero_at } : null };
+      xero: d.xero_invoice_no ? { no: d.xero_invoice_no, at: d.sent_to_xero_at } : null,
+      emailedAt: d.emailed_at, deliveredOn: d.delivered_on, deliveredBy: d.delivered_by, receivedBy: d.received_by };
     dById.set(d.id, o); byJob.get(d.job_id)?.despatches.push(o);
   }
   for (const dl of dlines.data) { const d = dById.get(dl.despatch_id); if (d) d.lines[dl.job_line_id] = dl.qty; }
@@ -97,6 +98,31 @@ export async function createDespatch(jobId, lines) {
   const { data, error } = await sb.rpc('create_despatch', { p_job_id: jobId, lines });
   if (error) fail('The despatch note was not created', error);
   return data;
+}
+
+/** what: 'emailed' | 'delivered' | 'undelivered' */
+export async function markDespatch(despatchId, what, receivedBy = '') {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('mark_despatch', { p_despatch_id: despatchId, p_what: what, p_received_by: receivedBy });
+  if (error) fail('Not saved', error);
+}
+export async function markAckEmailed(jobId) {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('mark_ack_emailed', { p_job_id: jobId });
+  if (error) fail('Not saved', error);
+}
+
+/**
+ * An Outlook draft in the signed-in person's mailbox with the PDF attached. Never sends:
+ * the person checks it in Outlook and presses Send. Returns Outlook's link to the draft.
+ */
+export async function draftEmail({ to, subject, html, fileName, pdfBase64 }) {
+  const msg = await graph('/me/messages', { method: 'POST', scopes: CONFIG.MAIL_SCOPES, body: {
+    subject, body: { contentType: 'HTML', content: html },
+    toRecipients: to ? [{ emailAddress: { address: to } }] : [],
+    attachments: [{ '@odata.type': '#microsoft.graph.fileAttachment', name: fileName, contentType: 'application/pdf', contentBytes: pdfBase64 }],
+  } });
+  return msg.webLink;
 }
 
 export async function markInvoiced(despatchId, invoiceNo) {

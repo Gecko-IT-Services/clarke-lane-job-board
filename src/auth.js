@@ -99,20 +99,21 @@ export async function signOut() {
 export const currentAccount = () => account;
 
 /** Graph call as the signed-in person. Used only to read Levi's quotes. */
-export async function graph(path, { headers = {} } = {}) {
+export async function graph(path, { headers = {}, method = 'GET', body, scopes = CONFIG.GRAPH_SCOPES } = {}) {
   let token;
   try {
-    token = (await msal.acquireTokenSilent({ scopes: CONFIG.GRAPH_SCOPES, account })).accessToken;
+    token = (await msal.acquireTokenSilent({ scopes, account })).accessToken;
   } catch {
-    await msal.acquireTokenRedirect({ scopes: CONFIG.GRAPH_SCOPES, account });
+    await msal.acquireTokenRedirect({ scopes, account });
     return new Promise(() => {});
   }
   const res = await fetch(path.startsWith('http') ? path : CONFIG.GRAPH + path,
-    { headers: { Authorization: `Bearer ${token}`, ...headers } });
+    { method, headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers },
+      body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) {
     let msg = res.statusText;
     try { msg = (await res.json()).error?.message || msg; } catch { /* not JSON */ }
-    const e = new Error(res.status === 403
+    const e = new Error(res.status === 403 && path.includes('/sites/')
       ? 'Your Microsoft account cannot open the Factory Jobs site in SharePoint, where the quotes are kept. Ask for read access to that site.'
       : `SharePoint said: ${msg} (${res.status})`);
     e.status = res.status;

@@ -65,3 +65,10 @@ export const xero = async (route, body) => {
 let cmap = new Map();
 export const loadContactMap = async () => new Map(cmap);
 export const saveContact = async (k, c) => { cmap.set(k, c); };
+export const markDespatch = async (id, what, receivedBy) => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) {
+  if (what === 'emailed') d.emailedAt = new Date().toISOString();
+  if (what === 'delivered') { d.deliveredOn = '2026-10-15'; d.receivedBy = receivedBy; }
+  if (what === 'undelivered') { d.deliveredOn = null; d.receivedBy = ''; } } };
+export const markAckEmailed = async id => { find(id).ackEmailedAt = new Date().toISOString(); };
+export let lastDraft = null;
+export const draftEmail = async m => { lastDraft = { ...m, pdfBytes: Math.round(m.pdfBase64.length * 0.75) }; window.__lastDraft = lastDraft; return null; };
