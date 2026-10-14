@@ -50,7 +50,11 @@ export async function start() {
     try { nonce = localStorage.getItem(NONCE_KEY); localStorage.removeItem(NONCE_KEY); } catch { /* blocked */ }
     if (nonce) {
       const { error } = await client.auth.signInWithIdToken({ provider: 'azure', token: result.idToken, nonce });
-      if (error) throw new Error('Microsoft sign-in worked but the job board database refused it: ' + error.message);
+      if (error) throw new Error(/unverified email/i.test(error.message)
+        ? `Microsoft signed you in as ${result.account?.username || 'this account'} but did not send a verified email address, ` +
+          'so the job board cannot check you against its staff list. In Entra › Users, open this account and check its Email ' +
+          'property is filled in (accounts without a mailbox often leave it blank).'
+        : 'Microsoft sign-in worked but the job board database refused it: ' + error.message);
     }
   }
   if (!account) return { account: null, ready: false };
