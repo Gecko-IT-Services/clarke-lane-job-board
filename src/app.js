@@ -285,14 +285,14 @@ function openOrderForm(prefill = {}, amendId = null) {
 }
 function openAmend(id) {
   const j = job(id);
-  openOrderForm({ so: j.so, customer: j.customer, po: j.po, contact: j.contactName, address: j.address, notes: j.notes,
+  openOrderForm({ so: j.so, customer: j.customer, po: j.po, contact: j.contactName, contactEmail: j.contactEmail || '', address: j.address, notes: j.notes,
     due: nextDue(j), procs: needed(j),
     lines: j.lines.map(l => ({ id: l.id, part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, sent: sent(j, l) })) }, id);
 }
 /** Copy what is typed into S.form, so adding, removing or splitting lines keeps everything else. */
 function collectForm() {
   const n = S.form, v = id => $(id)?.value ?? '';
-  Object.assign(n, { so: v('of-so'), customer: v('of-cust') || n.customer, po: v('of-po'), contact: v('of-contact'), address: v('of-addr'),
+  Object.assign(n, { so: v('of-so'), customer: v('of-cust') || n.customer, po: v('of-po'), contact: v('of-contact'), contactEmail: v('of-email'), address: v('of-addr'),
     due: v('of-due') || n.due, notes: v('of-notes') });
   n.lines = n.lines.map((l, i) => ({ ...l, part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i) }));
   n.procs = [...document.querySelectorAll('input[name=of-p]:checked')].map(i => i.value);
@@ -318,8 +318,9 @@ function orderForm() {
       ${amend ? `<label class="fl">Order number<input type="text" value="${esc(n.so)}" disabled></label>`
         : `<label class="fl">Order number<input type="text" id="of-so" value="${esc(n.so)}" placeholder="Blank = next SO number"></label>`}</div>
     ${amend ? '' : '<p class="note">Leave the order number blank for a new order. For one that already has a number, type it: SO-9726 raised in Xero, SAGE-9701 carried over from Sage.</p>'}
-    <div class="row2"><label class="fl">Customer order no. (PO)<input type="text" id="of-po" value="${esc(n.po)}"></label>
-      <label class="fl">Contact<input type="text" id="of-contact" value="${esc(n.contact)}"></label></div>
+    <div class="row3"><label class="fl">Customer order no. (PO)<input type="text" id="of-po" value="${esc(n.po)}"></label>
+      <label class="fl">Contact<input type="text" id="of-contact" value="${esc(n.contact)}"></label>
+      <label class="fl">Contact email<input type="email" id="of-email" value="${esc(n.contactEmail)}"></label></div>
     <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
       <label class="fl">Promised delivery (default for new lines)<input type="date" id="of-due" value="${esc(n.due)}"></label></div>
     <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th>Net</th>${amend ? '<th>Despatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -360,9 +361,11 @@ async function customerPicked(name) {
   try {
     const d = await data.xero('contact', { id: c.id });
     if (S.form !== n) return;
-    if (!n.address.trim() && d.address) n.address = d.address;
-    if (!n.contact.trim() && d.person) n.contact = d.person;
-    if (!n.contactEmail && d.email) n.contactEmail = d.email;
+    // Fill blanks, and replace what the previous Xero pick filled in; never overwrite what was typed.
+    if (d.address && (!n.address.trim() || n.address === n.fromXero?.address)) n.address = d.address;
+    if (d.person && (!n.contact.trim() || n.contact === n.fromXero?.person)) n.contact = d.person;
+    if (d.email && (!n.contactEmail.trim() || n.contactEmail === n.fromXero?.email)) n.contactEmail = d.email;
+    n.fromXero = { address: d.address, person: d.person, email: d.email };
   } catch { /* details are a convenience; the match itself is saved */ }
   keepInputs = false; render();
 }
@@ -397,6 +400,7 @@ async function submitOrder() {
       const j = job(n.jobId);
       await data.amendJob(n.jobId, { customer_po: n.po.trim(), contact_name: n.contact.trim(), delivery_address: n.address.trim(), notes: n.notes.trim(), lines: payloadLines });
       await data.setJobProcesses(n.jobId, n.procs.filter(p => !j.procs[p]), needed(j).filter(p => !n.procs.includes(p)));
+      if ((n.contactEmail || '') !== (j.contactEmail || '')) await data.updateJob(n.jobId, { contact_email: n.contactEmail.trim() });
       S.form = null; keepInputs = false; await reload(); S.open = n.jobId;
       toast(`${j.so} amended.`);
     } else {

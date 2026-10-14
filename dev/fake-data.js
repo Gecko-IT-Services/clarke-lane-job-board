@@ -19,7 +19,7 @@ export const whoAmI = async () => ({ email: 'x', name: role === 'office' ? 'Levi
 export const loadJobs = async () => structuredClone(jobs).map(hide);
 export const setProcess = async (id, p, done, by) => { find(id).procs[p] = done ? { done, by, at: new Date().toISOString() } : { done: false }; };
 export const setJobProcesses = async (id, add, remove) => { const j = find(id); add.forEach(p => { j.procs[p] = { done: false }; }); remove.forEach(p => delete j.procs[p]); };
-export const updateJob = async () => {};
+export const updateJob = async (id, patch) => { if ('contact_email' in patch) find(id).contactEmail = patch.contact_email; };
 let nextLine = 100;
 export const createJob = async p => {
   const id = jobs.length + 1, so = p.so_number || 'SO-97' + (82 + id);

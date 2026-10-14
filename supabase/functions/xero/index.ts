@@ -178,8 +178,14 @@ async function contact(id: string) {
     || addrs.find(x => x.AddressLine1);
   const address = a ? [a.AttentionTo ? `FAO ${a.AttentionTo}` : '', a.AddressLine1, a.AddressLine2, a.AddressLine3, a.AddressLine4,
     a.City, a.Region, a.PostalCode].filter(Boolean).join('\n') : '';
-  const person = [c.FirstName, c.LastName].filter(Boolean).join(' ');
-  return { id: c.ContactID, name: c.Name, email: c.EmailAddress || '', person, address };
+  // Default contact: the contact's own primary person, else the first named contact person
+  // (preferring one marked to receive emails), as Xero shows them.
+  const people: any[] = (c.ContactPersons || []).filter((p: any) => p.FirstName || p.LastName);
+  const alt = people.find(p => p.IncludeInEmails) || people[0];
+  const primary = [c.FirstName, c.LastName].filter(Boolean).join(' ');
+  const person = primary || (alt ? [alt.FirstName, alt.LastName].filter(Boolean).join(' ') : '');
+  const email = c.EmailAddress || alt?.EmailAddress || '';
+  return { id: c.ContactID, name: c.Name, email, person, address };
 }
 
 /** items: [{ despatchId, contactId }] → one draft invoice each, recorded on the despatch. */
