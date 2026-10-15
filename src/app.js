@@ -1176,7 +1176,11 @@ document.addEventListener('click', e => {
   if ('signin' in d) return auth.signIn();
   if ('signout' in d) return auth.signOut();
   if ('reload' in d) return location.reload();
-  if (d.homeview) { S.homeView = d.homeview; try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
+  if (d.homeview) {   // the switch is remembered; a card's list is just for now, and scrolls into view
+    S.homeView = d.homeview;
+    if (['attention', 'out'].includes(d.homeview)) { try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
+    render(); $('home-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
+  }
   if (d.dispview) { S.dispView = d.dispview; S.dispChosen = true; if (S.tab !== 'dispatch') { S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); window.scrollTo(0, 0); } return render(); }
   if (d.orderview) { S.orderView = d.orderview; try { localStorage.setItem('clj.orderview', d.orderview); } catch { /* not kept */ } return render(); }
   if (d.wondrill) return wonDrill(d.wondrill, d.key);

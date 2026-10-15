@@ -37,11 +37,13 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
     : '<button class="btn pri" type="button" data-tab="floor">Shop floor</button>';
 
   const cards = [
-    card('bad', 'late', d.late.length, office && d.late.length && d.lateValue != null ? `Running late · ${gbp(d.lateValue)}` : 'Running late', d.late.length > 0),
-    card('warn', 'soon', d.soon.length, 'Due in the next 7 days', d.soon.length > 0),
-    card('ok', 'ready', d.ready.length, 'Ready to dispatch', d.ready.length > 0),
-    office && d.orderBook != null ? card('info', 'book', gbp(d.orderBook), `Order book · ${d.open.length} open`, d.open.length > 0)
-      : card('info', 'book', d.open.length, 'Open jobs', d.open.length > 0),
+    // Each card opens the jobs behind its number in the table below.
+    card('bad', 'late', d.late.length, office && d.late.length && d.lateValue != null ? `Running late · ${gbp(d.lateValue)}` : 'Running late', d.late.length > 0,
+      'data-homeview="late" title="Show the jobs running late"'),
+    card('warn', 'soon', d.soon.length, 'Due in the next 7 days', d.soon.length > 0, 'data-homeview="soon" title="Show the jobs due in the next 7 days"'),
+    card('ok', 'ready', d.ready.length, 'Ready to dispatch', d.ready.length > 0, 'data-homeview="ready" title="Show the jobs ready to dispatch"'),
+    office && d.orderBook != null ? card('info', 'book', gbp(d.orderBook), `Order book · ${d.open.length} open`, d.open.length > 0, 'data-homeview="book" title="Show every open order"')
+      : card('info', 'book', d.open.length, 'Open jobs', d.open.length > 0, 'data-homeview="book" title="Show every open job"'),
   ].join('');
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
@@ -86,19 +88,31 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
 
   const rows = attention(d, { office, wonQuotes: wonQuotes || 0 });
   const isOut = view === 'out';
-  const body = isOut ? d.goingOut.map(outRow) : rows.map(r => ROW[r.kind](r));
+  const until = j => { const n = Math.round((new Date(nextDue(j) + 'T12:00:00Z') - new Date(today + 'T12:00:00Z')) / 864e5);
+    return `<span class="chip soon">${n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : `Due in ${n} days`}</span>`; };
+  // Lists opened from the cards (not on the switch): ✕ goes back to Needs attention.
+  const DRILL = {
+    late: { title: 'Running late', sub: 'worst first', list: d.late.map(r => ROW.late(r)), empty: 'Nothing is late.' },
+    soon: { title: 'Due in the next 7 days', sub: 'soonest first', list: d.soon.map(j => jobRow(j, until(j) + heldChip(j), j.status === 'open' && allDone(j) ? dispatchBtn(j) : openBtn(j))), empty: 'Nothing due in the next 7 days.' },
+    ready: { title: 'Ready to dispatch', sub: 'every process ticked', list: d.ready.map(j => ROW.ready({ job: j })), empty: 'Nothing ready yet.' },
+    book: { title: office ? 'Order book' : 'Open jobs', sub: office && d.orderBook != null ? `${d.open.length} open · ${gbp(d.orderBook)} still to send · soonest due first` : 'soonest due first',
+      list: d.open.slice().sort((a, b) => (nextDue(a) || '9') < (nextDue(b) || '9') ? -1 : 1).map(outRow), empty: 'No open orders.' },
+  };
+  const drill = DRILL[view];
+  const body = drill ? drill.list : isOut ? d.goingOut.map(outRow) : rows.map(r => ROW[r.kind](r));
   const head = `<thead><tr><th>Customer</th><th>Due</th><th>Still to do</th><th>Status</th>${office ? '<th class="num">Value</th>' : ''}<th class="act"><span class="sr">Action</span></th></tr></thead>`;
   const table = body.length
     ? `<div class="tbl-wrap"><table class="lines home">${head}<tbody>${body.join('')}</tbody></table></div>`
-    : `<div class="tbl-wrap"><p class="allclear${isOut ? '' : ' ok'}">${isOut ? 'Nothing due out before next Friday.' : 'All clear — nothing late, at risk or waiting.'}</p></div>`;
+    : `<div class="tbl-wrap"><p class="allclear${isOut || drill ? '' : ' ok'}">${drill ? drill.empty : isOut ? 'Nothing due out before next Friday.' : 'All clear — nothing late, at risk or waiting.'}</p></div>`;
   const seg = `<div class="seg" role="group" aria-label="Show">
-    <button type="button" data-homeview="attention" aria-pressed="${!isOut}">Needs attention <em>${rows.length}</em></button>
-    <button type="button" data-homeview="out" aria-pressed="${isOut}">Going out <em>${d.goingOut.length}</em></button></div>`;
+    <button type="button" data-homeview="attention" aria-pressed="${!isOut && !drill}">Needs attention <em>${rows.length}</em></button>
+    <button type="button" data-homeview="out" aria-pressed="${isOut}">Going out <em>${d.goingOut.length}</em></button></div>`
+    + (drill ? ' <button type="button" class="btn sm" data-homeview="attention" title="Back to Needs attention">✕ Close this list</button>' : '');
 
   return `<div class="home">
     <div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>
     <div class="hcards">${cards}</div>
     <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>
-    <section><div class="hsec-h"><h3>${isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${seg}</div>${table}</section>
+    <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;
 }
