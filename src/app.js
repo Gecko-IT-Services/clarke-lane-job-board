@@ -3,7 +3,8 @@
  * every change goes to Supabase first and the board redraws from what comes back.
  */
 import * as auth from './auth.js';
-import * as data from './data.js';
+import * as realData from './data.js';
+import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
@@ -13,6 +14,41 @@ import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despat
   byRunningOrder, moveInOrder, compareValues } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
+
+/* ---------- preview: Xero's open orders shown as jobs, in this browser only. Nothing is saved. ---------- */
+const PREVIEW = { on: false, jobs: [], prio: new Map() };
+const NOT_SAVED = 'This is a preview, so nothing is saved. Leave the preview to work for real.';
+/** The data layer, swapped for a read-only one in preview: reads are real, writes are refused,
+ *  except ticks and the running order, which stay in this browser so the board can be tried. */
+let data = realData;
+function previewData() {
+  const no = async () => { throw new Error(NOT_SAVED); };
+  const blocked = Object.fromEntries(Object.keys(realData).filter(k => typeof realData[k] === 'function' && !/^(load|whoAmI|onChange|orderedQuotes|quoteLines|xeroStatus)/.test(k)).map(k => [k, no]));
+  return { ...realData, ...blocked,
+    loadJobs: async o => [...(await realData.loadJobs(o)), ...structuredClone(PREVIEW.jobs)]
+      .map(j => (PREVIEW.prio.size ? { ...j, priority: PREVIEW.prio.get(j.id) ?? null } : j)),
+    setProcess: async (id, p, done, by) => {
+      const j = PREVIEW.jobs.find(x => x.id === id); if (!j) return no();
+      j.procs[p] = done ? { done: true, by, at: new Date().toISOString() } : { done: false };
+    },
+    setRunningOrder: async ids => { PREVIEW.prio = new Map(ids.map((id, i) => [id, i + 1])); },
+    xero: (route, body) => (['read', 'contacts', 'contact'].includes(route) ? realData.xero(route, body) : no()),
+  };
+}
+async function enterPreview() {
+  if (!S.xero) return toast('Connect to Xero first (Xero tab).', null, true);
+  S.xeroBusy = true; render();
+  try {
+    const r = await realData.xero('read');
+    PREVIEW.jobs = previewJobs(r.quotes, q => !!onBoard(q), d => addWorkingDays(d || todayIso(), 10));
+    PREVIEW.on = true; data = previewData();
+    try { sessionStorage.setItem('clj.preview', '1'); } catch { /* this visit only */ }
+    S.xeroBusy = false; S.tab = 'home'; history.replaceState(null, '', '#home');
+    await reload(); window.scrollTo(0, 0);
+    toast(`Preview: ${PREVIEW.jobs.length} open sales orders from Xero shown as jobs. Nothing is saved.`);
+  } catch (e) { S.xeroBusy = false; toast(e.message, null, true); render(); }
+}
+function leavePreview() { try { sessionStorage.removeItem('clj.preview'); } catch { /* fine */ } location.replace(location.pathname + '#home'); location.reload(); }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const gbp = (n, dp = 0) => n == null ? '' : '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: dp, maximumFractionDigits: dp });
 const unit = n => n == null ? '' : '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
@@ -56,7 +92,7 @@ async function boot() {
   await reload();
   if (office()) {
     loadQuotes();
-    loadXeroStatus().then(checkSoNumbers);
+    loadXeroStatus().then(() => { let p = null; try { p = sessionStorage.getItem('clj.preview'); } catch { /* none */ } return p ? enterPreview() : checkSoNumbers(); });
   }
   const back = new URLSearchParams(location.search).get('xero');
   if (back) {
@@ -574,7 +610,10 @@ function renderXero() {
       ${r ? `<p class="note">The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none'}</b>, so the next order made on the board will be <b>SO-${r.counterNext ?? '…'}</b>. The board always keeps its numbers past Xero's.</p>` : ''}</div>`;
   $('v-xero').innerHTML = `<div class="sec-h"><h2>Xero</h2><span class="sub">Clarke Lane's Xero, through the board's own connection.</span></div>
     ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
-    <div class="panel"><h3>Connection</h3>${head}</div>${importPanel}`;
+    <div class="panel"><h3>Connection</h3>${head}</div>
+    ${x ? `<div class="panel"><h3>Preview with Xero's order book</h3>
+      <p>Shows every open sales order in Xero as a job on every screen (Home, Sales orders, Jobs, Shop floor), so you can see the board with real orders before go-live. It is read only: <b>nothing is saved</b>, Xero is not changed, and the changeover import below is not used up. Ticks and moving jobs work, in this browser only. Leaving the preview (or closing the tab) puts everything back.</p>
+      <div class="actions"><button class="btn ${PREVIEW.on ? '' : 'pri'}" type="button" ${PREVIEW.on ? 'data-leavepreview' : 'data-preview'} ${busy}>${PREVIEW.on ? 'Leave preview' : 'Start the preview'}</button></div></div>` : ''}${importPanel}`;
 }
 function makeJobFromXero(id) {
   const q = (S.xeroOrders || []).find(x => x.id === id); if (!q) return;
@@ -1052,6 +1091,8 @@ function restoreInputs(m) {
 }
 function render() {
   if (!S.me) return;
+  $('preview-bar').hidden = !PREVIEW.on;
+  if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
   if (!office() && ['quotes', 'orders', 'xero'].includes(S.tab)) S.tab = 'floor';
   renderTabs();
@@ -1070,6 +1111,8 @@ window.addEventListener('hashchange', () => { fromHash(); render(); });
 document.addEventListener('click', e => {
   const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;
   const d = t.dataset;
+  if ('preview' in d) return enterPreview();
+  if ('leavepreview' in d) return leavePreview();
   if (d.gostation) { S.station = d.gostation; try { localStorage.setItem('clj.station', d.gostation); } catch { /* not kept */ } S.tab = 'floor'; history.replaceState(null, '', '#floor'); render(); window.scrollTo(0, 0); return; }
   if (t.matches('a[href^="#help-"],a[href^="#home-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ('signin' in d) return auth.signIn();

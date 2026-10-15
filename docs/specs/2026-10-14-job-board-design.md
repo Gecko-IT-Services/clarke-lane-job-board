@@ -295,3 +295,12 @@ dispatch, Out for delivery, and office-only Waiting for Xero (£), Won quotes wa
 to send on open orders) and Dispatched this week (£ since Monday). Panels: Running late (worst first,
 days late, processes still to do), Due in the next 7 days, Waiting at each station (bars; tap opens the
 shop floor at that station), On hold. Open = upcoming or current and not cancelled; held jobs count.
+
+## Preview with Xero's order book (15 Oct)
+For showing Levi the board with real orders before go-live, with no effect anywhere. Xero tab ›
+Start the preview: the read route (read only) → `previewJobs()` (src/core/preview.js, tested): every
+open SO-… not already a real job becomes a job in the browser only (negative ids, due = Xero expiry
+or +10 working days, processes guessed from descriptions, default Laser). app.js swaps `data` for a
+wrapper whose writes all refuse ("This is a preview, so nothing is saved"), except ticks on preview
+jobs and the running order, held in memory. An orange banner shows throughout; sessionStorage keeps it
+on across a refresh; Leave preview (or closing the tab) ends it. The changeover import is not used.
