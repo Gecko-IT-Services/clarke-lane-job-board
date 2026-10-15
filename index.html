@@ -279,7 +279,7 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 #v-home .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
 #v-home .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
 #v-home .hbtns{margin-left:auto;display:flex;gap:8px}
-#v-home .hcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:12px}
+#v-home .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 #v-home .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
 #v-home .hcard .ic{width:44px;height:44px;border-radius:10px;background:var(--field);color:var(--muted);display:grid;place-items:center;flex:none}
 #v-home .hcard svg{width:22px;height:22px}
@@ -290,6 +290,8 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 #v-home .hcard.t-ok{background:var(--ok-soft);border-color:transparent} #v-home .hcard.t-ok .ic{color:var(--ok)}
 #v-home .hcard.t-info{background:var(--info-soft);border-color:transparent} #v-home .hcard.t-info .ic{color:var(--info)}
 #v-home .hcard[class*="t-"] .ic{background:var(--surface)}
+@media (max-width:900px){ #v-home .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:480px){ #v-home .hcard{padding:14px;gap:10px} #v-home .hcard .ic{width:36px;height:36px} }
 #v-home .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
 #v-home .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
 #v-home .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}

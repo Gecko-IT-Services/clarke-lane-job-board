@@ -1295,7 +1295,7 @@ document.addEventListener('click', e => {
   if ('booksave' in d) return saveFormToBook();
   if ('leavepreview' in d) return leavePreview();
   if (d.gostation) { S.station = d.gostation; try { localStorage.setItem('clj.station', d.gostation); } catch { /* not kept */ } S.tab = 'floor'; history.replaceState(null, '', '#floor'); render(); window.scrollTo(0, 0); return; }
-  if (t.matches('a[href^="#help-"],a[href^="#home-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  if (t.matches('a[href^="#help-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ('signin' in d) return auth.signIn();
   if ('signout' in d) return auth.signOut();
   if ('reload' in d) return location.reload();

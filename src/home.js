@@ -19,7 +19,7 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
-  const hello = `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}${me?.name ? ', ' + esc(me.name.split(' ')[0]) : ''}`;
+  const hello = `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}${office && me?.name ? ', ' + esc(me.name.split(' ')[0]) : ''}`;
   const longDate = new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   const btns = office
     ? '<button class="btn" type="button" data-tab="dispatch">Dispatch</button><button class="btn pri" type="button" data-neworder>New order</button>'
@@ -29,10 +29,10 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
   const card = (tone, ic, shown, label, on) =>
     `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
   const cards = [
-    card('bad', 'late', d.late.length, office && d.late.length ? `Running late · ${gbp(d.lateValue)}` : 'Running late', d.late.length > 0),
+    card('bad', 'late', d.late.length, office && d.late.length && d.lateValue != null ? `Running late · ${gbp(d.lateValue)}` : 'Running late', d.late.length > 0),
     card('warn', 'soon', d.soon.length, 'Due in the next 7 days', d.soon.length > 0),
     card('ok', 'ready', d.ready.length, 'Ready to dispatch', d.ready.length > 0),
-    office ? card('info', 'book', gbp(d.orderBook), `Order book · ${d.open.length} open`, d.open.length > 0)
+    office && d.orderBook != null ? card('info', 'book', gbp(d.orderBook), `Order book · ${d.open.length} open`, d.open.length > 0)
       : card('info', 'book', d.open.length, 'Open jobs', d.open.length > 0),
   ].join('');
 
