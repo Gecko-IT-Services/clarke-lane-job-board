@@ -8,7 +8,7 @@
 <title>Clarke Lane Job Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Archivo:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Archivo:wght@400;500;600;700&display=swap">
 <style>
 /* Tabbed work app: jobs table for the office, big tap targets for the shop floor, quotes and dispatch as short panels. Design from the agreed mockup. */
 :root{
@@ -16,7 +16,7 @@
   --chrome:#111214; --chrome-ink:#FFFFFF; --chrome-mute:#A9A9AE; --steel:#3A3A3F; --steel-soft:#E4E4E7;
   --ok:#25744A; --ok-soft:#E0F1E7; --warn:#B45309; --warn-soft:#FDEED9; --bad:#B4321F; --bad-soft:#FBE4E0; --info:#2B5BD7; --info-soft:#E6EEFF;
   --paper:#FFFFFF; --paper-ink:#111214; --paper-line:#C9C9CE; --paper-mute:#5A5A60;
-  --xero-ink:#000856; --display:'Barlow Condensed','Arial Narrow',Arial,sans-serif; --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --xero-ink:#000856; --display:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif; --body:'Archivo',-apple-system,system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0C0C0D; --surface:#17171A; --field:#202024; --line:#323238; --ink:#EDEDEF; --muted:#9C9CA3;
@@ -28,7 +28,7 @@
   --ok:#5CC48A; --ok-soft:#173526; --warn:#F0A54B; --warn-soft:#3A2812; --bad:#F07B66; --bad-soft:#3D1C17; --info:#8FADFF; --info-soft:#1A2440; --xero-ink:#3ECCFF; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4}
-h1,h2,h3{font-family:var(--display);font-weight:700;margin:0;text-wrap:balance;letter-spacing:.01em}
+h1,h2,h3{font-family:var(--display);font-weight:500;margin:0;text-wrap:balance;letter-spacing:-.025em}
 p{margin:0}
 .num{font-variant-numeric:tabular-nums}
 .mono{font-family:var(--mono)}
@@ -44,9 +44,9 @@ button{cursor:pointer}
 .who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chrome-mute);flex:none}
 .who select{background:#1E1E22;color:#fff;border:1px solid #3A3A3F;border-radius:8px;padding:6px 10px;font-weight:600}
 nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;align-self:stretch;min-width:0}
-nav.tabs a{font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--chrome-mute);text-decoration:none;padding:3px 9px 0;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:6px;align-items:center}
+nav.tabs a{font-family:var(--body);font-size:14.5px;font-weight:500;color:var(--chrome-mute);text-decoration:none;padding:3px 9px 0;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:6px;align-items:center}
 nav.tabs a:hover{color:#E4E4E7;border-bottom-color:#3A3A3F}
-nav.tabs a[aria-current="page"]{color:#fff;border-color:#fff}
+nav.tabs a[aria-current="page"]{color:#fff;border-color:#fff;font-weight:600}
 @media (max-width:1100px){
   :root{--hdr:96px}
   .top .in{flex-wrap:wrap;min-height:0}
@@ -127,7 +127,7 @@ td.ord .mv .btn{padding:3px 5px;min-width:24px;line-height:1;font-size:12px}
 /* shop floor */
 .pbtns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .pbtn{min-height:64px;border-radius:12px;border:2px solid var(--line);background:var(--field);text-align:left;padding:8px 12px;display:flex;flex-direction:column;justify-content:center;gap:2px}
-.pbtn b{font-family:var(--display);font-size:20px;line-height:1.05}
+.pbtn b{font-family:var(--display);font-size:19px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
 .pbtn span{font-size:12px;color:var(--muted)}
 .pbtn.done{background:var(--ok-soft);border-color:var(--ok)}
 .pbtn.done b{color:var(--ok)}
@@ -136,14 +136,14 @@ td.ord .mv .btn{padding:3px 5px;min-width:24px;line-height:1;font-size:12px}
 body.kiosk-mode #app > header.top,body.kiosk-mode #app > nav.tabs,body.kiosk-mode #preview-bar{display:none}
 .kiosk{display:flex;flex-direction:column;gap:22px}
 .kiosk .kbar{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap}
-.kiosk .kbar h2{font-family:var(--display);font-size:40px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05}
+.kiosk .kbar h2{font-family:var(--display);font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.05}
 .kiosk .kbar .sub{margin:2px 0 0;color:var(--muted);font-size:17px}
 .kiosk .clock{margin-left:auto;text-align:right;color:var(--muted);font-size:15px}
 .kiosk .clock b{display:block;color:var(--ink);font-size:30px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
 .kiosk .back{display:inline-flex;align-items:center;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:14px;padding:0 22px;min-height:64px;font:700 20px var(--body);cursor:pointer}
 .kiosk .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .kiosk .tile{all:unset;box-sizing:border-box;cursor:pointer;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:18px;padding:22px 24px;min-height:150px;display:flex;flex-direction:column;justify-content:space-between;gap:12px}
-.kiosk .tile .nm{font-family:var(--display);font-size:34px;letter-spacing:.04em;text-transform:uppercase;font-weight:700;line-height:1.05}
+.kiosk .tile .nm{font-family:var(--display);font-size:32px;letter-spacing:-.03em;font-weight:600;line-height:1.05}
 .kiosk .tile .ct{display:block;color:var(--muted);font-size:18px}
 .kiosk .tile .ct b{font-size:52px;font-weight:600;line-height:1;color:var(--ink);margin-right:8px;font-variant-numeric:tabular-nums}
 .kiosk .tile.idle{opacity:.65}
@@ -172,7 +172,7 @@ body.kiosk-mode #app > header.top,body.kiosk-mode #app > nav.tabs,body.kiosk-mod
 .kiosk .step{all:unset;box-sizing:border-box;cursor:pointer;min-width:170px;min-height:76px;border:2px solid var(--line);background:var(--field);color:var(--ink);border-radius:14px;padding:10px 16px;display:flex;align-items:center;gap:12px}
 .kiosk .step .bx{width:34px;height:34px;border-radius:9px;border:3px solid var(--muted);display:grid;place-items:center;flex:none}
 .kiosk .step .bx svg{width:22px;height:22px}
-.kiosk .step b{display:block;font-family:var(--display);font-size:20px;letter-spacing:.04em;text-transform:uppercase}
+.kiosk .step b{display:block;font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:-.02em}
 .kiosk .step small{display:block;font-size:14px;color:var(--muted)}
 .kiosk .step.done{background:var(--ok-soft);border-color:transparent}
 .kiosk .step.done .bx{background:var(--ok);border-color:var(--ok);color:var(--surface)}
@@ -194,7 +194,7 @@ body.kiosk-mode #app > header.top,body.kiosk-mode #app > nav.tabs,body.kiosk-mod
 .qcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .qcard .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .qcard .h .mono{font-size:13px;color:var(--muted)}
-.qcard .amt{font-family:var(--display);font-size:24px;font-weight:700}
+.qcard .amt{font-family:var(--display);font-size:24px;font-weight:600;letter-spacing:-.02em}
 .qcard .cust{font-weight:700;font-size:16px}
 .qcard ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--muted)}
 .convert{background:var(--field);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
@@ -285,7 +285,7 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
   .pchecks{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 .previewbar{background:var(--warn);color:#fff;padding:8px 16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:13.5px;text-align:center}
-.previewbar b{font-family:var(--display);font-size:18px;text-transform:uppercase;letter-spacing:.06em}
+.previewbar b{font-family:var(--display);font-size:17px;font-weight:600;letter-spacing:-.01em}
 .previewbar .btn{color:var(--ink)}
 /* customers */
 #v-customers .cbook{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
@@ -432,7 +432,7 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-help .hstep .ic{position:relative;z-index:1;width:52px;height:52px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;flex:none;transition:transform .16s var(--ease),background-color .16s var(--ease),color .16s var(--ease)}
 #v-help .hstep .ic svg{width:24px;height:24px}
 #v-help .hstep:hover .ic{background:var(--ok);color:var(--surface);transform:translateY(-2px)}
-#v-help .hstep b,#v-help .hmore a b{display:block;font-family:var(--display);font-size:18px;text-transform:uppercase;letter-spacing:.04em;line-height:1.1}
+#v-help .hstep b,#v-help .hmore a b{display:block;font-family:var(--display);font-size:17px;font-weight:600;letter-spacing:-.02em;line-height:1.15}
 #v-help .hstep small,#v-help .hmore a small{display:block;font-size:12.5px;color:var(--muted);line-height:1.35;margin-top:2px}
 #v-help .hmore{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
 #v-help .hmore .hlbl{grid-column:1/-1;margin-bottom:0}
@@ -452,7 +452,7 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-help .htips>b{display:block;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:8px}
 #v-help .htips ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;max-width:80ch}
 #v-help .htips li{line-height:1.45} #v-help .htips li::marker{color:var(--muted)}
-#v-help .hsec h4{font-family:var(--display);font-size:19px;margin:26px 0 6px;padding-top:18px;border-top:1px solid var(--line);text-transform:uppercase;letter-spacing:.05em}
+#v-help .hsec h4{font-family:var(--display);font-size:19px;font-weight:600;margin:26px 0 6px;padding-top:18px;border-top:1px solid var(--line);letter-spacing:-.02em}
 #v-help .hsec h4:first-of-type{border-top:0;padding-top:0;margin-top:14px}
 #v-help .hsec.key{box-shadow:inset 4px 0 0 var(--warn)}
 #v-help .hcardsx{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px;margin-top:6px}
@@ -575,48 +575,6 @@ div.fl{font-size:12.5px;font-weight:600;color:var(--muted)}
 .qcard.wide{grid-column:1/-1}
 form.inv{display:flex;gap:6px;justify-content:flex-end}
 form.inv input{width:110px}
-/* ---------- Steel theme (Philip, 15 Oct): the sign-in page's black, white and brushed steel across the
-   board. Neutral greys only; the status colours (late, ready, held…) are unchanged because they carry
-   meaning. Brushing is SVG noise blended into a gradient; the dot grid is the website's, standing still. */
-:root{--brush:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.003 0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  --bg:#D7D9DC; --surface:#F4F5F6; --field:#E9EAEC; --line:#B7BABF; --ink:#111214; --muted:#55585E; --steel-soft:#E1E3E6;
-  --plate:linear-gradient(180deg,#F7F8F9,#E6E8EA); --plate-edge:inset 0 1px 0 #FFFFFF,0 1px 2px rgba(0,0,0,.08);
-  --dots:rgba(0,0,0,.07)}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0C0C0E; --surface:#151619; --field:#1D1E22; --line:#2E3036; --ink:#ECEDEF; --muted:#9A9DA3; --steel-soft:#24262A;
-  --plate:linear-gradient(180deg,#1A1B1E,#131416); --plate-edge:inset 0 1px 0 rgba(255,255,255,.06),0 1px 0 #000;
-  --dots:rgba(255,255,255,.06)}}
-:root[data-theme="dark"]{
-  --bg:#0C0C0E; --surface:#151619; --field:#1D1E22; --line:#2E3036; --ink:#ECEDEF; --muted:#9A9DA3; --steel-soft:#24262A;
-  --plate:linear-gradient(180deg,#1A1B1E,#131416); --plate-edge:inset 0 1px 0 rgba(255,255,255,.06),0 1px 0 #000;
-  --dots:rgba(255,255,255,.06)}
-body{background:radial-gradient(var(--dots) 1px,transparent 1.5px) 0 0/22px 22px fixed,var(--bg)}
-/* Top bar: brushed black steel with a machined bottom edge. */
-.top{background:var(--brush) 0 0/600px 600px,linear-gradient(180deg,#1E1F22,#0B0B0C);background-blend-mode:soft-light,normal;
-  border-bottom:1px solid #000;box-shadow:inset 0 -1px 0 rgba(255,255,255,.07),0 2px 10px rgba(0,0,0,.25)}
-nav.tabs a[aria-current="page"]{border-image:linear-gradient(90deg,#8E9298,#FFFFFF,#8E9298) 1}
-@media (max-width:1100px){nav.tabs{border-top-color:rgba(255,255,255,.08)}}
-/* Panels and cards: a faint plate with a lit top edge, squarer corners. */
-.panel,.qcard,.tbl-wrap,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard:not([class*="t-"]){background:var(--plate);box-shadow:var(--plate-edge);border-radius:10px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard{border-radius:10px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard[class*="t-"]{background:var(--plate);box-shadow:var(--plate-edge);border:1px solid var(--line);border-left:4px solid var(--tone)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard[class*="t-"] .ic{background:var(--field)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-bad{--tone:var(--bad)} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-warn{--tone:var(--warn)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-ok{--tone:var(--ok)} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-info{--tone:var(--info)}
-.kiosk .tile{background:var(--plate);box-shadow:var(--plate-edge);border-radius:12px}
-/* Buttons: machined, square-shouldered. Primary is black steel in light mode, a steel plate in dark. */
-.btn{border-radius:6px;background:var(--plate);box-shadow:var(--plate-edge)}
-.btn.pri{background:var(--brush) 0 0/600px 600px,linear-gradient(180deg,#2A2B2E,#0C0C0D);background-blend-mode:soft-light,normal;border-color:#000;color:#fff;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 1px 2px rgba(0,0,0,.2)}
-.btn.pri:hover{background:var(--brush) 0 0/600px 600px,linear-gradient(180deg,#36373B,#151517);background-blend-mode:soft-light,normal;border-color:#000}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.pri{background:var(--brush) 0 0/600px 600px,linear-gradient(180deg,#C3C6CA,#8E9298);background-blend-mode:overlay,normal;border-color:#5E6268;color:#0C0C0D;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 1px 0 #000}
-  :root:not([data-theme="light"]) .btn.pri:hover{background:var(--brush) 0 0/600px 600px,linear-gradient(180deg,#D3D6DA,#9EA2A8);background-blend-mode:overlay,normal}}
-:root[data-theme="dark"] .btn.pri{background:var(--brush) 0 0/600px 600px,linear-gradient(180deg,#C3C6CA,#8E9298);background-blend-mode:overlay,normal;border-color:#5E6268;color:#0C0C0D;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 1px 0 #000}
-.docbar .btn.pri{color:#fff}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .docbar .btn.pri{color:#0C0C0D}}
-:root[data-theme="dark"] .docbar .btn.pri{color:#0C0C0D}
-.seg{border-radius:8px} .seg button{border-radius:5px}
-input[type=text],input[type=search],input[type=date],input[type=number],select.f,textarea{border-radius:6px}
 /* Sign-in: black and white, brushed metal (Philip: "remember this is precision engineering").
    A machined aluminium nameplate, screwed in at the corners, centred on plain black with the moving
    dot grid from clarke-lane.co.uk (src/wave.js), and drawing-office crop marks around it. */
