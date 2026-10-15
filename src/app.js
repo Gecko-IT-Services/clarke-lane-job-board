@@ -109,7 +109,7 @@ async function boot() {
   const back = new URLSearchParams(location.search).get('xero');
   if (back) {
     history.replaceState(null, '', location.pathname + '#xero'); S.tab = 'xero';
-    if (back === 'connected') toast('Xero connected.'); else toast(back, null, true);
+    if (back === 'connected') { forgetXero(); toast('Xero connected.'); } else toast(back, null, true);
   }
   data.onChange(debounce(reload, 400)).catch(() => {});
   setInterval(() => { if (!document.hidden) reload(); }, 60000);   // backstop if realtime drops
@@ -411,7 +411,7 @@ function customerNote(n) {
   if (!S.xc) return 'Reading the customers from Xero…';
   const m = n.customer.trim() && contactFor(n.customer);
   if (m) return `✓ Xero contact: ${m.name}`;
-  return n.customer.trim() ? 'Not a Xero customer yet. Pick one from the list, or add them in Xero first, so the invoice lands on the right account.'
+  return n.customer.trim() ? 'Not a Xero customer yet. Pick one from the list, or add them in Xero first (then Read the customers again on the Xero tab), so the invoice lands on the right account.'
     : `Start typing to pick from ${S.xc.contacts.length} Xero contacts.`;
 }
 /** Picking a Xero contact fills in the contact person and delivery address (if empty) and
@@ -677,8 +677,18 @@ async function importFromXero() {
  *  board a quiet read keeps the board's next SO number past Xero's. No orders are brought in. */
 async function checkSoNumbers() {
   if (!S.xero || (S.xeroOrders || []).length) return;
-  try { S.xeroRead = await data.xero('read'); render(); } catch { /* numbers are checked again next time */ }
+  try { S.xeroRead = await keptFor('clj.socheck', 15 * 60e3, async () => { const r = await data.xero('read'); return { highestSo: r.highestSo, counterNext: r.counterNext }; }); render(); }
+  catch { /* numbers are checked again next time */ }
 }
+/** Xero allows the board 5,000 calls a day, and each read pages through a whole list (100 a call),
+ *  so what changes slowly is kept on this computer for a while instead of read on every page load. */
+async function keptFor(key, ms, read) {
+  try { const k = JSON.parse(localStorage.getItem(key)); if (k && Date.now() - k.at < ms) return k.v; } catch { /* read it */ }
+  const v = await read();
+  try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), v })); } catch { /* read again next time */ }
+  return v;
+}
+function forgetXero() { try { localStorage.removeItem('clj.socheck'); localStorage.removeItem('clj.xc'); } catch { /* nothing kept */ } }
 /** Imported Xero sales orders still waiting to go on the board. */
 function xeroWaiting() {
   return (S.xeroOrders || []).filter(q => !q.dismissed && !onBoard(q));
@@ -696,7 +706,7 @@ async function xeroAction(route) {
   try {
     if (route === 'connect') { location.href = (await data.xero('connect')).url; return; }
     if (route === 'import') { await loadXeroStatus(); S.xeroBusy = false; await importFromXero(); return; }
-    if (route === 'disconnect') { await data.xero('disconnect'); S.xero = null; S.xeroRead = null; toast('Xero disconnected.'); }
+    if (route === 'disconnect') { await data.xero('disconnect'); S.xero = null; S.xeroRead = null; forgetXero(); toast('Xero disconnected.'); }
   } catch (e) { S.xeroErr = e.message; }
   S.xeroBusy = false; render();
 }
@@ -707,7 +717,8 @@ function renderXero() {
   const last = imported.reduce((a, q) => (q.importedAt > (a?.importedAt || '') ? q : a), null);
   const head = x
     ? `<p>Connected to <b>${esc(x.tenant_name)}</b> by ${esc(x.connected_by)} on ${fmtLong(x.connected_at)}.</p>
-       <div class="actions"><button class="btn" type="button" data-xero="connect" ${busy}>${icon('refresh')}Reconnect</button></div>`
+       <div class="actions"><button class="btn" type="button" data-xero="connect" ${busy}>${icon('refresh')}Reconnect</button></div>
+       <p class="note">Xero's customer list is kept on this computer for half an hour, to stay inside Xero's daily limit. Added a customer in Xero? <button class="btn sm" type="button" data-xcreload>Read the customers again</button></p>`
     : `<p>Not connected. Connecting lets the board create draft invoices in Xero for Keith, and bring in Xero's open sales orders once at changeover. It never approves, sends or deletes anything in Xero.</p>
        <div class="actions"><button class="btn xero" type="button" data-xero="connect" ${busy}>Connect to ${XERO}</button></div>
        <p class="note">You will be sent to Xero to sign in. Pick Clarke Lane Engineering when it asks which organisation.</p>`;
@@ -834,10 +845,11 @@ function contactFor(customer) {
 /** Called from several tabs' render; one read at a time, or every re-render while it runs starts another
  *  (each one pages through all of Xero's contacts) and Xero answers "rate limit". */
 let xcLoading = false;
-async function loadXeroContacts() {
+async function loadXeroContacts(fresh) {
   if (xcLoading) return;
   xcLoading = true; S.xcErr = null; if (S.form) collectForm();
-  try { [S.xc, S.xcMap] = await Promise.all([data.xero('contacts'), data.loadContactMap()]); }
+  if (fresh) try { localStorage.removeItem('clj.xc'); } catch { /* not kept */ }
+  try { [S.xc, S.xcMap] = await Promise.all([keptFor('clj.xc', 30 * 60e3, () => data.xero('contacts')), data.loadContactMap()]); }
   catch (e) { S.xcErr = e.message; }
   xcLoading = false; render();
 }
@@ -1256,7 +1268,7 @@ document.addEventListener('click', e => {
   if (d.xero) return xeroAction(d.xero);
   if (d.fromxero) return makeJobFromXero(d.fromxero);
   if ('sendxero' in d) return sendToXero();
-  if ('xcreload' in d) { S.xc = null; S.xcErr = null; return render(); }
+  if ('xcreload' in d) return loadXeroContacts(true).then(() => (S.xcErr || S.xc) && toast(S.xcErr || `Read ${S.xc.contacts.length} customers from Xero.`, null, !!S.xcErr));
   if (d.xcchange) { S.forcePick.add(d.xcchange); return render(); }
 });
 $('scrim').addEventListener('click', () => { S.open = null; render(); });
