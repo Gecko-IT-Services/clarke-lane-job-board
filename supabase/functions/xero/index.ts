@@ -115,7 +115,14 @@ async function xero(s: { access_token: string; tenant_id: string }, path: string
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(`https://api.xero.com/api.xro/2.0/${path}`, {
       headers: { Authorization: `Bearer ${s.access_token}`, 'xero-tenant-id': s.tenant_id, Accept: 'application/json' } });
-    if (res.status === 429) { await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); continue; }
+    if (res.status === 429) {
+      // Xero says which limit: concurrent (5 at once), minute (60) or day (5,000 per app per organisation).
+      const problem = res.headers.get('X-Rate-Limit-Problem') || '', wait = Number(res.headers.get('Retry-After')) || 2 * (attempt + 1);
+      console.warn(`Xero 429 (${problem || 'unknown'}) on ${path.split('?')[0]}, retry after ${wait}s`);
+      if (problem === 'day') throw new HttpError(503, `Xero's daily limit for the board is used up. It frees up in about ${Math.ceil(wait / 3600)} hour(s).`);
+      if (wait > 20) throw new HttpError(503, `Xero is busy (rate limit). Try again in ${wait} seconds.`);
+      await new Promise(r => setTimeout(r, wait * 1000)); continue;
+    }
     if (!res.ok) throw new HttpError(502, `Xero said ${res.status} reading ${path.split('?')[0]}.`);
     return res.json();
   }

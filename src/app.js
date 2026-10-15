@@ -831,11 +831,15 @@ function contactFor(customer) {
   if (!S.xc || S.forcePick.has(normName(customer))) return null;
   return matchContact(customer, S.xc.contacts, S.xcMap);
 }
+/** Called from several tabs' render; one read at a time, or every re-render while it runs starts another
+ *  (each one pages through all of Xero's contacts) and Xero answers "rate limit". */
+let xcLoading = false;
 async function loadXeroContacts() {
-  S.xcErr = null; if (S.form) collectForm();
+  if (xcLoading) return;
+  xcLoading = true; S.xcErr = null; if (S.form) collectForm();
   try { [S.xc, S.xcMap] = await Promise.all([data.xero('contacts'), data.loadContactMap()]); }
   catch (e) { S.xcErr = e.message; }
-  render();
+  xcLoading = false; render();
 }
 async function pickContact(key, id) {
   const c = S.xc.contacts.find(x => x.id === id); if (!c) return;
