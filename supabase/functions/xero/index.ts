@@ -44,7 +44,7 @@ function cors(req: Request, res: Response) {
 }
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const back = (msg: string) => Response.redirect(`${BOARD}?xero=${encodeURIComponent(msg)}#despatch`, 302);
+const back = (msg: string) => Response.redirect(`${BOARD}?xero=${encodeURIComponent(msg)}#dispatch`, 302);
 
 /** The caller, if they are office staff on the board. */
 async function office(req: Request) {
@@ -201,7 +201,7 @@ async function send(items: { despatchId: number; contactId: string }[]) {
         .select('id, dn_number, despatched_on, delivered_on, xero_invoice_id, xero_invoice_no, job_id, ' +
           'jobs(so_number, customer_po), despatch_lines(qty, job_lines(part, line_no, job_line_prices(unit_price)))')
         .eq('id', it.despatchId).single();
-      if (error || !row) throw new Error('Despatch not found.');
+      if (error || !row) throw new Error('Dispatch not found.');
       if (row.xero_invoice_id || row.xero_invoice_no) { out.push({ despatchId: it.despatchId, ok: true, invoiceNo: row.xero_invoice_no, already: true }); continue; }
       if (!row.delivered_on) throw new Error(`${row.dn_number} is not marked delivered yet.`);
       if (!it.contactId) throw new Error('Choose the Xero contact first.');
@@ -209,7 +209,7 @@ async function send(items: { despatchId: number; contactId: string }[]) {
       const lines = (row.despatch_lines as any[])
         .sort((a, b) => a.job_lines.line_no - b.job_lines.line_no)
         .map(l => ({ part: l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
-      if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this despatch has no price.');
+      if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this dispatch has no price.');
       const inv = buildInvoice({ dn: row.dn_number, date: row.despatched_on, so: job.so_number, po: job.customer_po, calloff: '', lines },
         it.contactId, d.accountCode, d.taxType);
       const r = await xeroPost(s, 'Invoices', { Invoices: [inv] }, `clj-despatch-${row.id}`);

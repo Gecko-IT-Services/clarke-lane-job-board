@@ -1,5 +1,5 @@
 /**
- * The board: Jobs, Shop floor, Quotes, Despatch. Rendering from one state object;
+ * The board: Jobs, Shop floor, Quotes, Dispatch. Rendering from one state object;
  * every change goes to Supabase first and the board redraws from what comes back.
  */
 import * as auth from './auth.js';
@@ -52,8 +52,7 @@ async function boot() {
   await reload();
   if (office()) {
     loadQuotes();
-    loadXeroStatus().then(readXero);
-    setInterval(() => { if (!document.hidden) readXero(); }, 10 * 60000);
+    loadXeroStatus().then(checkSoNumbers);
   }
   const back = new URLSearchParams(location.search).get('xero');
   if (back) {
@@ -68,7 +67,8 @@ function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeou
 
 async function reload() {
   try {
-    [S.jobs, S.dismissed] = await Promise.all([data.loadJobs({ office: office() }), office() ? data.loadDismissed() : []]);
+    [S.jobs, S.dismissed, S.xeroOrders] = await Promise.all([data.loadJobs({ office: office() }),
+      office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : []]);
     S.error = null;
     if (!S.stageChosen) {            // open on the first list that has something in it
       const has = st => S.jobs.some(j => stage(j) === st);
@@ -115,8 +115,8 @@ function statusChips(j) {
   }
   const del = deliveryLabel(j);
   if (del) out.push(`<span class="chip">${del}</span>`);
-  else if (j.despatches.length) out.push('<span class="chip">Part despatched</span>');
-  if (allDone(j)) out.push('<span class="chip ok">Ready to despatch</span>');
+  else if (j.despatches.length) out.push('<span class="chip">Part dispatched</span>');
+  if (allDone(j)) out.push('<span class="chip ok">Ready to dispatch</span>');
   else if (st === 'current') out.push(`<span class="chip">${doneCount(j)} of ${needed(j).length} done</span>`);
   if (S.quotesRaw && j.spQuoteId && !S.quotesRaw.some(q => q.spId === j.spQuoteId)) out.push('<span class="chip late" title="The quote is no longer marked Ordered in the quote calculator">Quote no longer Ordered</span>');
   return out.join('');
@@ -132,7 +132,7 @@ async function toggleProc(id, p) {
   render();
   try {
     await data.setProcess(id, p, done, S.me.name);
-    toast(done ? `${p} done on ${j.so}` + (allDone(j) ? '. Ready to despatch.' : '') : `${p} on ${j.so} set back to not done`,
+    toast(done ? `${p} done on ${j.so}` + (allDone(j) ? '. Ready to dispatch.' : '') : `${p} on ${j.so} set back to not done`,
       async () => { try { await data.setProcess(id, p, prev.done, prev.by || S.me.name); } catch (e) { toast(e.message, null, true); } reload(); });
   } catch (e) { j.procs[p] = prev; render(); toast(e.message, null, true); }
 }
@@ -168,7 +168,7 @@ async function makeDespatch() {
     const done = stage(job(j.id)) === 'completed';
     if (done) S.desp = null;
     showDoc('dn', j.id, d.id);
-    toast(`${d.dn_number} created.` + (done ? ` ${j.so} is fully despatched.` : ' The rest stays outstanding on the order.'));
+    toast(`${d.dn_number} created.` + (done ? ` ${j.so} is fully dispatched.` : ' The rest stays outstanding on the order.'));
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
 }
@@ -197,7 +197,7 @@ async function setStatus(id, status) {
   const j = job(id);
   try {
     await data.setJobStatus(id, status); S.ask = null;
-    toast({ held: `${j.so} is on hold. It cannot be despatched until it is released.`, open: `${j.so} released.`, cancelled: `${j.so} cancelled. It stays in the Sales orders list.` }[status]);
+    toast({ held: `${j.so} is on hold. It cannot be dispatched until it is released.`, open: `${j.so} released.`, cancelled: `${j.so} cancelled. It stays in the Sales orders list.` }[status]);
   } catch (e) { toast(e.message, null, true); }
   reload();
 }
@@ -209,12 +209,12 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'New orders'], ['despatch', 'Despatch'], ['xero', 'Xero']];
+const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'New orders'], ['dispatch', 'Dispatch'], ['xero', 'Xero']];
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
   $('tabs').innerHTML = TABS.filter(([k]) => office() || (k !== 'quotes' && k !== 'xero')).map(([k, t]) => {
-    const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'despatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
+    const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${b ? `<span class="badge">${b}</span>` : ''}</a>`;
   }).join('');
 }
@@ -252,18 +252,18 @@ function jobBoard() {
       ${PROCESSES.map(p => `<td class="p">${procCell(j, p)}</td>`).join('')}
       ${money ? `<td class="val num">${gbp(S.stage === 'completed' ? value(j) : value(j, { remaining: true }))}</td>` : ''}</tr>`;
   }).join('');
-  const blurb = { upcoming: 'Confirmed orders nobody has started yet.', current: 'At least one process done, or part despatched.', completed: 'Everything despatched.' }[S.stage];
+  const blurb = { upcoming: 'Confirmed orders nobody has started yet.', current: 'At least one process done, or part dispatched.', completed: 'Everything dispatched.' }[S.stage];
   const empty = S.jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
     : (money ? 'No orders yet. Turn an ordered quote into one on the Quotes tab, or press New order.' : 'No jobs yet. They appear here once the office creates them.');
-  return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to despatch.` : ''}</p>
+  return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to dispatch.` : ''}</p>
     <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
       <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="jobs"><thead><tr><th>Customer</th><th>Sales order</th><th>Customer PO</th><th>${S.stage === 'completed' ? 'Despatched' : 'Due'}</th>
+    <div class="tbl-wrap"><table class="jobs"><thead><tr><th>Customer</th><th>Sales order</th><th>Customer PO</th><th>${S.stage === 'completed' ? 'Dispatched' : 'Due'}</th>
       ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? `<th style="text-align:right">${S.stage === 'completed' ? 'Value' : 'Outstanding'}</th>` : ''}</tr></thead>
       <tbody>${rows || `<tr><td colspan="15" class="empty">${empty}</td></tr>`}</tbody></table></div>
     <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full order.</p>`;
 }
-/** The Sage-style list of sales orders, with despatch and invoice status. Office only. */
+/** The Sage-style list of sales orders, with dispatch and invoice status. Office only. */
 function salesOrders() {
   const q = S.search.toLowerCase();
   const f = S.orderFilter;
@@ -273,13 +273,13 @@ function salesOrders() {
     .sort((a, b) => (a.so < b.so ? 1 : -1));
   const rows = list.map(j => `<tr data-open="${j.id}"><td class="mono">${esc(j.so)}</td><td>${fmt(j.ordered)}</td><td style="text-align:left"><b>${esc(j.customer)}</b></td>
       <td style="text-align:left">${esc(j.po) || '—'}</td><td class="num">${gbp(value(j), 2)}</td><td>${stage(j) === 'completed' || j.status === 'cancelled' ? '' : dueChip(nextDue(j))}</td>
-      <td>${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Despatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}${j.status === 'held' ? ' <span class="chip late">On hold</span>' : ''}</td>
+      <td>${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Dispatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}${j.status === 'held' ? ' <span class="chip late">On hold</span>' : ''}</td>
       <td><span class="chip ${invoiceStatus(j) === 'Invoiced' ? 'ok' : ''}">${invoiceStatus(j)}</span></td></tr>`).join('');
-  const filters = [['outstanding', 'Outstanding'], ['complete', 'Despatched'], ['held', 'On hold'], ['cancelled', 'Cancelled'], ['all', 'All']]
+  const filters = [['outstanding', 'Outstanding'], ['complete', 'Dispatched'], ['held', 'On hold'], ['cancelled', 'Cancelled'], ['all', 'All']]
     .map(([k, t]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${t}</option>`).join('');
   return `<div class="sec-h" style="gap:10px"><label class="fl" style="flex-direction:row;align-items:center;gap:8px">Show <select class="f" id="ofilter">${filters}</select></label>
       <input type="search" id="search" placeholder="Search order, customer or PO" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer order no.</th><th>Net</th><th>Next due</th><th>Despatched</th><th>Invoiced</th></tr></thead>
+    <div class="tbl-wrap"><table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer order no.</th><th>Net</th><th>Next due</th><th>Dispatched</th><th>Invoiced</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="8" class="empty">No orders here.</td></tr>`}</tbody></table></div>`;
 }
 
@@ -341,7 +341,7 @@ function orderForm() {
       <label class="fl">Contact email<input type="email" id="of-email" value="${esc(n.contactEmail)}"></label></div>
     <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
       <label class="fl">Promised delivery (default for new lines)<input type="date" id="of-due" value="${esc(n.due)}"></label></div>
-    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th>Net</th>${amend ? '<th>Despatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th>Net</th>${amend ? '<th>Dispatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="actions"><button class="btn sm" type="button" data-oladd>Add a line</button>
       <details class="splitter"><summary class="btn sm">Split into call-offs…</summary>
         <div class="row3"><label class="fl">Deliveries<input type="number" id="of-sn" min="2" max="24" value="${esc(n.splitN || 4)}"></label>
@@ -390,7 +390,7 @@ async function customerPicked(name) {
 function splitLines() {
   collectForm();
   const n = S.form;
-  if (n.lines.some(l => l.sent)) return toast('Some lines have despatches already. Add new lines for the remaining deliveries instead.', null, true);
+  if (n.lines.some(l => l.sent)) return toast('Some lines have dispatches already. Add new lines for the remaining deliveries instead.', null, true);
   const count = Math.max(2, Math.min(24, +n.splitN || 2));
   const dates = calloffDates(n.splitFrom || n.due, count, n.splitEvery || '7');
   const real = n.lines.filter(l => l.part.trim() && Number(l.qty) > 0);
@@ -408,7 +408,7 @@ async function submitOrder() {
   const bad = lines.find(l => !l.part.trim() || !(Number(l.qty) > 0) || !Number.isInteger(Number(l.qty)) || l.price === '' || Number(l.price) < 0 || !l.due);
   if (bad) return msg('Every line needs a part, a whole-number quantity, a unit price (0 is allowed) and a due date.');
   const under = lines.find(l => l.sent && Number(l.qty) < l.sent);
-  if (under) return msg(`"${under.part}" has ${under.sent} despatched already, so its quantity cannot go below that.`);
+  if (under) return msg(`"${under.part}" has ${under.sent} dispatched already, so its quantity cannot go below that.`);
   if (!n.procs.length) return msg('Tick at least one process so the shop floor knows what the order needs.');
   if (n.mode === 'new' && n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
   const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due }));
@@ -440,67 +440,73 @@ async function loadXeroStatus() {
   try { S.xero = await data.xeroStatus(); } catch (e) { S.xeroErr = e.message; }
   render();
 }
-/** Xero's sales orders and invoices, read automatically when the board opens and every
- *  10 minutes after, so nobody has to press anything. */
+/** The one-off changeover import: reads Xero's open sales orders and keeps them on the board
+ *  (xero_orders), so New orders offers them until each is made a job or marked not a job.
+ *  Nothing reads Xero's sales orders by itself; running it again only adds new ones. */
+const openSo = q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED', 'INVOICED'].includes(q.status);
 let xeroReading = false;
-async function readXero() {
+async function importFromXero() {
   if (!S.xero || xeroReading) return;
-  xeroReading = true;
-  try { S.xeroRead = await data.xero('read'); S.xeroReadAt = new Date(); S.xeroErr = null; }
-  catch (e) { S.xeroErr = e.message; }
+  xeroReading = true; S.xeroErr = null; render();
+  try {
+    S.xeroRead = await data.xero('read'); S.xeroReadAt = new Date();
+    const fresh = S.xeroRead.quotes.filter(q => openSo(q) && !onBoard(q));
+    const added = await data.importXeroOrders(fresh);
+    await reload();
+    toast(added ? `${added} sales order${added === 1 ? '' : 's'} brought in from Xero. They are on New orders.` : 'Nothing new: every open sales order in Xero is already here.');
+  } catch (e) { S.xeroErr = e.message; }
   xeroReading = false; render();
 }
-/** Xero sales orders since go-live that are not on the board yet. */
+/** Until changeover (the import), Mandy may still raise sales orders in Xero, so on opening the
+ *  board a quiet read keeps the board's next SO number past Xero's. No orders are brought in. */
+async function checkSoNumbers() {
+  if (!S.xero || (S.xeroOrders || []).length) return;
+  try { S.xeroRead = await data.xero('read'); render(); } catch { /* numbers are checked again next time */ }
+}
+/** Imported Xero sales orders still waiting to go on the board. */
 function xeroWaiting() {
-  if (!S.xeroRead) return [];
-  return S.xeroRead.quotes.filter(q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED', 'INVOICED'].includes(q.status) && !onBoard(q));
+  return (S.xeroOrders || []).filter(q => !q.dismissed && !onBoard(q));
+}
+async function dismissXero(id, dismiss) {
+  const q = (S.xeroOrders || []).find(x => x.id === id); if (!q) return;
+  q.dismissed = dismiss; render();
+  try {
+    await data.dismissXeroOrder(id, dismiss, S.me?.email);
+    toast(dismiss ? `${q.number} marked not a job. Xero is unchanged.` : `${q.number} is back on New orders.`, dismiss ? () => dismissXero(id, false) : null);
+  } catch (e) { q.dismissed = !dismiss; render(); toast(e.message, null, true); }
 }
 async function xeroAction(route) {
   S.xeroBusy = true; S.xeroErr = null; render();
   try {
     if (route === 'connect') { location.href = (await data.xero('connect')).url; return; }
-    if (route === 'read') { await loadXeroStatus(); S.xeroBusy = false; await readXero(); return; }
+    if (route === 'import') { await loadXeroStatus(); S.xeroBusy = false; await importFromXero(); return; }
     if (route === 'disconnect') { await data.xero('disconnect'); S.xero = null; S.xeroRead = null; toast('Xero disconnected.'); }
   } catch (e) { S.xeroErr = e.message; }
   S.xeroBusy = false; render();
 }
 const onBoard = q => S.jobs.find(j => j.xeroQuoteId === q.id || j.so.toUpperCase() === String(q.number).toUpperCase());
 function renderXero() {
-  const x = S.xero, r = S.xeroRead, busy = S.xeroBusy ? 'disabled' : '';
+  const x = S.xero, r = S.xeroRead, busy = S.xeroBusy || xeroReading ? 'disabled' : '';
+  const imported = S.xeroOrders || [];
+  const last = imported.reduce((a, q) => (q.importedAt > (a?.importedAt || '') ? q : a), null);
   const head = x
     ? `<p>Connected to <b>${esc(x.tenant_name)}</b> by ${esc(x.connected_by)} on ${fmtLong(x.connected_at)}.</p>
-       <p class="note">${S.xeroReadAt ? `Read from Xero at ${S.xeroReadAt.toTimeString().slice(0, 5)}. It refreshes by itself every 10 minutes.` : 'Reading from Xero…'}</p>
-       <div class="actions"><button class="btn" type="button" data-xero="read" ${busy || xeroReading ? 'disabled' : ''}>Refresh now</button>
-       <button class="btn" type="button" data-xero="connect" ${busy}>Reconnect</button></div>`
-    : `<p>Not connected. Connecting lets the board read Clarke Lane's sales orders and invoices in Xero, and later create draft invoices for Keith. It never approves, sends or deletes anything in Xero.</p>
+       <div class="actions"><button class="btn" type="button" data-xero="connect" ${busy}>Reconnect</button></div>`
+    : `<p>Not connected. Connecting lets the board create draft invoices in Xero for Keith, and bring in Xero's open sales orders once at changeover. It never approves, sends or deletes anything in Xero.</p>
        <div class="actions"><button class="btn pri" type="button" data-xero="connect" ${busy}>Connect to Xero</button></div>
        <p class="note">You will be sent to Xero to sign in. Pick Clarke Lane Engineering when it asks which organisation.</p>`;
-  let body = '';
-  if (r) {
-    const sos = r.quotes.filter(q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED'].includes(q.status));
-    const waiting = xeroWaiting();
-    const done = sos.filter(q => onBoard(q));
-    body = `<div class="panel"><h3>Sales order numbers</h3>
-        <p>The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none yet'}</b>. The next job made on the board will be <b>SO-${r.counterNext ?? '…'}</b>.</p>
-        <p class="note">The board always keeps its next number past anything raised in Xero, so the two never clash. Once everyone uses the board, stop raising sales orders as quotes in Xero.</p></div>
-      <div class="panel"><h3>Sales orders in Xero, not on the board yet <span class="note">${waiting.length}</span></h3>
-        ${waiting.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th>Order</th><th style="text-align:left">Customer</th><th style="text-align:left">Reference</th><th>Status</th><th>Date</th><th>Net</th><th></th></tr></thead><tbody>
-          ${waiting.map(q => `<tr><td class="mono">${esc(q.number)}</td><td style="text-align:left">${esc(q.customer)}</td><td style="text-align:left">${esc(q.reference)}</td>
-            <td><span class="chip">${esc(q.status.toLowerCase())}</span></td><td>${fmt(q.date)}</td><td>${gbp(q.subTotal, 2)}</td>
-            <td><button class="btn sm" type="button" data-fromxero="${esc(q.id)}">Make job</button></td></tr>`).join('')}</tbody></table></div>`
-          : '<div class="empty">Every sales order in Xero is on the board.</div>'}
-        ${done.length ? `<p class="note">${done.length} more already on the board.</p>` : ''}</div>
-      <details class="panel"><summary><b>Invoices in Xero since 1 October</b> <span class="note">${r.invoices.length}</span></summary>
-        <div style="overflow-x:auto;margin-top:10px"><table class="lines"><thead><tr><th>Invoice</th><th style="text-align:left">Customer</th><th style="text-align:left">Reference</th><th>Status</th><th>Date</th><th>Net</th></tr></thead><tbody>
-        ${r.invoices.map(i => `<tr><td class="mono">${esc(i.number)}</td><td style="text-align:left">${esc(i.customer)}</td><td style="text-align:left">${esc(i.reference)}</td><td>${esc(i.status.toLowerCase())}</td><td>${fmt(i.date)}</td><td>${gbp(i.subTotal, 2)}</td></tr>`).join('')}
-        </tbody></table></div></details>`;
-  }
-  $('v-xero').innerHTML = `<div class="sec-h"><h2>Xero</h2><span class="sub">Clarke Lane's Xero, read through the board's own connection.</span></div>
+  const waiting = xeroWaiting();
+  const importPanel = !x ? '' : `<div class="panel"><h3>Changeover: bring in Xero's sales orders</h3>
+      <p>Do this once, on the day the board takes over from raising sales orders in Xero. It copies every open sales order (SO-…) from Xero onto New orders, ready to make into jobs. After that the board is the only place orders are raised, and Xero is not read for orders again.</p>
+      ${last ? `<p><b>Imported ${imported.length} sales order${imported.length === 1 ? '' : 's'}</b>, last on ${fmtLong(last.importedAt)} by ${esc(last.importedBy)}. ${waiting.length} still waiting on New orders.</p>` : '<p class="note">Not imported yet.</p>'}
+      <div class="actions"><button class="btn ${last ? '' : 'pri'}" type="button" data-xero="import" ${busy}>${xeroReading ? 'Reading Xero…' : last ? 'Import again (adds only new ones)' : 'Import open sales orders'}</button></div>
+      ${r ? `<p class="note">The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none'}</b>, so the next order made on the board will be <b>SO-${r.counterNext ?? '…'}</b>. The board always keeps its numbers past Xero's.</p>` : ''}</div>`;
+  $('v-xero').innerHTML = `<div class="sec-h"><h2>Xero</h2><span class="sub">Clarke Lane's Xero, through the board's own connection.</span></div>
     ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
-    <div class="panel"><h3>Connection</h3>${head}</div>${body}`;
+    <div class="panel"><h3>Connection</h3>${head}</div>${importPanel}`;
 }
 function makeJobFromXero(id) {
-  const q = S.xeroRead.quotes.find(x => x.id === id);
+  const q = (S.xeroOrders || []).find(x => x.id === id); if (!q) return;
   const due = q.expiry && q.expiry >= todayIso() ? q.expiry : addWorkingDays(todayIso(), 10);
   openOrderForm({ from: `Xero ${q.number}`, so: q.number.toUpperCase().replace(/^SO(\d)/, 'SO-$1'), customer: q.customer, po: q.reference,
     due, xeroQuoteId: q.id,
@@ -532,7 +538,7 @@ function renderFloor() {
       <div class="parts">${floorParts(j)}
         ${deliveryLabel(j) ? `<div>${deliveryLabel(j)}, due ${fmt(nextDue(j))}</div>` : ''}
         ${j.po ? `<div>PO ${esc(j.po)}</div>` : ''}${j.status === 'held' ? '<div class="bad"><b>On hold</b></div>' : ''}</div>
-      ${allDone(j) ? '<div class="readybar">All processes done. Ready to despatch.</div>' : ''}
+      ${allDone(j) ? '<div class="readybar">All processes done. Ready to dispatch.</div>' : ''}
       <div class="pbtns">${procButtons(j, st)}</div>
       <button type="button" class="btn link" data-open="${j.id}" style="align-self:flex-start">Job details</button></article>`).join('');
   $('v-floor').innerHTML = `
@@ -547,20 +553,21 @@ function inboxRows() {
   const rows = [];
   for (const q of quotes() || []) rows.push({ kind: 'quote', key: 'q' + q.spId, date: q.quoteDate, ref: q.quoteNo, customer: q.customer,
     who: q.contactName, net: q.sellTotal != null ? q.sellTotal + (q.carriage || 0) : null, state: q.state, so: q.so, jobId: q.jobId, spId: q.spId });
-  if (S.xeroRead) for (const x of S.xeroRead.quotes.filter(q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED'].includes(q.status))) {
+  for (const x of S.xeroOrders || []) {
     const j = onBoard(x);
-    if (!j && x.status === 'INVOICED') continue;
     rows.push({ kind: 'xero', key: 'x' + x.id, date: x.date, ref: x.number, customer: x.customer, who: x.reference ? 'Ref ' + x.reference : '',
-      net: x.subTotal, state: j ? 'job' : 'waiting', so: j?.so, jobId: j?.id, xeroId: x.id, xeroStatus: x.status });
+      net: x.subTotal, state: j ? 'job' : x.dismissed ? 'dismissed' : 'waiting', so: j?.so, jobId: j?.id, xeroId: x.id });
   }
   return rows.sort((p, q) => ((q.date || '') < (p.date || '') ? -1 : (q.date || '') > (p.date || '') ? 1 : p.ref < q.ref ? 1 : -1));
 }
 function inboxRow(r) {
-  const src = r.kind === 'quote' ? 'Quote' : `Xero${r.xeroStatus ? ' · ' + esc(r.xeroStatus.toLowerCase()) : ''}`;
+  const src = r.kind === 'quote' ? 'Quote' : 'Xero import';
   let act;
   if (r.state === 'job') act = `<button class="btn link" type="button" data-open="${r.jobId}">${esc(r.so)}</button>`;
-  else if (r.state === 'dismissed') act = `<button class="btn sm" type="button" data-restore="${r.spId}">Put back</button>`;
-  else if (r.kind === 'xero') act = `<button class="btn sm pri" type="button" data-fromxero="${esc(r.xeroId)}">Make job</button>`;
+  else if (r.state === 'dismissed') act = r.kind === 'xero' ? `<button class="btn sm" type="button" data-xrestore="${esc(r.xeroId)}">Put back</button>`
+    : `<button class="btn sm" type="button" data-restore="${r.spId}">Put back</button>`;
+  else if (r.kind === 'xero') act = `<button class="btn sm pri" type="button" data-fromxero="${esc(r.xeroId)}">Make job</button>
+    <button class="btn sm" type="button" data-xdismiss="${esc(r.xeroId)}" title="Stop offering this sales order here. Xero is not changed.">Not a job</button>`;
   else if (S.conv?.spId === r.spId) act = '<span class="note">Reading the lines…</span>';
   else act = `<button class="btn sm pri" type="button" data-start="${r.spId}">Make job</button>
     <button class="btn sm" type="button" data-dismiss="${r.spId}" title="Stop offering this quote here. The quote itself is not changed.">Not a job</button>`;
@@ -577,21 +584,20 @@ function renderQuotes() {
   const waiting = rows.filter(r => r.state === 'waiting'), made = rows.filter(r => r.state === 'job').slice(0, 20), gone = rows.filter(r => r.state === 'dismissed');
   const reading = [];
   if (!S.quotesRaw && !S.quotesErr) reading.push('the quote calculator');
-  if (S.xero && !S.xeroRead && !S.xeroErr) reading.push('Xero');
   const errs = [S.quotesErr ? `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(S.quotesErr)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>` : '',
-    S.xero && S.xeroErr ? `<div class="err"><b>Could not read the sales orders from Xero.</b> ${esc(S.xeroErr)} <button class="btn sm" type="button" data-xero="read">Try again</button></div>` : ''].join('');
-  $('v-quotes').innerHTML = `<div class="sec-h"><h2>New orders</h2><span class="sub">Quotes Levi has marked Ordered in the quote calculator, and sales orders raised in Xero, newest first. Both refresh by themselves.</span>
+  ].join('');
+  $('v-quotes').innerHTML = `<div class="sec-h"><h2>New orders</h2><span class="sub">Quotes Levi has marked Ordered in the quote calculator, newest first, and any sales orders brought in from Xero at changeover.</span>
       <span class="right"><button class="btn sm" type="button" data-reloadquotes>Refresh</button></span></div>
     ${errs}${reading.length ? `<p class="note">Reading ${reading.join(' and ')}…</p>` : ''}
     <div class="group-h">Waiting to go on the board <span class="note">${waiting.length}</span></div>
-    ${inboxTable(waiting, reading.length ? 'Reading…' : 'Nothing waiting. Quotes marked Ordered and sales orders raised in Xero appear here.')}
+    ${inboxTable(waiting, reading.length ? 'Reading…' : 'Nothing waiting. Quotes Levi marks Ordered in the quote calculator appear here.')}
     ${made.length ? `<details class="gone"><summary class="group-h">Already on the board <span class="note">latest ${made.length}</span></summary>${inboxTable(made, '')}</details>` : ''}
     ${gone.length ? `<details class="gone"><summary class="group-h">Marked not a job <span class="note">${gone.length}</span></summary>${inboxTable(gone, '')}</details>` : ''}`;
 }
 
-/* ---------- despatch ---------- */
+/* ---------- dispatch ---------- */
 function waitingForXero(pend) {
-  if (!pend.length) return `<div class="panel"><h3>Waiting for Xero</h3><div class="empty">Nothing waiting. Every delivered despatch is in Xero.</div></div>`;
+  if (!pend.length) return `<div class="panel"><h3>Waiting for Xero</h3><div class="empty">Nothing waiting. Every delivered dispatch is in Xero.</div></div>`;
   const connected = !!S.xero;
   if (connected && !S.xc && !S.xcErr) loadXeroContacts();
   const rows = pend.map(([x, d]) => {
@@ -613,9 +619,9 @@ function waitingForXero(pend) {
   const how = !connected ? '<p class="note">Connect Xero on the Xero tab to send these as draft invoices with one click. Until then, raise each in Xero by hand and type its invoice number here.</p>'
     : S.xcErr ? `<div class="err">${esc(S.xcErr)} <button class="btn sm" type="button" data-xcreload>Try again</button></div>`
     : !S.xc ? '<p class="note">Reading the contacts from Xero…</p>'
-    : `<p class="note">Each one becomes a <b>draft</b> invoice in Xero for exactly what went out on that despatch note, referenced sales order / PO / despatch note, on account <b>${esc(S.xc.defaults.accountCode)}</b>${S.xc.defaults.taxType ? ` with VAT code <b>${esc(S.xc.defaults.taxType)}</b>` : ''} (as on ${esc(S.xc.defaults.from)}). Keith checks and approves them in Xero. The board never approves or sends an invoice.</p>`;
+    : `<p class="note">Each one becomes a <b>draft</b> invoice in Xero for exactly what went out on that dispatch note, referenced sales order / PO / dispatch note, on account <b>${esc(S.xc.defaults.accountCode)}</b>${S.xc.defaults.taxType ? ` with VAT code <b>${esc(S.xc.defaults.taxType)}</b>` : ''} (as on ${esc(S.xc.defaults.from)}). Keith checks and approves them in Xero. The board never approves or sends an invoice.</p>`;
   return `<div class="panel"><h3>Waiting for Xero <span class="note">${pend.length}</span></h3>${how}
-    <div style="overflow-x:auto"><table class="lines"><thead><tr>${connected ? '<th></th>' : ''}<th>Despatch note</th><th style="text-align:left">Customer</th>${connected ? '<th style="text-align:left">Xero contact</th>' : ''}<th style="text-align:left">Reference</th><th>Sent</th><th>Net</th><th>Invoiced by hand?</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="overflow-x:auto"><table class="lines"><thead><tr>${connected ? '<th></th>' : ''}<th>Dispatch note</th><th style="text-align:left">Customer</th>${connected ? '<th style="text-align:left">Xero contact</th>' : ''}<th style="text-align:left">Reference</th><th>Sent</th><th>Net</th><th>Invoiced by hand?</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${connected && S.xc ? `<div class="actions"><button class="btn pri" type="button" data-sendxero ${ready.length && !S.busy ? '' : 'disabled'}>${S.busy ? 'Sending…' : `Create ${ready.length} draft invoice${ready.length === 1 ? '' : 's'} in Xero`}</button>${ready.length ? `<span class="note">${gbp(total, 2)} net</span>` : ''}</div>` : ''}</div>`;
 }
 /** The Xero contact a customer's invoices go to, or null while Mandy has to choose. */
@@ -661,9 +667,9 @@ function deliveryRow(j) {
     const done = ls.every(l => left(j, l) === 0), part = !done && ls.some(l => sent(j, l) > 0), late = !done && c < today;
     return `<div class="call ${done ? 'done' : late ? 'late' : ''}"><i>${i + 1}</i><b>${fmt(c)}</b>${done ? 'sent' : part ? 'part sent' : late ? 'late' : 'due'}</div>`; }).join('')}</div>`;
 }
-/** Despatch notes with their email, delivery and Xero state, and the buttons to move them on. */
+/** Dispatch notes with their email, delivery and Xero state, and the buttons to move them on. */
 function despatchTable(rows, money) {
-  return `<div style="overflow-x:auto;margin-top:8px"><table class="lines dtable"><thead><tr><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Order</th><th>Despatched</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
+  return `<div style="overflow-x:auto;margin-top:8px"><table class="lines dtable"><thead><tr><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Order</th><th>Dispatched</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
     ${rows.map(([x, d]) => `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
       <td>${d.emailedAt ? `<span class="chip ok">${fmt(d.emailedAt.slice(0, 10))}</span>` : `<button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">Email…</button>`}</td>
       <td>${d.deliveredOn ? `<span class="chip ok">${fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : ''}</span>${!d.xero ? ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>` : ''}`
@@ -684,19 +690,19 @@ function renderDespatch() {
     const del = deliveryLabel(j);
     form = `${missing.length ? `<div class="warn">Not ticked yet: ${esc(missing.join(', '))}. Check the parts are finished before they go.</div>` : ''}
       ${deliveryRow(j)}
-      <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Despatched</th><th>Outstanding</th><th>This despatch</th></tr></thead><tbody>
-      ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this despatch">` : '—'}</td></tr>`).join('')}
+      <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Dispatched</th><th>Outstanding</th><th>This dispatch</th></tr></thead><tbody>
+      ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this dispatch">` : '—'}</td></tr>`).join('')}
       </tbody></table></div>
-      <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create despatch note${del ? ` (${del.toLowerCase()})` : ''}</button></div>
+      <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create dispatch note${del ? ` (${del.toLowerCase()})` : ''}</button></div>
       <p class="note" id="dn-msg">The quantities default to everything due by ${fmt(nextDue(j))}. Anything not sent stays outstanding on the order, as in Sage.</p>`;
   }
   const all = []; S.jobs.forEach(x => x.despatches.forEach(d => all.push([x, d])));
   all.sort((a, b) => (a[1].id < b[1].id ? 1 : -1));
   const pend = all.filter(([, d]) => !d.xero && d.deliveredOn).reverse();
   const undelivered = all.filter(([, d]) => !d.deliveredOn && !d.xero);
-  $('v-despatch').innerHTML = `
-    <div class="sec-h"><h2>Despatch</h2><span class="sub">Send all of a job or part of it. Each despatch gets its own note, and only what went out is invoiced.</span></div>
-    <div class="panel"><h3>Despatch goods</h3>
+  $('v-dispatch').innerHTML = `
+    <div class="sec-h"><h2>Dispatch</h2><span class="sub">Send all of a job or part of it. Each dispatch gets its own note, and only what went out is invoiced.</span></div>
+    <div class="panel"><h3>Dispatch goods</h3>
       <label class="fl">Job
       <select class="f" id="dsel"><option value="">Choose a job…</option>${open.map(x => `<option value="${x.id}" ${x.id === S.desp ? 'selected' : ''}>${esc(x.so)} · ${esc(x.customer)}${x.po ? ' · PO ' + esc(x.po) : ''}${allDone(x) ? ' · ready' : ''}</option>`).join('')}</select></label>
       ${held.length ? `<p class="note">On hold, so not listed: ${held.map(h => esc(h.so)).join(', ')}.</p>` : ''}
@@ -705,8 +711,8 @@ function renderDespatch() {
       <p class="note">Email the delivery note to the customer, then mark it delivered once the goods have arrived. Only delivered notes go to Xero.</p>
       ${undelivered.length ? despatchTable(undelivered, money) : '<div class="empty">Nothing out for delivery.</div>'}</div>
     ${money ? waitingForXero(pend) : ''}
-    <details class="panel"><summary><b>All despatch notes</b> <span class="note">${all.length}</span></summary>
-      ${all.length ? despatchTable(all.slice(0, 100), money) : '<div class="empty">No despatch notes yet.</div>'}</details>`;
+    <details class="panel"><summary><b>All dispatch notes</b> <span class="note">${all.length}</span></summary>
+      ${all.length ? despatchTable(all.slice(0, 100), money) : '<div class="empty">No dispatch notes yet.</div>'}</details>`;
 }
 
 /* ---------- job drawer ---------- */
@@ -723,20 +729,20 @@ function renderDrawer() {
       ${st !== 'completed' ? `<button class="btn" type="button" data-ask="cancel" data-job="${j.id}">Cancel order</button>` : ''}
       ${!j.despatches.length ? `<button class="btn link" type="button" data-ask="delete" data-job="${j.id}">Delete (made by mistake)</button>` : ''}</div>` : '';
   const confirm = ask === 'cancel'
-    ? `<div class="panel warnbox"><b>Cancel ${esc(j.so)}?</b><span class="note">${j.despatches.length ? 'What has been despatched stays, with its despatch notes and invoices. The outstanding quantity is cancelled.' : 'Nothing has been despatched.'} The order stays in the Sales orders list as Cancelled and leaves the job board.</span>
+    ? `<div class="panel warnbox"><b>Cancel ${esc(j.so)}?</b><span class="note">${j.despatches.length ? 'What has been dispatched stays, with its dispatch notes and invoices. The outstanding quantity is cancelled.' : 'Nothing has been dispatched.'} The order stays in the Sales orders list as Cancelled and leaves the job board.</span>
        <div class="actions"><button class="btn danger" type="button" data-status="cancelled" data-job="${j.id}">Yes, cancel ${esc(j.so)}</button><button class="btn" type="button" data-noask>Keep it</button></div></div>`
     : ask === 'delete'
     ? `<div class="panel warnbox"><b>Delete ${esc(j.so)}?</b><span class="note">For an order created by mistake. It is removed completely. ${j.spQuoteId ? 'The quote goes back to the Quotes tab. ' : ''}The number ${esc(j.so)} is not used again.</span>
        <div class="actions"><button class="btn danger" type="button" data-confirmdelete="${j.id}">Yes, delete ${esc(j.so)}</button><button class="btn" type="button" data-noask>Keep it</button></div></div>` : '';
   $('drawer').innerHTML = `
     <div class="dh"><div><div class="mono note">${esc(j.so)}${j.quote ? ' · from ' + esc(j.quote) : ''}</div><h2>${esc(j.customer)}</h2>
-      <div class="actions" style="margin-top:6px">${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Despatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}
+      <div class="actions" style="margin-top:6px">${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Dispatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}
         ${money ? `<span class="chip ${invoiceStatus(j) === 'Invoiced' ? 'ok' : ''}">${invoiceStatus(j)}</span>` : ''}${j.status === 'held' ? '<span class="chip late">On hold</span>' : ''}${deliveryLabel(j) && st !== 'completed' ? `<span class="chip">${deliveryLabel(j)}</span>` : ''}</div></div>
       <button class="btn sm x" type="button" data-close>Close</button></div>
     <div class="facts">
       <div class="fact"><div class="k">Customer order no.</div><div class="v mono">${esc(j.po) || '—'}</div></div>
       <div class="fact"><div class="k">Order date</div><div class="v">${fmtLong(j.ordered)}</div></div>
-      <div class="fact"><div class="k">${st === 'completed' ? 'Despatched' : 'Next due'}</div><div class="v">${fmtLong(st === 'completed' ? lastDespatch(j) : nextDue(j))}</div></div>
+      <div class="fact"><div class="k">${st === 'completed' ? 'Dispatched' : 'Next due'}</div><div class="v">${fmtLong(st === 'completed' ? lastDespatch(j) : nextDue(j))}</div></div>
       <div class="fact"><div class="k">Contact</div><div class="v">${esc(j.contactName) || '—'}</div></div>
       ${j.address ? `<div class="fact" style="grid-column:1/-1"><div class="k">Deliver to</div><div class="v" style="white-space:pre-line;font-weight:500">${esc(j.address)}</div></div>` : ''}
     </div>
@@ -746,16 +752,16 @@ function renderDrawer() {
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div></div>
-    <div class="panel"><h3>Despatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
+    <div class="panel"><h3>Dispatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
       ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>
         <td>${d.emailedAt ? fmt(d.emailedAt.slice(0, 10)) : '—'}</td><td>${d.deliveredOn ? fmt(d.deliveredOn) : '<span class="note">not yet</span>'}</td>
         ${money ? `<td>${gbp(despatchValue(j, d), 2)}</td><td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : d.deliveredOn ? '<span class="chip soon">waiting</span>' : '<span class="note">after delivery</span>'}</td>` : ''}
         <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>
-      <p class="note">Mark deliveries on the Despatch tab.</p>` : '<div class="note">Nothing despatched yet.</div>'}</div>
+      <p class="note">Mark deliveries on the Dispatch tab.</p>` : '<div class="note">Nothing dispatched yet.</div>'}</div>
     <div class="actions">
       ${money ? `<button class="btn" type="button" data-repeat="${j.id}">Repeat order</button>` : ''}
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
-      ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">Despatch…</button>` : ''}
+      ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">Dispatch…</button>` : ''}
     </div>${actions}${confirm}`;
 }
 
@@ -849,7 +855,7 @@ async function emailDoc(kind, jobId, despId) {
     const ref = j.po ? ` (your order ${esc(j.po)})` : '';
     const html = kind === 'soa'
       ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached our sales order acknowledgement ${esc(j.so)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
-      : `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} have been despatched. Please find attached delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
+      : `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} have been dispatched. Please find attached delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
     const subject = kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${j.po ? ' / ' + j.po : ''}`;
     const link = await data.draftEmail({ to: j.contactEmail, subject, html, fileName: `${no}.pdf`, pdfBase64: pdf });
     if (kind === 'soa') await data.markAckEmailed(jobId); else await data.markDespatch(despId, 'emailed');
@@ -861,7 +867,7 @@ async function emailDoc(kind, jobId, despId) {
     if (btn) { btn.disabled = false; btn.textContent = 'Email to customer'; }
   }
 }
-/** On a despatch note: what is still to come on the order after this delivery, per part. */
+/** On a dispatch note: what is still to come on the order after this delivery, per part. */
 function stillToCome(j, di) {
   const upto = j.despatches.slice(0, di + 1);
   const by = new Map();
@@ -900,11 +906,11 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, despatch: renderDespatch, xero: renderXero })[S.tab]();
+  ({ jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero })[S.tab]();
   renderDrawer();
   restoreInputs(kept);
 }
-function fromHash() { const h = location.hash.slice(1); if (TABS.some(([k]) => k === h)) S.tab = h; }
+function fromHash() { const h = location.hash.slice(1) === 'despatch' ? 'dispatch' : location.hash.slice(1); if (TABS.some(([k]) => k === h)) S.tab = h; }
 window.addEventListener('hashchange', () => { fromHash(); render(); });
 
 document.addEventListener('click', e => {
@@ -932,12 +938,14 @@ document.addEventListener('click', e => {
   if ('olcancel' in d) { const back = S.form.jobId; S.form = null; if (back) S.open = back; return render(); }
   if ('close' in d) { S.open = null; return render(); }
   if (d.start) { keepInputs = false; return startConvert(+d.start); }
-  if ('reloadquotes' in d) { S.quotesRaw = null; render(); loadQuotes(); return readXero(); }
+  if ('reloadquotes' in d) { S.quotesRaw = null; render(); return loadQuotes(); }
+  if (d.xdismiss) return dismissXero(d.xdismiss, true);
+  if (d.xrestore) return dismissXero(d.xrestore, false);
   if (d.dismiss) return dismiss(+d.dismiss);
   if (d.restore) return restore(+d.restore);
   if (d.soa) return showDoc('soa', +d.soa);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
-  if (d.desp) { S.desp = +d.desp; S.open = null; S.tab = 'despatch'; history.replaceState(null, '', '#despatch'); return render(); }
+  if (d.desp) { S.desp = +d.desp; S.open = null; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); return render(); }
   if ('print' in d) return window.print();
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');

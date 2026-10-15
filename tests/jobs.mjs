@@ -46,9 +46,9 @@ assert.equal(nextDue(short), '2026-10-16', 'a short delivery keeps that date out
 assert.equal(deliveryLabel(job()), '');
 
 // — Sage statuses. —
-assert.equal(despatchStatus(job()), 'Not despatched');
-assert.equal(despatchStatus(c2), 'Part despatched');
-assert.equal(despatchStatus(job({ despatches: [{ lines: { 10: 20, 11: 5 } }] })), 'Despatched');
+assert.equal(despatchStatus(job()), 'Not dispatched');
+assert.equal(despatchStatus(c2), 'Part dispatched');
+assert.equal(despatchStatus(job({ despatches: [{ lines: { 10: 20, 11: 5 } }] })), 'Dispatched');
 assert.equal(invoiceStatus(job()), 'Not invoiced');
 assert.equal(invoiceStatus({ ...c2, despatches: [{ lines: { 1: 60 }, xero: { no: 'INV-1' } }] }), 'Part invoiced');
 assert.equal(invoiceStatus(job({ despatches: [{ lines: { 10: 20, 11: 5 }, xero: { no: 'INV-1' } }] })), 'Invoiced');

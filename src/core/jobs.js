@@ -61,15 +61,15 @@ export function deliveryLabel(job) {
 /** Sage's despatch status for the order. */
 export function despatchStatus(job) {
   const sentAny = job.lines.some(l => sent(job, l) > 0);
-  if (job.lines.every(l => left(job, l) === 0)) return 'Despatched';
-  return sentAny ? 'Part despatched' : 'Not despatched';
+  if (job.lines.every(l => left(job, l) === 0)) return 'Dispatched';
+  return sentAny ? 'Part dispatched' : 'Not dispatched';
 }
 
 /** Sage's invoice status: by despatch, since only what went out is invoiced. */
 export function invoiceStatus(job) {
   const ds = job.despatches;
   if (!ds.length || ds.every(d => !d.xero)) return 'Not invoiced';
-  return ds.every(d => d.xero) && despatchStatus(job) === 'Despatched' ? 'Invoiced' : 'Part invoiced';
+  return ds.every(d => d.xero) && despatchStatus(job) === 'Dispatched' ? 'Invoiced' : 'Part invoiced';
 }
 
 export const lastDespatch = job => job.despatches.length ? job.despatches[job.despatches.length - 1].date : '';

@@ -72,3 +72,7 @@ export const markDespatch = async (id, what, receivedBy) => { for (const j of jo
 export const markAckEmailed = async id => { find(id).ackEmailedAt = new Date().toISOString(); };
 export let lastDraft = null;
 export const draftEmail = async m => { lastDraft = { ...m, pdfBytes: Math.round(m.pdfBase64.length * 0.75) }; window.__lastDraft = lastDraft; return null; };
+let xorders = [];
+export const loadXeroOrders = async () => structuredClone(xorders);
+export const importXeroOrders = async qs => { let n = 0; for (const q of qs) if (!xorders.some(x => x.id === q.id)) { xorders.push({ ...q, importedAt: new Date().toISOString(), importedBy: 'levi@clarke-lane.co.uk', dismissed: false }); n++; } return n; };
+export const dismissXeroOrder = async (id, d) => { xorders.find(x => x.id === id).dismissed = d; };

@@ -6,7 +6,9 @@ import { CONFIG } from './config.js';
 import { getSupabase, graph } from './auth.js';
 import { QUOTE_FIELDS, LINE_FIELDS, resolveColumns, quoteLookupColumn, toQuote, toLine } from './core/quotes.js';
 
-const fail = (what, error) => { const e = new Error(`${what}: ${error.message}`); e.cause = error; throw e; };
+/** UK spelling on screen: the database names and older messages say despatch. */
+const uk = m => String(m ?? '').replace(/espatch/g, 'ispatch');
+const fail = (what, error) => { const e = new Error(uk(`${what}: ${error.message}`)); e.cause = error; throw e; };
 
 /** Who is signed in, from the staff table. null role = not on the list. */
 export async function whoAmI() {
@@ -96,7 +98,7 @@ export async function setJobStatus(jobId, status) {
 export async function createDespatch(jobId, lines) {
   const sb = await getSupabase();
   const { data, error } = await sb.rpc('create_despatch', { p_job_id: jobId, lines });
-  if (error) fail('The despatch note was not created', error);
+  if (error) fail('The dispatch note was not created', error);
   return data;
 }
 
@@ -131,7 +133,7 @@ export async function markInvoiced(despatchId, invoiceNo) {
     .update({ xero_invoice_no: invoiceNo, sent_to_xero_at: new Date().toISOString() }, { count: 'exact' })
     .eq('id', despatchId);
   if (error) fail('Not saved', error);
-  if (!count) throw new Error('Not saved. Only Levi and Mandy can mark despatches as invoiced.');
+  if (!count) throw new Error('Not saved. Only Levi and Mandy can mark dispatches as invoiced.');
 }
 
 /** sp_quote_id of every quote marked "Not a job". Office only. */
@@ -152,12 +154,37 @@ export async function restoreQuote(spQuoteId) {
   if (error) fail('Not saved', error);
 }
 
+/** Xero sales orders brought in by the one-off import at changeover, in the read route's shape. Office only. */
+export async function loadXeroOrders() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('xero_orders').select('*').order('order_date', { ascending: false });
+  if (error) fail('Could not load the imported Xero sales orders', error);
+  return data.map(r => ({ id: r.xero_id, number: r.so_number, customer: r.customer, reference: r.reference, status: r.xero_status,
+    date: r.order_date, expiry: r.expiry, subTotal: r.sub_total == null ? null : Number(r.sub_total), lines: r.lines || [],
+    importedAt: r.imported_at, importedBy: r.imported_by, dismissed: !!r.dismissed_at }));
+}
+/** Adds the given Xero sales orders; ones already imported are left exactly as they are. Returns how many were new. */
+export async function importXeroOrders(orders) {
+  const sb = await getSupabase();
+  const rows = orders.map(q => ({ xero_id: q.id, so_number: q.number, customer: q.customer || '', reference: q.reference || '',
+    xero_status: q.status || '', order_date: q.date || null, expiry: q.expiry || null, sub_total: q.subTotal ?? null, lines: q.lines || [] }));
+  if (!rows.length) return 0;
+  const { data, error } = await sb.from('xero_orders').upsert(rows, { onConflict: 'xero_id', ignoreDuplicates: true }).select('xero_id');
+  if (error) fail('The import was not saved', error);
+  return data.length;
+}
+export async function dismissXeroOrder(xeroId, dismiss, by) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('xero_orders').update(dismiss ? { dismissed_at: new Date().toISOString(), dismissed_by: by || '' } : { dismissed_at: null, dismissed_by: null }).eq('xero_id', xeroId);
+  if (error) fail('Not saved', error);
+}
+
 /** Cancel a job made by mistake. Refused once anything has been despatched. */
 export async function deleteJob(jobId) {
   const sb = await getSupabase();
   const { error, count } = await sb.from('jobs').delete({ count: 'exact' }).eq('id', jobId);
   if (error) {
-    if (error.code === '23503') throw new Error('This job has despatch notes, so it cannot be cancelled.');
+    if (error.code === '23503') throw new Error('This job has dispatch notes, so it cannot be cancelled.');
     fail('The job was not cancelled', error);
   }
   if (!count) throw new Error('The job was not cancelled. Only Levi and Mandy can cancel jobs.');
@@ -167,7 +194,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

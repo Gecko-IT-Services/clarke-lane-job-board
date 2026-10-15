@@ -112,9 +112,18 @@ no network). `?role=floor` shows the shop-floor view. Serve with
   saves the customer→contact match, so Send to Xero never asks for that customer. A name not in Xero
   is allowed but flagged.
 
-- **Xero read is automatic** (15 Oct): on opening the board (office) and every 10 minutes while it is
-  visible; "Refresh now" on the Xero tab. Xero sales orders not on the board appear on the Quotes tab
-  (titled "New orders") beside Levi's ordered quotes, each with Make job; the tab badge counts both.
+- **Xero sales orders: a one-off import at changeover** (Philip, 15 Oct; replaces the automatic
+  10-minute read). Xero tab › "Import open sales orders" copies every open SO-… quote (not declined,
+  deleted or invoiced, not already on the board) into `xero_orders` (office-only RLS). New orders then
+  offers them ("Xero import") with Make job / Not a job / Put back until each is dealt with. Running it
+  again adds only orders not already imported. Nothing reads Xero's orders by itself.
+  Until the import is done, opening the board does a quiet read only to keep the SO counter past
+  Xero's highest (Mandy may still raise SOs in Xero until changeover); after the import that stops.
+
+## Spelling (15 Oct)
+On screen it is **Dispatch** (Philip: UK). Database names (`despatches`, `create_despatch`, …) are
+unchanged; `data.js` turns "despatch" into "dispatch" in any database or Xero error message shown.
+The old `#despatch` link still opens the Dispatch tab.
 
 ## Repeat order (15 Oct)
 Office › any order › **Repeat order**: a new order with the same customer, contact, address, notes,
