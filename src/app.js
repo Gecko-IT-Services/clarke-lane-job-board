@@ -832,6 +832,8 @@ function despatchForm(j) {
     <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create dispatch note${del ? ` (${del.toLowerCase()})` : ''}</button><button class="btn" type="button" data-despclose>Close</button></div>
     <p class="note" id="dn-msg"></p></div>`;
 }
+/** The note form opens above the list: bring it into view when it is opened from further down. */
+const showDespForm = () => $('v-dispatch').querySelector('.dform')?.scrollIntoView({ block: 'nearest' });
 function renderDespatch() {
   const lists = dispatchLists(S.jobs, todayIso());
   if (S.desp && !lists.open.some(j => j.id === S.desp)) S.desp = null;
@@ -1178,8 +1180,8 @@ document.addEventListener('click', e => {
   if (d.jobsheet) return openJobSheet(+d.jobsheet);
   if (d.sqset) return setSheet(d.sqset);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
-  if ('despclose' in d) { S.desp = null; return render(); }
-  if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); return render(); }
+  if ('despclose' in d) { S.desp = null; keepInputs = false; return render(); }
+  if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); render(); return showDespForm(); }
   if ('print' in d) return window.print();
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
@@ -1219,7 +1221,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
-  if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
+  if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }

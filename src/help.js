@@ -152,7 +152,7 @@ function dispatch(office) {
   const seg = on => `<div class="seg">${[['Ready', 2], ['Out for delivery', 1], ...(office ? [['Waiting for Xero', 1]] : []), ['All notes', 6]]
     .map(([t, k]) => `<button type="button" aria-pressed="${t === on}">${t} <em>${k}</em></button>`).join('')}</div>`;
   return `<section class="hsec" id="help-dispatch"><h3>${office ? '6 · ' : ''}Dispatch</h3>
-    <p>The <b>Dispatch</b> tab shows <span class="badge go">2 ready</span> when jobs are finished. The cards count what is ready, not emailed, out for delivery and${office ? ' waiting for Xero' : ' delivered'}. The switch shows <b>Ready</b>, <b>Out for delivery</b>, ${office ? '<b>Waiting for Xero</b> and ' : 'and '}<b>All notes</b>; it opens on the first with something in it.</p>
+    <p>The <b>Dispatch</b> tab shows <span class="badge go">2 ready</span> when jobs are finished. The cards count what is ready, not emailed, out for delivery and${office ? ' waiting for Xero' : ' sent this week'}. The switch shows <b>Ready</b>, <b>Out for delivery</b>, ${office ? '<b>Waiting for Xero</b> and ' : 'and '}<b>All notes</b>; it opens on the first with something in it.</p>
     ${pic(`<div class="hrow">${seg('Ready')}</div>
       <table class="lines home dispatch"><thead><tr><th>Customer</th><th>Due</th><th>To send</th><th class="act">Next step</th></tr></thead><tbody>
       <tr><td><b>Demo Metals Ltd</b><span class="ref mono">SO-9781 · PO-1</span></td><td><span class="chip soon">24 Oct</span></td><td><b>12</b> × Cabinet</td><td class="act"><span class="btn sm pri">Dispatch</span>${n(1)}</td></tr></tbody></table>

@@ -8,7 +8,7 @@ import { allDone, deliveryLabel, nextDue } from './core/jobs.js';
 import { card } from './home.js';
 
 const notes = n => `${n} note${n === 1 ? '' : 's'}`;
-const noteMatch = ({ job: j, d }, q) => [d.dn, j.so, j.po, j.customer].some(v => (v || '').toLowerCase().includes(q));
+const noteMatch = ({ job: j, d }, q) => [d.dn, j.so, j.po, j.customer, ...j.lines.map(l => l.po)].some(v => (v || '').toLowerCase().includes(q));
 
 export function renderDispatch({ lists: s, office, view, chosen, search, desp, form, cancelDn, xero }, h) {
   const { esc, fmt, gbp, dueChip, parts } = h;
