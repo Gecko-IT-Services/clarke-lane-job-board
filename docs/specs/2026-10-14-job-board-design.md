@@ -281,3 +281,8 @@ GitHub Pages lets browsers cache each file ~10 minutes, so after a deploy a new 
 module and fail to load. index.html has a small guard: on a module load error it refetches every
 module with cache: 'reload' and reloads once (sessionStorage guard). `tests/site.mjs` keeps its
 MODULES list in step with src/.
+- (15 Oct) **Job sheet quantities** (call-off customers such as VFS and Wessex make part of an order at
+  a time): Job sheet opens "What is this sheet for?" above the sheet, one To make box per line,
+  defaulting to the next delivery (`defaultDespatchQty`), with Next delivery / Everything outstanding /
+  Clear. The printed sheet lists only lines with a quantity, their due dates, which call-off(s) and
+  their POs. Screen-only (S.sheet); the order is never changed, and the editor doesn't print.

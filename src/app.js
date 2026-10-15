@@ -872,15 +872,24 @@ function docHtml(kind, jobId, despId) {
   let body;
   if (kind === 'job') {
     // The factory's paper copy for the job folder (with the drawing). No prices. The board stays the live record.
-    const dates = deliveryDates(j), need = needed(j), skip = PROCESSES.filter(p => !j.procs[p]);
+    const need = needed(j), skip = PROCESSES.filter(p => !j.procs[p]);
+    // What to make on this sheet: chosen on screen before printing (S.sheet); the order is not changed.
+    const pick = S.sheet?.jobId === j.id ? S.sheet.qty : Object.fromEntries(j.lines.map(l => [l.id, left(j, l)]));
+    const make = j.lines.filter(l => (pick[l.id] || 0) > 0);
+    const allDates = deliveryDates(j), dates = [...new Set(make.map(l => l.due))].sort();
+    const which = allDates.length > 1 && dates.length ? dates.map(d => allDates.indexOf(d) + 1).filter(n => n > 0) : [];
+    const pos = [...new Set(make.map(l => l.po).filter(Boolean))];
     body = `<div class="ph">${logo}<div><h1>Job sheet</h1><div class="dno big">${esc(j.so)}</div></div></div>
       <div class="two"><div><div class="k">Customer</div><b class="lg">${esc(j.customer)}</b>${j.contactName ? `<div>${esc(j.contactName)}</div>` : ''}</div>
         <div class="kv"><span class="k">Customer PO</span><span>${esc(j.po) || '—'}</span><span class="k">Our quote</span><span>${esc(j.quote) || '—'}</span>
         <span class="k">Ordered</span><span>${fmtLong(j.ordered)}</span>
-        <span class="k">Due</span><span><b>${dates.length > 1 ? `${dates.length} deliveries, first ${fmtLong(dates[0])}` : fmtLong(nextDue(j))}</b></span></div></div>
+        <span class="k">Due</span><span><b>${dates.length ? (dates.length > 1 ? `${fmtLong(dates[0])} to ${fmtLong(dates[dates.length - 1])}` : fmtLong(dates[0])) : '—'}</b></span>
+        ${which.length ? `<span class="k">Call-off</span><span><b>${which.length > 1 ? `Deliveries ${which.join(', ')}` : `Delivery ${which[0]}`} of ${allDates.length}</b></span>` : ''}
+        ${pos.length ? `<span class="k">Call-off PO</span><span><b>${esc(pos.join(', '))}</b></span>` : ''}</div></div>
       ${j.notes ? `<div class="jnote"><div class="k">Notes</div><div style="white-space:pre-line">${esc(j.notes)}</div></div>` : ''}
-      <table><thead><tr><th>Part</th><th>Qty</th><th>Due</th>${linePos(j).length ? '<th>Call-off PO</th>' : ''}<th>Sent</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td><b>${l.qty}</b></td><td>${fmtLong(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${sent(j, l) || ''}</td></tr>`).join('')}</tbody></table>
+      ${make.length ? `<table><thead><tr><th>Part</th><th>To make</th><th>Due</th>${pos.length ? '<th>Call-off PO</th>' : ''}</tr></thead><tbody>
+      ${make.map(l => `<tr><td>${esc(l.part)}</td><td><b class="lg">${pick[l.id]}</b></td><td>${fmtLong(l.due)}</td>${pos.length ? `<td>${esc(l.po) || ''}</td>` : ''}</tr>`).join('')}</tbody></table>`
+        : '<div class="jnote">Nothing to make on this sheet. Enter a quantity above it on screen.</div>'}
       <table class="jprocs"><thead><tr><th>Process</th><th>Done</th><th>By</th><th>Date</th></tr></thead><tbody>
       ${need.map(p => { const st = j.procs[p]; return `<tr><td><b>${esc(p)}</b></td><td><span class="jbox">${st.done ? '✓' : ''}</span></td><td>${st.done ? esc(st.by) : ''}</td><td>${st.done ? fmt(st.at.slice(0, 10)) : ''}</td></tr>`; }).join('')
         || '<tr><td colspan="4">No processes ticked on this order.</td></tr>'}</tbody></table>
@@ -915,6 +924,29 @@ function docHtml(kind, jobId, despId) {
   }
   return body;
 }
+/** Before printing a job sheet: choose what this sheet is for (call-off customers make part of an
+ *  order at a time). Defaults to the next delivery; the order itself is never changed here. */
+function openJobSheet(id) {
+  const j = job(id); if (!j) return;
+  const next = Object.fromEntries(j.lines.map(l => [l.id, defaultDespatchQty(j, l)]));
+  const any = Object.values(next).some(q => q > 0);
+  S.sheet = { jobId: id, qty: any ? next : Object.fromEntries(j.lines.map(l => [l.id, left(j, l)])) };
+  showDoc('job', id);
+}
+function sheetEditor(j) {
+  const call = deliveryDates(j).length > 1;
+  return `<div class="sheetedit panel"><h3>What is this sheet for?</h3>
+    <p class="note">Change <b>To make</b> for this job sheet only, for example the call-off you are making now. The order is not changed; to change the order, use Amend.</p>
+    <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Due</th>${linePos(j).length ? '<th>Call-off PO</th>' : ''}<th>Ordered</th><th>Outstanding</th><th>To make</th></tr></thead><tbody>
+    ${j.lines.map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td style="text-align:left">${esc(l.part)}</td><td>${fmt(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${l.qty}</td><td>${left(j, l)}</td>
+      <td><input type="number" min="0" step="1" value="${S.sheet.qty[l.id] || 0}" data-sq="${l.id}" style="width:90px" aria-label="To make on this sheet: ${esc(l.part)} due ${fmt(l.due)}"></td></tr>`).join('')}</tbody></table></div>
+    <div class="actions">${call ? '<button class="btn sm" type="button" data-sqset="next">Next delivery</button>' : ''}<button class="btn sm" type="button" data-sqset="all">Everything outstanding</button><button class="btn sm" type="button" data-sqset="none">Clear</button></div></div>`;
+}
+function setSheet(how) {
+  const j = job(S.sheet?.jobId); if (!j) return;
+  S.sheet.qty = Object.fromEntries(j.lines.map(l => [l.id, how === 'all' ? left(j, l) : how === 'next' ? defaultDespatchQty(j, l) : 0]));
+  showDoc('job', j.id);
+}
 function showDoc(kind, jobId, despId) {
   const j = job(jobId); if (!j) return;
   const d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
@@ -924,6 +956,7 @@ function showDoc(kind, jobId, despId) {
       ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">Job sheet</button>` : ''}
       ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
       <button class="btn" type="button" data-print>Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
+    ${kind === 'job' ? sheetEditor(j) : ''}
     <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
   $('doc').hidden = false;
   document.body.classList.add('doc-open');
@@ -1064,7 +1097,8 @@ document.addEventListener('click', e => {
   if (d.dismiss) return dismiss(+d.dismiss);
   if (d.restore) return restore(+d.restore);
   if (d.soa) return showDoc('soa', +d.soa);
-  if (d.jobsheet) return showDoc('job', +d.jobsheet);
+  if (d.jobsheet) return openJobSheet(+d.jobsheet);
+  if (d.sqset) return setSheet(d.sqset);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); return render(); }
   if ('print' in d) return window.print();
@@ -1085,6 +1119,11 @@ $('scrim').addEventListener('click', () => { S.open = null; render(); });
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) { S.open = null; render(); } } });
 document.addEventListener('input', e => {
+  if (e.target.dataset.sq && S.sheet) {   // job sheet quantities: redraw the sheet, keep the box being typed in
+    S.sheet.qty[+e.target.dataset.sq] = Math.max(0, Math.floor(Number(e.target.value) || 0));
+    document.querySelector('#doc .paper').innerHTML = docHtml('job', S.sheet.jobId);
+    return;
+  }
   if (e.target.id === 'search' || e.target.id === 'osearch') {
     const id = e.target.id; S[id] = e.target.value; const pos = e.target.selectionStart;
     if (id === 'search') renderJobs(); else renderOrders();
