@@ -488,7 +488,7 @@ async function submitOrder() {
       const who = n.customer.trim();
       S.form = null; keepInputs = false; await reload();
       showDoc('soa', j.id);
-      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Upcoming.`);
+      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Upcoming. Press Job sheet to print one for the folder.`);
     }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
@@ -838,6 +838,7 @@ function renderDrawer() {
         <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>
       <p class="note">Mark deliveries on the Dispatch tab.</p>` : '<div class="note">Nothing dispatched yet.</div>'}</div>
     <div class="actions">
+      <button class="btn" type="button" data-jobsheet="${j.id}">Job sheet</button>
       ${money ? `<button class="btn" type="button" data-repeat="${j.id}">Repeat order</button>` : ''}
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
       ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">Dispatch…</button>` : ''}
@@ -850,7 +851,24 @@ function docHtml(kind, jobId, despId) {
   const logo = document.querySelector('.top .logo').outerHTML;
   const head = (title, no) => `<div class="ph">${logo}<div><h1>${title}</h1><div class="dno">${no}</div></div></div>`;
   let body;
-  if (kind === 'soa') {
+  if (kind === 'job') {
+    // The factory's paper copy for the job folder (with the drawing). No prices. The board stays the live record.
+    const dates = deliveryDates(j), need = needed(j), skip = PROCESSES.filter(p => !j.procs[p]);
+    body = `<div class="ph">${logo}<div><h1>Job sheet</h1><div class="dno big">${esc(j.so)}</div></div></div>
+      <div class="two"><div><div class="k">Customer</div><b class="lg">${esc(j.customer)}</b>${j.contactName ? `<div>${esc(j.contactName)}</div>` : ''}</div>
+        <div class="kv"><span class="k">Customer PO</span><span>${esc(j.po) || '—'}</span><span class="k">Our quote</span><span>${esc(j.quote) || '—'}</span>
+        <span class="k">Ordered</span><span>${fmtLong(j.ordered)}</span>
+        <span class="k">Due</span><span><b>${dates.length > 1 ? `${dates.length} deliveries, first ${fmtLong(dates[0])}` : fmtLong(nextDue(j))}</b></span></div></div>
+      ${j.notes ? `<div class="jnote"><div class="k">Notes</div><div style="white-space:pre-line">${esc(j.notes)}</div></div>` : ''}
+      <table><thead><tr><th>Part</th><th>Qty</th><th>Due</th><th>Sent</th></tr></thead><tbody>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td><b>${l.qty}</b></td><td>${fmtLong(l.due)}</td><td>${sent(j, l) || ''}</td></tr>`).join('')}</tbody></table>
+      <table class="jprocs"><thead><tr><th>Process</th><th>Done</th><th>By</th><th>Date</th></tr></thead><tbody>
+      ${need.map(p => { const st = j.procs[p]; return `<tr><td><b>${esc(p)}</b></td><td><span class="jbox">${st.done ? '✓' : ''}</span></td><td>${st.done ? esc(st.by) : ''}</td><td>${st.done ? fmt(st.at.slice(0, 10)) : ''}</td></tr>`; }).join('')
+        || '<tr><td colspan="4">No processes ticked on this order.</td></tr>'}</tbody></table>
+      ${skip.length ? `<div class="k" style="text-transform:none;letter-spacing:0">Not needed: ${skip.map(esc).join(', ')}</div>` : ''}
+      <div class="jlines"><div>Drawing no. / revision</div><div>Material</div><div>Notes</div></div>
+      <div class="foot">Printed ${fmtLong(todayIso())} from the job board. The job board is the live record: tick processes there too.</div>`;
+  } else if (kind === 'soa') {
     const net = value(j), vat = round2(net * 0.2);
     body = head('Order acknowledgement', esc(j.so)) + `
       <div class="two"><div><div class="k">Customer</div><b>${esc(j.customer)}</b>${j.contactName ? `<div>${esc(j.contactName)}</div>` : ''}</div>
@@ -882,8 +900,9 @@ function showDoc(kind, jobId, despId) {
   const j = job(jobId); if (!j) return;
   const d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
   const sentAt = kind === 'soa' ? j.ackEmailedAt : d?.emailedAt;
-  const canEmail = kind === 'dn' || office();
-  $('doc').innerHTML = `<div class="docbar"><span>${sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>
+  const canEmail = kind !== 'job' && (kind === 'dn' || office());
+  $('doc').innerHTML = `<div class="docbar"><span>${kind === 'job' ? 'Print it for the job folder.' : sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>
+      ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">Job sheet</button>` : ''}
       ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
       <button class="btn" type="button" data-print>Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
     <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
@@ -1025,6 +1044,7 @@ document.addEventListener('click', e => {
   if (d.dismiss) return dismiss(+d.dismiss);
   if (d.restore) return restore(+d.restore);
   if (d.soa) return showDoc('soa', +d.soa);
+  if (d.jobsheet) return showDoc('job', +d.jobsheet);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); return render(); }
   if ('print' in d) return window.print();

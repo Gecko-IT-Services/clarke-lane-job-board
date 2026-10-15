@@ -248,3 +248,12 @@ and Repeat open the order form there. Jobs is the job board only. Each tab has i
 - (15 Oct) The New orders button is **Create sales order** (was "Make job"): an order and its job are
   one record, shown with prices on Sales orders and without on Jobs (Upcoming until started). No
   separate "release to the floor" step, by design.
+
+## Job sheet (15 Oct)
+Clarke Lane still keep a paper folder per job (drawing, correspondence) for now, so the board prints a
+**Job sheet**: SO number large, customer, PO, quote, ordered and due dates, notes, parts with qty / due /
+sent, one row per needed process with a Done box, By and Date (filled in if already ticked on the
+board), "not needed" processes listed, and blank lines for drawing no./revision, material and notes.
+No prices, so the shop floor can print it too. From the job (drawer) and from the order
+acknowledgement's toolbar; the "created" message points to it. No email option (internal only).
+Expected to fall away once the board is used on its own.

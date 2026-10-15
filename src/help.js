@@ -76,6 +76,7 @@ function jobsBoard() {
     ${steps([`${n(1)} <b>Bring a job forward:</b> ⤒ sends it to the top, and ▲ ▼ move it one place. The shop floor follows this order straight away. <b>Put everything back in date order</b> (under the table) undoes it all.`,
       `${n(2)} <b>Sort:</b> click any heading to sort by it, and click again to reverse. ▲ or ▼ shows which one is in use. The arrows to move jobs only show when sorted by Order.`,
       'A green row means every process is ticked: the job is ready to dispatch.',
+      '<b>Job sheet</b> (open the job, or from the order acknowledgement): a printed copy for the job folder with the drawing. It has the parts, due dates and a box for each process, and no prices. The board is still the live record, so tick processes there too.',
       'Click a row to open the whole order. From there: <b>Amend</b>, <b>Hold</b> / <b>Release</b>, <b>Cancel</b>, <b>Repeat order</b>, <b>Order acknowledgement</b> and <b>Dispatch…</b>.',
       'Prices and values are on <b>Sales orders</b>; the shop floor never sees them.'])}
   </section>`;
@@ -139,6 +140,7 @@ function faq(office) {
   const q = [
     ['I ticked the wrong box.', 'Tap it again, or press Undo on the message at the bottom of the screen.'],
     ['The screen looks out of date.', 'It updates by itself when anyone makes a change. If in doubt, refresh the page.'],
+    ['How do I print a job sheet?', 'Open the job (tap its sales order number) and press Job sheet, then Print.'],
     ['It says I am not on the staff list.', 'Ask Gecko IT to add your Microsoft 365 address.'],
   ];
   if (office) q.push(
