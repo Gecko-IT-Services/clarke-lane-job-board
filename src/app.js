@@ -1024,7 +1024,7 @@ document.addEventListener('click', e => {
   if (d.restore) return restore(+d.restore);
   if (d.soa) return showDoc('soa', +d.soa);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
-  if (d.desp) { S.desp = +d.desp; S.open = null; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); return render(); }
+  if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); return render(); }
   if ('print' in d) return window.print();
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
