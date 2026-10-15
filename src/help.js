@@ -42,7 +42,7 @@ function newOrders() {
 
 function orderForm() {
   return `<section class="hsec" id="help-form"><h3>2 · Sales orders</h3>
-    <p>The office's list of every order, like Sage's Sales Order Processing: value, customer PO, next due date, and whether it has been dispatched and invoiced. Click an order to open it. Use <b>Show</b> to see outstanding, dispatched, on hold, cancelled or all orders, and click any heading to sort.</p>
+    <p>The office's list of every order, like Sage's Sales Order Processing: value, customer PO, next due date, and whether it has been dispatched and invoiced. Click an order to open it. The switch above the list shows <b>Outstanding</b> (soonest due first), <b>Dispatched</b>, <b>On hold</b> or <b>Cancelled</b>; the search looks through every order.</p>
     ${pic(`<table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th>Net</th><th>Next due</th><th>Dispatched</th><th>Invoiced</th></tr></thead><tbody>
       <tr><td class="mono">SO-9790</td><td>15 Oct</td><td style="text-align:left"><b>Sample Engineering Co</b></td><td>£386.50</td><td><span class="chip soon">20 Nov</span></td><td><span class="chip">Not dispatched</span></td><td><span class="chip">Not invoiced</span></td></tr>
       <tr><td class="mono">SO-9781</td><td>14 Oct</td><td style="text-align:left"><b>Demo Metals Ltd</b></td><td>£1,068.00</td><td></td><td><span class="chip ok">Dispatched</span></td><td><span class="chip ok">Invoiced</span></td></tr></tbody></table>`)}

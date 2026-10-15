@@ -9,6 +9,7 @@ import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { renderWon } from './won.js';
+import { renderSalesOrders } from './orders.js';
 import { drawMap, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
 import { dashboard } from './core/jobs.js';
@@ -65,7 +66,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
+const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -92,6 +93,7 @@ async function boot() {
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>Sign out</button>`;
   try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
+  try { const v = localStorage.getItem('clj.orderview'); if (['dispatched', 'held', 'cancelled'].includes(v)) S.orderView = v; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
   fromHash();
   if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
@@ -171,7 +173,7 @@ const onBoardStage = j => ['upcoming', 'current'].includes(stage(j));
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
 
 /* ---------- sortable column headings (office tables). Each computer remembers its own choice. ---------- */
-const SORT_DEFAULT = { board: { col: 'order', dir: 1 }, boardDone: { col: 'dispatched', dir: -1 }, orders: { col: 'date', dir: -1 },
+const SORT_DEFAULT = { board: { col: 'order', dir: 1 }, boardDone: { col: 'dispatched', dir: -1 },
   dn: { col: 'date', dir: -1 } };
 let SORT = {};
 try { SORT = JSON.parse(localStorage.getItem('clj.sort') || '{}') || {}; } catch { /* date order */ }
@@ -326,9 +328,8 @@ function renderJobs() {
 }
 /** Sales orders: the office's own tab, as Sage's Sales Order Processing. New and Amend open here. */
 function renderOrders() {
-  $('v-orders').innerHTML = `<div class="sec-h"><h2>Sales orders</h2><span class="sub">Every order, with what has been dispatched and invoiced. Click one to open it.</span>
-      ${!S.form ? '<span class="right"><button class="btn pri" type="button" data-neworder>New order</button></span>' : ''}</div>
-    ${S.form ? orderForm() : ''}${salesOrders()}`;
+  $('v-orders').innerHTML = renderSalesOrders({ jobs: S.jobs, today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
+    { esc, fmt, gbp, dueChip, match: orderMatch });
 }
 function jobBoard() {
   const q = S.search.toLowerCase();
@@ -371,27 +372,6 @@ function jobBoard() {
       ${money && !done ? (canMove ? ' Use ⤒ ▲ ▼ to bring a job forward; the shop floor follows this order.' : ' To bring a job forward, sort by Order (click the heading) and use the arrows.') : ''}
       ${money && anyPlaced && !done ? ' <button type="button" class="btn link sm" data-move="reset">Put everything back in date order</button>' : ''}</p>`;
 }
-/** The Sage-style list of sales orders, with dispatch and invoice status. Office only. */
-function salesOrders() {
-  const q = (S.osearch || '').toLowerCase();
-  const f = S.orderFilter;
-  const keep = j => f === 'all' ? true : f === 'cancelled' ? j.status === 'cancelled' : f === 'held' ? j.status === 'held'
-    : f === 'complete' ? stage(j) === 'completed' : stage(j) !== 'completed' && j.status !== 'cancelled';
-  const list = sortRows('orders', S.jobs.filter(keep).filter(j => !q || [j.so, j.customer, j.po, j.quote, ...linePos(j)].some(s => (s || '').toLowerCase().includes(q)))
-    .sort((a, b) => compareValues(b.so, a.so)), { so: j => j.so, date: j => j.ordered, customer: j => j.customer, po: j => j.po, net: j => value(j),
-    due: j => (stage(j) === 'completed' || j.status === 'cancelled' ? '' : nextDue(j)), dispatched: j => (j.status === 'cancelled' ? 'Cancelled' : despatchStatus(j)), invoiced: j => invoiceStatus(j) });
-  const rows = list.map(j => `<tr data-open="${j.id}"><td class="mono">${esc(j.so)}</td><td>${fmt(j.ordered)}</td><td style="text-align:left"><b>${esc(j.customer)}</b></td>
-      <td style="text-align:left">${esc(j.po) || '—'}</td><td class="num">${gbp(value(j), 2)}</td><td>${stage(j) === 'completed' || j.status === 'cancelled' ? '' : dueChip(nextDue(j))}</td>
-      <td>${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Dispatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}${j.status === 'held' ? ' <span class="chip late">On hold</span>' : ''}</td>
-      <td><span class="chip ${invoiceStatus(j) === 'Invoiced' ? 'ok' : ''}">${invoiceStatus(j)}</span></td></tr>`).join('');
-  const filters = [['outstanding', 'Outstanding'], ['complete', 'Dispatched'], ['held', 'On hold'], ['cancelled', 'Cancelled'], ['all', 'All']]
-    .map(([k, t]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${t}</option>`).join('');
-  return `<div class="sec-h" style="gap:10px"><label class="fl" style="flex-direction:row;align-items:center;gap:8px">Show <select class="f" id="ofilter">${filters}</select></label>
-      <input type="search" id="osearch" placeholder="Search order, customer or PO" value="${esc(S.osearch || '')}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="lines solist"><thead><tr>${sortTh('orders', 'so', 'Order')}${sortTh('orders', 'date', 'Date')}${sortTh('orders', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('orders', 'po', 'Customer order no.', 'style="text-align:left"')}${sortTh('orders', 'net', 'Net')}${sortTh('orders', 'due', 'Next due')}${sortTh('orders', 'dispatched', 'Dispatched')}${sortTh('orders', 'invoiced', 'Invoiced')}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="8" class="empty">No orders here.</td></tr>`}</tbody></table></div>`;
-}
-
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
 const blankLine = due => ({ part: '', qty: '', price: '', due: due || '' });
 function openOrderForm(prefill = {}, amendId = null) {
@@ -404,6 +384,7 @@ function openOrderForm(prefill = {}, amendId = null) {
 /** PO(s) for one dispatch note: its lines' own call-off POs, else the order's PO. */
 const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
 const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
+const orderMatch = (j, q) => [j.so, j.customer, j.po, j.quote, ...linePos(j)].some(s => (s || '').toLowerCase().includes(q));
 /** Sage-style "copy order": a new order from an old one. New number, new PO, dates moved forward. */
 function openRepeat(id) {
   const j = job(id);
@@ -1272,6 +1253,7 @@ document.addEventListener('click', e => {
   if ('signout' in d) return auth.signOut();
   if ('reload' in d) return location.reload();
   if (d.homeview) { S.homeView = d.homeview; try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
+  if (d.orderview) { S.orderView = d.orderview; try { localStorage.setItem('clj.orderview', d.orderview); } catch { /* not kept */ } return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
@@ -1343,7 +1325,6 @@ document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
-  if (e.target.id === 'ofilter') { S.orderFilter = e.target.value; render(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
