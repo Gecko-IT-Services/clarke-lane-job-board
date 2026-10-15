@@ -116,6 +116,17 @@ no network). `?role=floor` shows the shop-floor view. Serve with
   visible; "Refresh now" on the Xero tab. Xero sales orders not on the board appear on the Quotes tab
   (titled "New orders") beside Levi's ordered quotes, each with Make job; the tab badge counts both.
 
+## Repeat order (15 Oct)
+Office › any order › **Repeat order**: a new order with the same customer, contact, address, notes,
+processes, parts, quantities and prices; new SO number, customer PO left blank, and every due date
+moved by the same amount so the first is 10 working days out (call-off spacing kept,
+`repeatLines`). The form warns to check prices. Nothing links the two orders beyond the note.
+
+## Purchase orders (open, Philip to decide)
+Proposed: raise a draft PO in Xero from the job (supplier from Xero contacts, lines pre-filled from
+quote material/paint/plating costs, reference = SO), Xero keeps approval, sending and bill matching;
+the job shows its POs' status. They buy both per job and for stock. Waiting on Philip/Levi.
+
 ## Emailing documents and confirming delivery (15 Oct)
 - Order acknowledgement (office) and delivery note (anyone) have **Email to customer**: the page is
   drawn with html2canvas, made into an A4 PDF with jsPDF, and created as an **Outlook draft** in the

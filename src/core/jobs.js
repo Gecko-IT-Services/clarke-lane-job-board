@@ -151,6 +151,21 @@ export function addWorkingDays(from, n) {
 }
 
 /**
+ * Lines for a repeat of an order: same parts, quantities and prices, with every due date moved
+ * by the same number of days so the first lands on `firstDue` (a call-off schedule keeps its
+ * spacing). Returns [{ part, qty, price, due }] with qty/price as strings for the form.
+ */
+export function repeatLines(lines, firstDue) {
+  const days = s => Math.round(new Date(s + 'T12:00:00Z') / 864e5);
+  const start = Math.min(...lines.map(l => days(l.due)));
+  const shift = days(firstDue) - start;
+  return [...lines].sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : a.lineNo - b.lineNo)).map(l => {
+    const d = new Date(l.due + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + shift);
+    return { part: l.part, qty: String(l.qty), price: l.price == null ? '' : String(l.price), due: d.toISOString().slice(0, 10) };
+  });
+}
+
+/**
  * Where each Ordered quote stands, worked out fresh from the jobs and the dismissals every
  * time (so a job created or cancelled on another screen shows straight away).
  * Returns the quotes with { state: 'waiting' | 'job' | 'dismissed', jobId, so }.

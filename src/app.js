@@ -7,7 +7,7 @@ import * as data from './data.js';
 import { normName, matchContact } from './core/xero.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
-  addWorkingDays, quoteStates, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs } from './core/jobs.js';
+  addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -292,6 +292,14 @@ function openOrderForm(prefill = {}, amendId = null) {
   S.open = null; S.tab = 'jobs'; history.replaceState(null, '', '#jobs'); keepInputs = false; render(); window.scrollTo(0, 0);
   if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
 }
+/** Sage-style "copy order": a new order from an old one. New number, new PO, dates moved forward. */
+function openRepeat(id) {
+  const j = job(id);
+  const due = addWorkingDays(todayIso(), 10);
+  openOrderForm({ from: `repeat of ${j.so}`, repeatOf: j.so, customer: j.customer, contact: j.contactName, contactEmail: j.contactEmail || '',
+    address: j.address, notes: j.notes, due, procs: needed(j), lines: repeatLines(j.lines, due) });
+  toast(`Copied from ${j.so}. Enter the new customer order no., and check the prices and dates are still right.`);
+}
 function openAmend(id) {
   const j = job(id);
   openOrderForm({ so: j.so, customer: j.customer, po: j.po, contact: j.contactName, contactEmail: j.contactEmail || '', address: j.address, notes: j.notes,
@@ -326,6 +334,7 @@ function orderForm() {
       ${amend ? '' : `<datalist id="xero-customers">${(S.xc?.contacts || []).map(c => `<option value="${esc(c.name)}"></option>`).join('')}</datalist><span class="note" id="of-custnote">${customerNote(n)}</span>`}</label>
       ${amend ? `<label class="fl">Order number<input type="text" value="${esc(n.so)}" disabled></label>`
         : `<label class="fl">Order number<input type="text" id="of-so" value="${esc(n.so)}" placeholder="Blank = next SO number"></label>`}</div>
+    ${n.repeatOf ? `<div class="warn">Copied from ${esc(n.repeatOf)}. Prices are as they were on that order: check they are still right. The delivery dates have moved forward, keeping their spacing.</div>` : ''}
     ${amend ? '' : '<p class="note">Leave the order number blank for a new order. For one that already has a number, type it: SO-9726 raised in Xero, SAGE-9701 carried over from Sage.</p>'}
     <div class="row3"><label class="fl">Customer order no. (PO)<input type="text" id="of-po" value="${esc(n.po)}"></label>
       <label class="fl">Contact<input type="text" id="of-contact" value="${esc(n.contact)}"></label>
@@ -744,6 +753,7 @@ function renderDrawer() {
         <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>
       <p class="note">Mark deliveries on the Despatch tab.</p>` : '<div class="note">Nothing despatched yet.</div>'}</div>
     <div class="actions">
+      ${money ? `<button class="btn" type="button" data-repeat="${j.id}">Repeat order</button>` : ''}
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
       ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">Despatch…</button>` : ''}
     </div>${actions}${confirm}`;
@@ -911,6 +921,7 @@ document.addEventListener('click', e => {
   if (d.view) { S.view = d.view; return render(); }
   if ('neworder' in d) return openOrderForm();
   if (d.amend) return openAmend(+d.amend);
+  if (d.repeat) return openRepeat(+d.repeat);
   if (d.ask) { S.ask = { id: +d.job, what: d.ask }; return render(); }
   if ('noask' in d) { S.ask = null; return render(); }
   if (d.status) return setStatus(+d.job, d.status);

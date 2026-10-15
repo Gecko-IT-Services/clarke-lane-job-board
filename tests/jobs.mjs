@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs, addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
+import { repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs, addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
   suggestProcesses, describeLine, unitPrice, allDone } from '../src/core/jobs.js';
 
 const job = over => ({
@@ -80,5 +80,10 @@ assert.equal(addWorkingDays('2026-10-17', 0), '2026-10-17');
 const qs = quoteStates([{ spId: 1 }, { spId: 2 }, { spId: 3 }], [{ id: 9, so: 'SO-9729', spQuoteId: 1 }], [2, 1]);
 assert.deepEqual(qs.map(q => q.state), ['job', 'dismissed', 'waiting'], 'a job wins over a dismissal');
 assert.equal(qs[0].so, 'SO-9729');
+
+// — Repeat order: same lines, dates moved together so a call-off keeps its spacing. —
+const rep = repeatLines([{ lineNo: 2, part: 'B', qty: 60, price: 76.26, due: '2026-10-23' }, { lineNo: 1, part: 'B', qty: 60, price: 76.26, due: '2026-10-16' }], '2026-12-01');
+assert.deepEqual(rep.map(l => `${l.qty} ${l.price} ${l.due}`), ['60 76.26 2026-12-01', '60 76.26 2026-12-08']);
+assert.equal(repeatLines([{ part: 'x', qty: 1, price: null, due: '2026-10-16' }], '2026-10-20')[0].price, '', 'hidden price stays blank');
 
 console.log('jobs: ok');
