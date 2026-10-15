@@ -143,7 +143,6 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 .readybar{background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:6px 10px;font-weight:700;font-size:14px}
 
 /* quotes */
-.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:14px;align-items:start}
 .qcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .qcard .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .qcard .h .mono{font-size:13px;color:var(--muted)}
@@ -156,8 +155,6 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 .pchecks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .pchecks label{display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;font-weight:600}
 .pchecks input{width:18px;height:18px;accent-color:var(--ink)}
-.group-h{font-family:var(--display);font-size:22px;display:flex;gap:10px;align-items:baseline}
-.group-h .note{font-family:var(--body)}
 
 /* dispatch */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -281,51 +278,51 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 .mpop .btn.link{padding:0;font-weight:700}
 
 /* home */
-#v-home > .home{display:flex;flex-direction:column;gap:26px}
-#v-home .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
-#v-home .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
-#v-home .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
-#v-home .hbtns{margin-left:auto;display:flex;gap:8px}
-#v-home .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-#v-home .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
-#v-home .hcard .ic{width:44px;height:44px;border-radius:10px;background:var(--field);color:var(--muted);display:grid;place-items:center;flex:none}
-#v-home .hcard svg{width:22px;height:22px}
-#v-home .hcard b{display:block;font-size:26px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
-#v-home .hcard div span{font-size:14px;color:var(--muted)}
-#v-home .hcard.t-bad{background:var(--bad-soft);border-color:transparent} #v-home .hcard.t-bad .ic{color:var(--bad)}
-#v-home .hcard.t-warn{background:var(--warn-soft);border-color:transparent} #v-home .hcard.t-warn .ic{color:var(--warn)}
-#v-home .hcard.t-ok{background:var(--ok-soft);border-color:transparent} #v-home .hcard.t-ok .ic{color:var(--ok)}
-#v-home .hcard.t-info{background:var(--info-soft);border-color:transparent} #v-home .hcard.t-info .ic{color:var(--info)}
-#v-home .hcard[class*="t-"] .ic{background:var(--surface)}
-@media (max-width:900px){ #v-home .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (max-width:480px){ #v-home .hcard{padding:14px;gap:10px} #v-home .hcard .ic{width:36px;height:36px} }
-#v-home .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
-#v-home .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
-#v-home .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
-#v-home .snap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px}
-#v-home .st{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-#v-home .st:hover{border-color:var(--muted)}
-#v-home .st:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-#v-home .st .r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;font-size:14.5px}
-#v-home .st .r1 small{color:var(--muted)}
-#v-home .sbar{display:block;width:100%;height:6px;border-radius:3px;background:var(--field);overflow:hidden}
-#v-home .sbar span{display:block;height:100%;border-radius:3px;min-width:4px;background:var(--ok)}
-#v-home .sbar.late span{background:var(--bad)}
-#v-home .seg{display:inline-flex;margin-left:auto;background:var(--field);border-radius:10px;padding:3px}
-#v-home .seg button{border:0;background:none;border-radius:8px;padding:7px 14px;min-height:38px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
-#v-home .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-#v-home .seg em{font-style:normal;font-weight:500;margin-left:4px}
-#v-home table.home th,#v-home table.home td{text-align:left;padding:12px 14px;vertical-align:middle}
-#v-home table.home th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
-#v-home table.home .num,#v-home table.home .act{text-align:right;white-space:nowrap}
-#v-home table.home .ref{display:block;font-size:12.5px;color:var(--muted)}
-#v-home table.home tbody tr[data-open]{cursor:pointer}
-#v-home table.home tbody tr[data-open]:hover td{background:var(--field)}
-#v-home .allclear{margin:0;padding:18px;color:var(--muted)}
-#v-home .allclear.ok{color:var(--ok);font-weight:600}
-#v-home .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-#v-home .tbl-wrap{position:relative}
-@media (max-width:560px){ #v-home .hbtns,#v-home .seg,#v-home .hsec-h > a{margin-left:0} #v-home table.home th:nth-child(3),#v-home table.home td:nth-child(3){display:none} }
+:is(#v-home,#v-quotes) > .home{display:flex;flex-direction:column;gap:26px}
+:is(#v-home,#v-quotes) .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
+:is(#v-home,#v-quotes) .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
+:is(#v-home,#v-quotes) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
+:is(#v-home,#v-quotes) .hbtns{margin-left:auto;display:flex;gap:8px}
+:is(#v-home,#v-quotes) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+:is(#v-home,#v-quotes) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+:is(#v-home,#v-quotes) .hcard .ic{width:44px;height:44px;border-radius:10px;background:var(--field);color:var(--muted);display:grid;place-items:center;flex:none}
+:is(#v-home,#v-quotes) .hcard svg{width:22px;height:22px}
+:is(#v-home,#v-quotes) .hcard b{display:block;font-size:26px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
+:is(#v-home,#v-quotes) .hcard div span{font-size:14px;color:var(--muted)}
+:is(#v-home,#v-quotes) .hcard.t-bad{background:var(--bad-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-bad .ic{color:var(--bad)}
+:is(#v-home,#v-quotes) .hcard.t-warn{background:var(--warn-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-warn .ic{color:var(--warn)}
+:is(#v-home,#v-quotes) .hcard.t-ok{background:var(--ok-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-ok .ic{color:var(--ok)}
+:is(#v-home,#v-quotes) .hcard.t-info{background:var(--info-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-info .ic{color:var(--info)}
+:is(#v-home,#v-quotes) .hcard[class*="t-"] .ic{background:var(--surface)}
+@media (max-width:900px){ :is(#v-home,#v-quotes) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:480px){ :is(#v-home,#v-quotes) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes) .hcard .ic{width:36px;height:36px} }
+:is(#v-home,#v-quotes) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
+:is(#v-home,#v-quotes) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
+:is(#v-home,#v-quotes) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
+:is(#v-home,#v-quotes) .snap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px}
+:is(#v-home,#v-quotes) .st{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+:is(#v-home,#v-quotes) .st:hover{border-color:var(--muted)}
+:is(#v-home,#v-quotes) .st:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+:is(#v-home,#v-quotes) .st .r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;font-size:14.5px}
+:is(#v-home,#v-quotes) .st .r1 small{color:var(--muted)}
+:is(#v-home,#v-quotes) .sbar{display:block;width:100%;height:6px;border-radius:3px;background:var(--field);overflow:hidden}
+:is(#v-home,#v-quotes) .sbar span{display:block;height:100%;border-radius:3px;min-width:4px;background:var(--ok)}
+:is(#v-home,#v-quotes) .sbar.late span{background:var(--bad)}
+:is(#v-home,#v-quotes) .seg{display:inline-flex;margin-left:auto;background:var(--field);border-radius:10px;padding:3px}
+:is(#v-home,#v-quotes) .seg button{border:0;background:none;border-radius:8px;padding:7px 14px;min-height:38px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+:is(#v-home,#v-quotes) .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+:is(#v-home,#v-quotes) .seg em{font-style:normal;font-weight:500;margin-left:4px}
+:is(#v-home,#v-quotes) table.home th,:is(#v-home,#v-quotes) table.home td{text-align:left;padding:12px 14px;vertical-align:middle}
+:is(#v-home,#v-quotes) table.home th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
+:is(#v-home,#v-quotes) table.home .num,:is(#v-home,#v-quotes) table.home .act{text-align:right;white-space:nowrap}
+:is(#v-home,#v-quotes) table.home .ref{display:block;font-size:12.5px;color:var(--muted)}
+:is(#v-home,#v-quotes) table.home tbody tr[data-open]{cursor:pointer}
+:is(#v-home,#v-quotes) table.home tbody tr[data-open]:hover td{background:var(--field)}
+:is(#v-home,#v-quotes) .allclear{margin:0;padding:18px;color:var(--muted)}
+:is(#v-home,#v-quotes) .allclear.ok{color:var(--ok);font-weight:600}
+:is(#v-home,#v-quotes) .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+:is(#v-home,#v-quotes) .tbl-wrap{position:relative}
+@media (max-width:560px){ :is(#v-home,#v-quotes) .hbtns,:is(#v-home,#v-quotes) .seg,:is(#v-home,#v-quotes) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes) table.home th:nth-child(3),:is(#v-home,#v-quotes) table.home td:nth-child(3){display:none} }
 
 /* help */
 #v-help .hflow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:6px 0 18px}
@@ -415,15 +412,9 @@ tr.muted td{color:var(--muted)}
 table.inbox td{vertical-align:middle}
 table.inbox th:nth-child(-n+3),table.inbox td:nth-child(-n+3){text-align:left}
 table.inbox .acts{white-space:nowrap;display:flex;gap:6px;justify-content:flex-end;align-items:center}
-details.gone .tbl-wrap{margin-top:10px}
 table.dtable form.inv input{width:140px}
 .paper.pdf{background:#fff;color:#111214}
 .cdates{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-details.gone>summary{cursor:pointer;list-style:none}
-details.gone>summary::-webkit-details-marker{display:none}
-details.gone>summary::before{content:'▸ ';font-size:14px}
-details.gone[open]>summary::before{content:'▾ '}
-details.gone .qgrid{margin-top:12px}
 .btn.ghost{background:transparent;border-color:#3A3A3F;color:#fff}
 .who{color:#C8C8CC;font-weight:600;gap:10px}
 .err{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -483,7 +474,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

@@ -11,9 +11,13 @@ const ICON = {
   soon: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   ready: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
   book: '<path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/>',
+  quote: '<path d="M4 4h16v12H5l-1 4z"/><path d="M8 9h8M8 12h5"/>',
 };
 const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+/** A summary card. It only takes its colour when there is something to see. label/shown are HTML: escape before passing. */
+export const card = (tone, ic, shown, label, on) =>
+  `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
 export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
   const { esc, fmt, gbp } = h;
@@ -25,9 +29,6 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
     ? '<button class="btn" type="button" data-tab="dispatch">Dispatch</button><button class="btn pri" type="button" data-neworder>New order</button>'
     : '<button class="btn pri" type="button" data-tab="floor">Shop floor</button>';
 
-  // A card only takes its colour when there is something to see.
-  const card = (tone, ic, shown, label, on) =>
-    `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
   const cards = [
     card('bad', 'late', d.late.length, office && d.late.length && d.lateValue != null ? `Running late · ${gbp(d.lateValue)}` : 'Running late', d.late.length > 0),
     card('warn', 'soon', d.soon.length, 'Due in the next 7 days', d.soon.length > 0),

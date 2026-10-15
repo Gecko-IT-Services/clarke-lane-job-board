@@ -40,8 +40,10 @@ export const createDespatch = async (jobId, lines) => { const j = find(jobId); i
 export const markInvoiced = async (id, no) => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) d.xero = { no }; };
 export const onChange = async () => {};
 export const orderedQuotes = async () => [
-  { spId: 301, quoteNo: 'Q-0301', customer: 'Example Customer Ltd', status: 'Ordered', carriage: 0, sellTotal: 393, deliveryDays: 10 },
-  { spId: 303, quoteNo: 'Q-0303', customer: 'Third Example Ltd', status: 'Ordered', carriage: 12.5, sellTotal: 290.25, deliveryDays: 0, quoteDate: '2026-10-12' }];
+  { spId: 301, quoteNo: 'Q-0301', customer: 'Example Customer Ltd', status: 'Ordered', carriage: 0, sellTotal: 393, deliveryDays: 10, quoteDate: '2026-10-13' },
+  { spId: 303, quoteNo: 'Q-0303', customer: 'Third Example Ltd', status: 'Ordered', carriage: 12.5, sellTotal: 290.25, deliveryDays: 0, quoteDate: '2026-10-12' },
+  { spId: 305, quoteNo: 'Q-0305', customer: 'Ninth Example Ltd', contactName: 'Sam Buyer', status: 'Ordered', carriage: 0, sellTotal: 210, deliveryDays: 10, quoteDate: '2026-10-07' },
+  { spId: 306, quoteNo: 'Q-0306', customer: 'Tenth Example Ltd', contactName: 'A Buyer', status: 'Ordered', carriage: 0, sellTotal: 1994, deliveryDays: 15, quoteDate: '2026-10-14' }];
 export const quoteLines = async () => [{ lineNo: 1, qty: 10, sellTotal: 290.25, desc: 'Valve guard', thickness: 2, material: 'Zintec', process: 'Laser', folds: 3, weld: 0, inserts: 0, paint: true, plating: 0, holes: 0 }];
 let dismissed = [];
 export const loadDismissed = async () => [...dismissed];

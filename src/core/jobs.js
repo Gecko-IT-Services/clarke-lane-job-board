@@ -180,6 +180,43 @@ export function quoteStates(quotes, jobs, dismissedIds) {
   });
 }
 
+/** Working days (Mon–Fri) after `from` up to and including `today`. null when there is no date. */
+export function workingDaysSince(from, today) {
+  if (!from) return null;
+  let n = 0;
+  // ponytail: bank holidays and shutdowns count as working days; add a holiday list if Christmas flags annoy.
+  for (let d = plusDays(from.slice(0, 10), 1); d <= today; d = plusDays(d, 1)) {
+    const w = new Date(d + 'T12:00:00Z').getUTCDay();
+    if (w !== 0 && w !== 6) n++;
+  }
+  return n;
+}
+
+/** How a won quote's wait looks: red after 5 working days, amber after 2. */
+export const quoteAgeTone = days => (days > 5 ? 'late' : days > 2 ? 'soon' : '');
+
+/**
+ * The Won quotes tab from the app's inbox rows (newest first; { ref, date, net, state, madeOn }).
+ * Waiting oldest first (undated last); made and not-a-job keep the newest-first order.
+ */
+export function wonQuotes(rows, today) {
+  const net = xs => round2(xs.reduce((a, r) => a + (r.net || 0), 0));
+  const waiting = rows.filter(r => r.state === 'waiting').map(r => ({ ...r, age: workingDaysSince(r.date, today) }))
+    .sort((a, b) => (!a.date) - (!b.date) || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const made = rows.filter(r => r.state === 'job');
+  const gone = rows.filter(r => r.state === 'dismissed');
+  const wk = weekStart(today), monthStart = today.slice(0, 8) + '01';
+  const month = rows.filter(r => r.state !== 'dismissed' && r.date && r.date.slice(0, 10) >= monthStart && r.date.slice(0, 10) <= today);
+  return {
+    waiting, made, gone,
+    waitingValue: net(waiting),
+    oldest: waiting[0] && waiting[0].age != null ? waiting[0] : null,
+    madeThisWeek: made.filter(r => r.madeOn && r.madeOn >= wk && r.madeOn <= today).length,
+    wonMonth: month.length,
+    wonMonthValue: net(month),
+  };
+}
+
 /** Running order: jobs given a place (priority 1 = top) first, in that order; the rest by due date. */
 export function byRunningOrder(a, b) {
   const pa = a.priority ?? Infinity, pb = b.priority ?? Infinity;

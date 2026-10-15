@@ -168,3 +168,41 @@ console.log('jobs: ok');
   assert.deepEqual(attention(lateReady).map(tag), ['late:11'], 'late and ready shows once, as late');
   console.log('jobs dashboard: ok');
 }
+
+// — Won quotes: ages in working days, flags, and the tab's lists and totals. —
+{
+  const { workingDaysSince, quoteAgeTone, wonQuotes } = await import('../src/core/jobs.js');
+  const today = '2026-10-15';   // a Thursday
+  assert.equal(workingDaysSince('2026-10-07', today), 6, 'Wed 7 → Thu 15 is six working days');
+  assert.equal(workingDaysSince('2026-10-12', today), 3);
+  assert.equal(workingDaysSince('2026-10-14', today), 1);
+  assert.equal(workingDaysSince(today, today), 0, 'won today');
+  assert.equal(workingDaysSince('2026-10-10', today), 4, 'won on a Saturday: Mon–Thu');
+  assert.equal(workingDaysSince('2026-10-12T09:30:00Z', today), 3, 'a timestamp counts by its date');
+  assert.equal(workingDaysSince(null, today), null);
+  assert.deepEqual([0, 2, 3, 5, 6, null].map(quoteAgeTone), ['', '', 'soon', 'soon', 'late', '']);
+
+  const rows = [   // newest first, as the app builds them
+    { ref: 'Q1', date: '2026-10-14', net: 100, state: 'waiting' },
+    { ref: 'Q3', date: '2026-10-13', net: 50, state: 'job', madeOn: '2026-10-14' },
+    { ref: 'Q2', date: '2026-10-07', net: 200, state: 'waiting' },
+    { ref: 'Q5', date: '2026-10-02', net: 999, state: 'dismissed' },
+    { ref: 'Q4', date: '2026-09-30', net: 70, state: 'job', madeOn: '2026-10-09' },
+    { ref: 'X1', date: null, net: null, state: 'waiting' },
+  ];
+  const w = wonQuotes(rows, today);
+  assert.deepEqual(w.waiting.map(r => [r.ref, r.age]), [['Q2', 6], ['Q1', 1], ['X1', null]], 'oldest first, undated last');
+  assert.deepEqual(w.made.map(r => r.ref), ['Q3', 'Q4'], 'newest first');
+  assert.deepEqual(w.gone.map(r => r.ref), ['Q5']);
+  assert.equal(w.waitingValue, 300, 'a missing value counts as nothing');
+  assert.equal(w.oldest.ref, 'Q2'); assert.equal(w.oldest.age, 6);
+  assert.equal(w.madeThisWeek, 1, 'made Wed 14 is this week; Fri 9 is not');
+  assert.equal(w.wonMonth, 3, 'October, not marked not a job');
+  assert.equal(w.wonMonthValue, 350);
+  const tie = wonQuotes([{ ref: 'S', date: '2026-10-10', state: 'waiting' }, { ref: 'F', date: '2026-10-09', state: 'waiting' }], today);
+  assert.deepEqual(tie.waiting.map(r => [r.ref, r.age]), [['F', 4], ['S', 4]], 'same age: the earlier date first');
+  const none = wonQuotes([], today);
+  assert.deepEqual([none.waiting, none.made, none.gone, none.oldest, none.madeThisWeek, none.wonMonth, none.wonMonthValue], [[], [], [], null, 0, 0, 0]);
+  assert.equal(wonQuotes([{ ref: 'X', date: null, net: 5, state: 'waiting' }], today).oldest, null, 'no age, no oldest');
+  console.log('jobs won quotes: ok');
+}

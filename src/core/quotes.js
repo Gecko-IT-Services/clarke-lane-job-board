@@ -15,6 +15,7 @@ export const QUOTE_FIELDS = {
   contactName:  { names: ['ContactName', 'Contact Name'] },
   contactEmail: { names: ['ContactEmail', 'Contact Email'] },
   quoteDate:    { names: ['QuoteDate', 'Quote Date'] },
+  orderedDate:  { names: ['OrderedDate', 'Ordered Date', 'DateOrdered', 'Date Ordered'] },
   deliveryDays: { names: ['DeliveryDays', 'Delivery Days'] },
   carriage:     { names: ['CarriageCost', 'Carriage Cost'] },
   sellTotal:    { names: ['SellTotal', 'TotalSell', 'Sell Total'] },
@@ -89,6 +90,9 @@ export function toQuote(item, col) {
     contactName: String(f[col.contactName] ?? ''),
     contactEmail: String(f[col.contactEmail] ?? ''),
     quoteDate: String(f[col.quoteDate] ?? '').slice(0, 10),
+    // When it was won: an Ordered Date column if the list has one, else when the item last changed
+    // (Mark as Ordered sets it; a later edit to the quote moves it), else the quote date.
+    wonDate: String((col.orderedDate && f[col.orderedDate]) || item.lastModifiedDateTime || f[col.quoteDate] || '').slice(0, 10),
     deliveryDays: num(f[col.deliveryDays]),
     carriage: num(f[col.carriage]),
     sellTotal: col.sellTotal ? num(f[col.sellTotal]) : null,
