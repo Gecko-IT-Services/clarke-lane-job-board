@@ -84,9 +84,7 @@ async function boot() {
   try { st = await auth.start(); }
   catch (e) { return gate(`<p>${esc(e.message)}</p><button class="btn pri" type="button" data-signin>Try signing in again</button>`); }
   if (!st.account || !st.ready) {
-    return gate(`<p>Sign in with your Clarke Lane Microsoft account.</p>
-      <button class="btn ms" type="button" data-signin>${MICROSOFT}Sign in with Microsoft</button>
-      <p class="note">Microsoft checks your password; the board never sees it.</p>`);
+    return gate(`<button class="btn ms" type="button" data-signin>${MICROSOFT}Sign in with Microsoft</button>`);
   }
   try { S.me = await data.whoAmI(); }
   catch (e) { return gate(`<p>${esc(e.message)}</p><button class="btn" type="button" data-reload>Try again</button>`); }
