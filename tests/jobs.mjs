@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs, addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
-  suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists } from '../src/core/jobs.js';
+  suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists, nextStep, floorQueue, floorStations, partsLeft, dayNo } from '../src/core/jobs.js';
 
 const job = over => ({
   id: 1, so: 'SO-9729', customer: 'BSA Regal Group Ltd', po: 'M32991', due: '2026-10-30', status: 'open',
@@ -245,4 +245,37 @@ console.log('jobs: ok');
   assert.deepEqual(ids(bl.completed), [5, 4]);
   assert.ok(!Object.values(bl).flat().includes(g), 'cancelled is off the board');
   console.log('jobs sales orders and board: ok');
+}
+
+// — Shop floor: what waits at each station, in the running order. —
+{
+  const L = due => [{ id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 13.1, due }];
+  const a = job({ id: 1, so: 'SO-1', lines: L('2026-10-10'), procs: { 'Laser': { done: true }, 'Fold': { done: false }, 'Weld': { done: false } } });
+  const b = job({ id: 2, so: 'SO-2', status: 'held', lines: L('2026-10-20'), procs: { 'Laser': { done: false }, 'Weld': { done: false } } });
+  const c = job({ id: 3, so: 'SO-3', lines: L('2026-10-18'), procs: { 'Laser': { done: true }, 'Fold': { done: true } } });
+  const d = job({ id: 4, so: 'SO-4', lines: L('2026-10-01'), procs: { 'Laser': { done: false } }, despatches: [{ lines: { 10: 20 }, date: '2026-10-02' }] });
+  const e = job({ id: 5, so: 'SO-5', status: 'cancelled', lines: L('2026-10-01'), procs: { 'Laser': { done: false } } });
+  const all = [a, b, c, d, e], ids = xs => xs.map(x => x.id);
+  assert.equal(nextStep(a), 'Fold', "the first not done, in Levi's order");
+  assert.equal(nextStep(c), null);
+  assert.deepEqual(ids(floorQueue(all, 'all')), [1, 3, 2], 'running order; held in; finished and cancelled out');
+  assert.deepEqual(ids(floorQueue(all, 'Laser')), [2], 'only jobs still needing Laser');
+  assert.deepEqual(ids(floorQueue(all, 'Weld')), [1, 2]);
+  const st = floorStations(all, '2026-10-15'), t = Object.fromEntries(st.map(s => [s.p, s]));
+  assert.equal(st.length, 9);
+  assert.deepEqual(st.map(s => s.p), PROCESSES);
+  assert.deepEqual([t['Laser'].waiting, t['Laser'].late, t['Weld'].waiting, t['Weld'].late, t['Fold'].waiting, t['Tap'].waiting], [1, 0, 2, 1, 1, 0]);
+  console.log('jobs shop floor: ok');
+}
+
+// — Parts still to make, one entry per part however many delivery lines. —
+{
+  const p = job({ lines: [
+    { id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 1, due: '2026-10-10' },
+    { id: 11, lineNo: 2, part: 'Plate', qty: 5, price: 1, due: '2026-10-10' },
+    { id: 12, lineNo: 3, part: 'Bracket', qty: 30, price: 1, due: '2026-10-20' }],
+    despatches: [{ lines: { 11: 5, 10: 5 }, date: '2026-10-02' }] });
+  assert.deepEqual(partsLeft(p), [{ part: 'Bracket', left: 45, next: 15 }], 'Plate fully sent drops out; next = due by the next delivery');
+  assert.equal(dayNo('2026-10-02') - dayNo('2026-10-01'), 1);
+  console.log('jobs partsLeft: ok');
 }

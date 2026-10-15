@@ -10,6 +10,7 @@ import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { renderWon } from './won.js';
 import { renderBoard } from './board.js';
+import { renderShopFloor, clockHtml } from './floor.js';
 import { renderSalesOrders } from './orders.js';
 import { drawMap, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
@@ -17,7 +18,7 @@ import { dashboard } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
-  byRunningOrder, moveInOrder, compareValues } from './core/jobs.js';
+  byRunningOrder, partsLeft, moveInOrder, compareValues, nextStep } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 
@@ -68,7 +69,7 @@ const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.get
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
-  station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
+  station: null, open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
 /** Ordered quotes with where each stands (waiting / job / dismissed), or null until read. */
@@ -92,7 +93,6 @@ async function boot() {
   }
   $('gate').hidden = true; $('app').hidden = false;
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>Sign out</button>`;
-  try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.orderview'); if (['dispatched', 'held', 'cancelled'].includes(v)) S.orderView = v; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
@@ -220,7 +220,7 @@ async function toggleProc(id, p) {
   render();
   try {
     await data.setProcess(id, p, done, S.me.name);
-    toast(done ? `${p} done on ${j.so}` + (allDone(j) ? '. Ready to dispatch.' : '') : `${p} on ${j.so} set back to not done`,
+    toast(done ? `${p} done on ${j.so}` + (allDone(j) ? ' · ready to dispatch' : ` · next: ${nextStep(j)}`) : `${p} on ${j.so} set back to not done`,
       async () => { try { await data.setProcess(id, p, prev.done, prev.by || S.me.name); } catch (e) { toast(e.message, null, true); } reload(); });
   } catch (e) { j.procs[p] = prev; render(); toast(e.message, null, true); }
 }
@@ -734,47 +734,17 @@ function makeJobFromXero(id) {
 
 /* ---------- shop floor: the touch screen in the factory. Same rows as the job board, bigger boxes. ---------- */
 /** Outstanding parts, one line per part however many delivery lines it is split over. */
-function floorParts(j) {
-  const by = new Map();
-  for (const l of j.lines) { const k = l.part; const r = by.get(k) || { left: 0, next: 0 }; r.left += left(j, l); if (l.due <= nextDue(j)) r.next += left(j, l); by.set(k, r); }
-  return [...by.entries()].filter(([, r]) => r.left > 0).map(([part, r]) =>
-    `<div><b>${r.left}</b> × ${esc(part)}${r.next && r.next !== r.left ? ` <span class="note">(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
+function dispatchParts(j) {
+  return partsLeft(j).map(r =>
+    `<div><b>${r.left}</b> × ${esc(r.part)}${r.next && r.next !== r.left ? ` <span class="note">(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
 }
 function procButtons(j, focus) {
   return needed(j).map(p => { const s = j.procs[p];
-    return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
-}
-function floorTick(j, p, focus) {
-  const s = j.procs[p]; if (!s) return '<span class="na" aria-label="Not needed">–</span>';
-  const label = s.done ? `${p} done ${fmtTime(s.at)}. Tap to undo.` : `Tap when ${p} is done`;
-  return `<button type="button" class="tick big ${s.done ? 'done' : ''} ${focus ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(label)}" aria-label="${esc(label)} on ${esc(j.so)}">${s.done ? TICK : ''}</button>
-    ${s.done ? `<small>${esc(fmtTime(s.at))}</small>` : ''}`;
+    return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"${j.status === 'held' && !office() ? ' disabled' : ''}><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
 }
 function renderFloor() {
-  const open = S.jobs.filter(onBoardStage).sort(byRunningOrder);
-  const st = S.station;
-  const count = p => open.filter(j => j.procs[p] && !j.procs[p].done).length;
-  const btns = [['all', 'All jobs', open.length], ...PROCESSES.map(p => [p, p, count(p)])]
-    .map(([k, t, c]) => `<button type="button" data-station="${esc(k)}" aria-pressed="${st === k}">${esc(t)}<span class="c">${c}</span></button>`).join('');
-  const list = st === 'all' ? open : open.filter(j => j.procs[st] && !j.procs[st].done);
-  const rows = list.map(j => {
-    const pin = needed(j).map(p => `<button type="button" class="tick ${j.procs[p].done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${j.procs[p].done}">${j.procs[p].done ? TICK : ''}${SHORT[p]}</button>`).join('');
-    const ahead = j.priority != null && open.slice(open.indexOf(j) + 1).some(o => nextDue(o) < nextDue(j));   // above a job due sooner
-    const state = [ahead ? '<span class="chip late">Brought forward</span>' : '',
-      j.status === 'held' ? '<span class="chip bad">On hold</span>' : allDone(j) ? '<span class="chip ok">Ready to dispatch</span>' : ''].join(' ').trim();
-    return `<tr class="${allDone(j) ? 'ready' : ''}">
-      <td class="due">${dueChip(nextDue(j))}${deliveryLabel(j) ? `<div class="note">${deliveryLabel(j)}</div>` : ''}</td>
-      <td class="so"><button type="button" class="btn link" data-open="${j.id}" title="Job details">${esc(j.so)}</button></td>
-      <td class="cust"><b>${esc(j.customer)}</b><div class="parts">${floorParts(j)}</div>${state ? `<div class="meta">${state}</div>` : ''}<div class="pin">${pin}</div></td>
-      ${PROCESSES.map(p => `<td class="p ${st === p ? 'focus' : ''}">${floorTick(j, p, st === p)}</td>`).join('')}</tr>`;
-  }).join('');
-  $('v-floor').innerHTML = `
-    <div class="sec-h"><h2>Shop floor</h2><span class="sub">Tap the box when your process is finished on a job. Tap again to undo. Pick your station to see only the jobs waiting for it; this screen remembers it.</span></div>
-    <div class="stations" role="group" aria-label="Station">${btns}</div>
-    <div class="tbl-wrap"><table class="jobs floor"><thead><tr><th>Due</th><th>Sales order</th><th>Customer and parts</th>
-      ${PROCESSES.map(p => `<th class="p ${st === p ? 'focus' : ''}">${esc(p)}</th>`).join('')}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="12" class="empty">${st === 'all' ? 'No open jobs.' : `Nothing waiting for ${esc(st)}.`}</td></tr>`}</tbody></table></div>
-    <p class="note">In the office's running order: jobs brought forward first, then soonest due. A dash means the job doesn't need that process. Tap the sales order number for the full job.</p>`;
+  $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
+    canFull: !!document.fullscreenEnabled, isFull: !!document.fullscreenElement }, { esc, fmt, fmtTime, TICK });
 }
 
 /* ---------- new orders: Levi's ordered quotes and Xero sales orders, as Sage-style rows ---------- */
@@ -916,7 +886,7 @@ function renderDespatch() {
       <p class="note">Every process is ticked on these jobs. Check the parts, then press Dispatch to make the delivery note.</p>
       <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Order</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer PO</th><th>Due</th><th style="text-align:left">To send</th><th></th></tr></thead><tbody>
       ${r.map(x => `<tr><td class="mono" style="text-align:left">${esc(x.so)}</td><td style="text-align:left"><b>${esc(x.customer)}</b></td><td style="text-align:left">${esc(x.po) || '—'}</td>
-        <td>${dueChip(nextDue(x))}${deliveryLabel(x) ? ` <span class="note">${deliveryLabel(x)}</span>` : ''}</td><td style="text-align:left">${floorParts(x)}</td>
+        <td>${dueChip(nextDue(x))}${deliveryLabel(x) ? ` <span class="note">${deliveryLabel(x)}</span>` : ''}</td><td style="text-align:left">${dispatchParts(x)}</td>
         <td><button class="btn sm pri" type="button" data-desp="${x.id}">Dispatch</button></td></tr>`).join('')}</tbody></table></div></div>` : ''; })()}
     <div class="panel"><h3>Dispatch goods</h3>
       <label class="fl">Job
@@ -1184,11 +1154,23 @@ function render() {
   ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+  document.body.classList.toggle('on-floor', S.tab === 'floor');
   renderDrawer();
   restoreInputs(kept);
 }
 function fromHash() { const h = location.hash.slice(1) === 'despatch' ? 'dispatch' : location.hash.slice(1); if (TABS.some(([k]) => k === h)) S.tab = h; }
-window.addEventListener('hashchange', () => { fromHash(); render(); });
+document.addEventListener('fullscreenchange', () => { if (S.tab === 'floor') renderFloor(); });
+setInterval(() => { const c = $('fclock'); if (c) c.innerHTML = clockHtml(new Date()); }, 15000);
+window.addEventListener('hashchange', () => { fromHash(); render(); nudge(); });
+
+/* The shop floor screen is shared: two minutes untouched, it goes back to the station tiles. */
+let idleT;
+function nudge() {
+  clearTimeout(idleT);
+  idleT = setTimeout(() => { if (S.tab !== 'floor' || (S.station == null && S.open == null && $('doc').hidden)) return; closeDoc(); S.station = null; S.open = null; S.ask = null; render(); window.scrollTo(0, 0); }, 120000);
+}
+['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, nudge, { passive: true }));
+nudge();
 
 document.addEventListener('click', e => {
   const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;
@@ -1205,7 +1187,7 @@ document.addEventListener('click', e => {
   if ('fromxerobook' in d) return copyXeroToBook();
   if ('booksave' in d) return saveFormToBook();
   if ('leavepreview' in d) return leavePreview();
-  if (d.gostation) { S.station = d.gostation; try { localStorage.setItem('clj.station', d.gostation); } catch { /* not kept */ } S.tab = 'floor'; history.replaceState(null, '', '#floor'); render(); window.scrollTo(0, 0); return; }
+  if (d.gostation) { S.station = d.gostation; S.tab = 'floor'; history.replaceState(null, '', '#floor'); render(); window.scrollTo(0, 0); return; }
   if (t.matches('a[href^="#help-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ('signin' in d) return auth.signIn();
   if ('signout' in d) return auth.signOut();
@@ -1218,7 +1200,9 @@ document.addEventListener('click', e => {
   if (d.sort) { const [t, col] = d.sort.split(':'); return setSort(t, col); }
   if (d.move) { e.stopPropagation(); return moveJob(+d.job, d.move, boardVisible()); }
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
-  if (d.station) { S.station = d.station; try { localStorage.setItem('clj.station', d.station); } catch { /* not kept */ } return render(); }
+  if (d.station) { S.station = d.station; render(); window.scrollTo(0, 0); return; }
+  if (d.stations) { S.station = null; render(); window.scrollTo(0, 0); return; }
+  if (d.fullscreen) { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); return; }
   if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; return render(); }
   if ('neworder' in d) return openOrderForm();
   if (d.amend) return openAmend(+d.amend);
