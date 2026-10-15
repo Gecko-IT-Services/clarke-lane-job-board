@@ -147,6 +147,63 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 @media (max-width:820px){ table.floor td.p{display:none} table.floor .pin .tick{padding:10px 12px;font-size:15px;min-height:44px} }
 .readybar{background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:6px 10px;font-weight:700;font-size:14px}
 
+/* shop floor kiosk: one shared touchscreen; everything big, nothing hover-only */
+.kiosk{display:flex;flex-direction:column;gap:22px}
+.kiosk .kbar{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap}
+.kiosk .kbar h2{font-family:var(--display);font-size:40px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05}
+.kiosk .kbar .sub{margin:2px 0 0;color:var(--muted);font-size:17px}
+.kiosk .clock{margin-left:auto;text-align:right;color:var(--muted);font-size:15px}
+.kiosk .clock b{display:block;color:var(--ink);font-size:30px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.kiosk .back{display:inline-flex;align-items:center;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:14px;padding:0 22px;min-height:64px;font:700 20px var(--body);cursor:pointer}
+.kiosk .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.kiosk .tile{all:unset;box-sizing:border-box;cursor:pointer;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:18px;padding:22px 24px;min-height:150px;display:flex;flex-direction:column;justify-content:space-between;gap:12px}
+.kiosk .tile .nm{font-family:var(--display);font-size:34px;letter-spacing:.04em;text-transform:uppercase;font-weight:700;line-height:1.05}
+.kiosk .tile .ct{display:block;color:var(--muted);font-size:18px}
+.kiosk .tile .ct b{font-size:52px;font-weight:600;line-height:1;color:var(--ink);margin-right:8px;font-variant-numeric:tabular-nums}
+.kiosk .tile.idle{opacity:.5}
+.kiosk .tile.hot{border-color:var(--bad)}
+.kiosk :is(.tile,.step,.back,.btn):focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.kiosk .tag{display:inline-block;border-radius:8px;padding:4px 12px;font-weight:700;font-size:16px;background:var(--field);color:var(--muted);margin:4px 8px 0 0}
+.kiosk .tag.late{background:var(--bad-soft);color:var(--bad)}
+.kiosk .tag.soon{background:var(--warn-soft);color:var(--warn)}
+.kiosk .tag.ok{background:var(--ok-soft);color:var(--ok)}
+.kiosk .kfoot{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.kiosk :is(.kfoot,.side) .btn{min-height:56px;font-size:17px;padding:0 20px;border-radius:12px}
+.kiosk .kfoot em{font-style:normal;font-weight:500;margin-left:6px}
+.kiosk .fq{display:flex;flex-direction:column;gap:14px}
+.kiosk .fcard{background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.kiosk .fcard.late{border-color:var(--bad)}
+.kiosk .fcard.held{opacity:.6}
+.kiosk .fcard.ready{border-color:var(--ok);background:var(--ok-soft)}
+.kiosk .ftop{display:flex;align-items:flex-start;gap:16px}
+.kiosk .pos{width:52px;height:52px;border-radius:14px;background:var(--field);display:grid;place-items:center;font-size:24px;font-weight:700;flex:none}
+.kiosk .cu{font-size:25px;font-weight:700;line-height:1.2}
+.kiosk .cu .so{font-family:var(--mono);color:var(--muted);font-size:16px;margin-left:10px;font-weight:500}
+.kiosk .parts{display:flex;flex-wrap:wrap;gap:2px 18px;font-size:18px;color:var(--muted);margin-top:4px}
+.kiosk .parts b{color:var(--ink);font-size:20px}
+.kiosk .side{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.kiosk .route{display:flex;align-items:center;flex-wrap:wrap;row-gap:10px}
+.kiosk .step{all:unset;box-sizing:border-box;cursor:pointer;min-width:170px;min-height:76px;border:2px solid var(--line);background:var(--field);color:var(--ink);border-radius:14px;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.kiosk .step .bx{width:34px;height:34px;border-radius:9px;border:3px solid var(--muted);display:grid;place-items:center;flex:none}
+.kiosk .step .bx svg{width:22px;height:22px}
+.kiosk .step b{display:block;font-family:var(--display);font-size:20px;letter-spacing:.04em;text-transform:uppercase}
+.kiosk .step small{display:block;font-size:14px;color:var(--muted)}
+.kiosk .step.done{background:var(--ok-soft);border-color:transparent}
+.kiosk .step.done .bx{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.kiosk .step.done small{color:var(--ok)}
+.kiosk .step.here{border:3px solid var(--ink);background:var(--surface)}
+.kiosk .step.here .bx{border-color:var(--ink)}
+.kiosk .step:disabled{cursor:not-allowed}
+.kiosk .arrow{width:34px;text-align:center;color:var(--muted);font-size:22px}
+.kiosk .fstat{margin:0;font-size:18px;color:var(--muted)}
+.kiosk .fstat b{color:var(--ink)}
+.kiosk .allclear{margin:0;padding:24px;font-size:20px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.kiosk .allclear.ok{color:var(--ok);font-weight:600}
+@media (max-width:1000px){ .kiosk .tiles{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .kiosk .tiles{grid-template-columns:minmax(0,1fr)} .kiosk .tile{min-height:110px} .kiosk .kbar h2{font-size:32px}
+  .kiosk .ftop{flex-wrap:wrap} .kiosk .side{margin-left:0;align-items:flex-start;flex-direction:row;flex-wrap:wrap;width:100%}
+  .kiosk .arrow{display:none} .kiosk .route{gap:10px} .kiosk .step{flex:1 1 100%} }
+
 /* quotes */
 .qcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .qcard .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
@@ -486,7 +543,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/floor.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;
