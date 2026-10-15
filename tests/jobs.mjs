@@ -109,7 +109,7 @@ console.log('jobs: ok');
 
 // — Home screen numbers. —
 {
-  const { dashboard, weekStart } = await import('../src/core/jobs.js');
+  const { dashboard, weekStart, attention } = await import('../src/core/jobs.js');
   assert.equal(weekStart('2026-10-15'), '2026-10-12', 'Thursday → Monday');
   assert.equal(weekStart('2026-10-12'), '2026-10-12');
   assert.equal(weekStart('2026-10-18'), '2026-10-12', 'Sunday belongs to the week before');
@@ -135,5 +135,36 @@ console.log('jobs: ok');
   assert.equal(d.ticksToday, 1);
   const floor = dashboard(jobs.map(j => ({ ...j, lines: j.lines.map(l => ({ ...l, price: null })) })), '2026-10-15');
   assert.equal(floor.orderBook, null, 'no money for the shop floor');
+
+  // At risk: not ready, due within 3 working days. Going out: today to Friday of next week.
+  const withSoon = [...jobs, mk(7, '2026-10-16'), mk(8, '2026-10-21')];
+  const thu = dashboard(withSoon, '2026-10-15');
+  assert.deepEqual(thu.atRisk.map(j => j.id), [7], 'Thu: due Fri at risk; Wed 21 is 4 working days away; ready job 3 is not at risk');
+  assert.deepEqual(thu.goingOut.map(j => j.id), [7, 3, 8], 'Thu 15 → Fri 23, soonest first; late and later jobs left out');
+  assert.equal(thu.stationLate.Laser, 2, 'jobs 1 and 2 are late and still need Laser');
+  assert.equal(thu.stationLate.Weld, 0, 'every process has a count');
+  const fri = dashboard(withSoon, '2026-10-16');
+  assert.deepEqual(fri.atRisk.map(j => j.id), [7, 8], 'Fri: three working days reach Wed 21');
+  assert.deepEqual(dashboard(withSoon, '2026-10-17').goingOut.map(j => j.id), [3, 8], 'Sat: window still ends Fri 23');
+
+  // Needs attention: worst first, each job once, office-only rows hidden from the floor.
+  const rows = attention(thu, { office: true, wonQuotes: 2 });
+  const tag = r => r.kind + (r.job ? ':' + r.job.id : '') + (r.count ? ':' + r.count : '');
+  assert.deepEqual(rows.map(tag), ['late:1', 'late:2', 'risk:7', 'ready:3', 'quotes:2', 'invoice:5'],
+    'held job 2 is late, so it is listed once, as late');
+  assert.equal(rows[0].days, 5);
+  assert.equal(rows.at(-1).despatch.id, 9);
+  assert.deepEqual(attention(thu, { office: false, wonQuotes: 2 }).map(tag), ['late:1', 'late:2', 'risk:7', 'ready:3']);
+  assert.ok(!attention(thu, { office: true, wonQuotes: 0 }).some(r => r.kind === 'quotes'), 'no quotes row when none are waiting');
+  assert.deepEqual(attention(dashboard([mk(9, '2026-10-30', { status: 'held' })], '2026-10-15')).map(tag), ['held:9']);
+  assert.deepEqual(attention(dashboard([], '2026-10-15'), { office: true }), [], 'all clear');
+  // Held jobs are never at risk (nothing to chase on the floor) but still go out on the calendar.
+  const heldSoon = dashboard([mk(10, '2026-10-16', { status: 'held' })], '2026-10-15');
+  assert.deepEqual(heldSoon.atRisk.map(j => j.id), [], 'held job due within 3 working days is not at risk');
+  assert.deepEqual(heldSoon.goingOut.map(j => j.id), [10], 'but it is still going out');
+  assert.deepEqual(attention(heldSoon).map(tag), ['held:10']);
+  // Late and ready: listed once, as late.
+  const lateReady = dashboard([mk(11, '2026-10-10', { procs: { Laser: { done: true } } })], '2026-10-15');
+  assert.deepEqual(attention(lateReady).map(tag), ['late:11'], 'late and ready shows once, as late');
   console.log('jobs dashboard: ok');
 }

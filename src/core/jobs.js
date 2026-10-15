@@ -208,6 +208,7 @@ export function compareValues(a, b, dir = 1) {
 }
 
 const dayNo = s => Math.round(new Date(s.slice(0, 10) + 'T12:00:00Z') / 864e5);
+const plusDays = (s, n) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Monday of the week containing `today` (YYYY-MM-DD). */
 export function weekStart(today) {
   const d = new Date(today + 'T12:00:00Z');
@@ -217,16 +218,24 @@ export function weekStart(today) {
 /**
  * The Home screen's numbers. today: YYYY-MM-DD. Money is null when prices are hidden (shop floor).
  * Open = not completed or cancelled. Late = open with its next delivery before today.
+ * At risk = open, not on hold, not every process ticked, due within the next 3 working days.
+ * Going out = open (held included) and due from today to the Friday of next week.
  */
 export function dashboard(jobs, today) {
   const open = jobs.filter(j => ['upcoming', 'current'].includes(stage(j)) && j.status !== 'cancelled');
   const lateBy = j => dayNo(today) - dayNo(nextDue(j));
+  const bySoonest = (a, b) => (nextDue(a) < nextDue(b) ? -1 : nextDue(a) > nextDue(b) ? 1 : 0);
+  const due = (from, to) => open.filter(j => nextDue(j) >= from && nextDue(j) <= to).sort(bySoonest);
   const late = open.filter(j => nextDue(j) && nextDue(j) < today).map(j => ({ job: j, days: lateBy(j) })).sort((a, b) => b.days - a.days);
   const soonEnd = dayNo(today) + 7;
-  const soon = open.filter(j => nextDue(j) >= today && dayNo(nextDue(j)) <= soonEnd).sort((a, b) => (nextDue(a) < nextDue(b) ? -1 : 1));
+  const soon = open.filter(j => nextDue(j) >= today && dayNo(nextDue(j)) <= soonEnd).sort(bySoonest);
+  const atRisk = due(today, addWorkingDays(today, 3)).filter(j => j.status === 'open' && !allDone(j));
+  const goingOut = due(today, plusDays(weekStart(today), 11));
   const ready = open.filter(j => j.status === 'open' && allDone(j));
   const held = open.filter(j => j.status === 'held');
-  const stations = Object.fromEntries(PROCESSES.map(p => [p, open.filter(j => j.procs[p] && !j.procs[p].done).length]));
+  const waiting = (list, p) => list.filter(j => j.procs[p] && !j.procs[p].done).length;
+  const stations = Object.fromEntries(PROCESSES.map(p => [p, waiting(open, p)]));
+  const stationLate = Object.fromEntries(PROCESSES.map(p => [p, waiting(late.map(x => x.job), p)]));
   const dn = jobs.flatMap(j => j.despatches.map(d => ({ job: j, d })));
   const out = dn.filter(x => !x.d.deliveredOn && !x.d.xero);
   const toXero = dn.filter(x => x.d.deliveredOn && !x.d.xero);
@@ -236,10 +245,27 @@ export function dashboard(jobs, today) {
   const sum = (xs, f) => (money ? round2(xs.reduce((a, x) => a + (f(x) || 0), 0)) : null);
   const ticksToday = jobs.reduce((a, j) => a + Object.values(j.procs).filter(s => s.done && s.at && s.at.slice(0, 10) === today).length, 0);
   return {
-    open, late, soon, ready, held, stations, out, toXero, thisWeek, ticksToday,
+    open, late, soon, atRisk, goingOut, ready, held, stations, stationLate, out, toXero, thisWeek, ticksToday,
     orderBook: sum(open, j => value(j, { remaining: true })),
     lateValue: sum(late, x => value(x.job, { remaining: true })),
     toXeroValue: sum(toXero, x => despatchValue(x.job, x.d)),
     thisWeekValue: sum(thisWeek, x => despatchValue(x.job, x.d)),
   };
+}
+
+/**
+ * Home's "Needs attention" rows from dashboard()'s result, worst first: late, at risk, on hold,
+ * ready to dispatch, then (office only) won quotes waiting and deliveries to invoice.
+ * A job is listed once, under the first of late / at risk / on hold / ready it matches.
+ */
+export function attention(d, { office = false, wonQuotes = 0 } = {}) {
+  const rows = [], seen = new Set();
+  const add = (kind, job, more = {}) => { if (seen.has(job.id)) return; seen.add(job.id); rows.push({ kind, job, ...more }); };
+  d.late.forEach(x => add('late', x.job, { days: x.days }));
+  d.atRisk.forEach(j => add('risk', j));
+  d.held.forEach(j => add('held', j));
+  d.ready.forEach(j => add('ready', j));
+  if (office && wonQuotes > 0) rows.push({ kind: 'quotes', count: wonQuotes });
+  if (office) d.toXero.forEach(x => rows.push({ kind: 'invoice', job: x.job, despatch: x.d }));
+  return rows;
 }
