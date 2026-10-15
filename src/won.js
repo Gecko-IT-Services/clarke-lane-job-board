@@ -50,7 +50,7 @@ export function renderWon({ rows, today, view, reading, error, converting }, h) 
   const head = '<thead><tr><th>Customer</th><th>Won</th><th>Contact</th><th class="num">Value</th><th class="act"><span class="sr">Action</span></th></tr></thead>';
   const table = !reading && V.list.length
     ? `<div class="tbl-wrap"><table class="lines home">${head}<tbody>${V.list.map(row).join('')}</tbody></table></div>`
-    : `<div class="tbl-wrap"><p class="allclear${!reading && v === 'waiting' ? ' ok' : ''}">${reading ? 'Reading the quotes…' : V.empty}</p></div>`;
+    : `<div class="tbl-wrap"><p class="allclear${!reading && !error && v === 'waiting' ? ' ok' : ''}">${reading ? 'Reading the quotes…' : error ? 'Could not read the quotes, so this list may be incomplete.' : V.empty}</p></div>`;
   const seg = `<div class="seg" role="group" aria-label="Show">${Object.entries(VIEWS).map(([k, x]) =>
     `<button type="button" data-wonview="${k}" aria-pressed="${k === v}">${x.tab} <em>${x.n}</em></button>`).join('')}</div>`;
   const err = error ? `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(error)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>` : '';

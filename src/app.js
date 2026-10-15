@@ -172,7 +172,7 @@ const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
 
 /* ---------- sortable column headings (office tables). Each computer remembers its own choice. ---------- */
 const SORT_DEFAULT = { board: { col: 'order', dir: 1 }, boardDone: { col: 'dispatched', dir: -1 }, orders: { col: 'date', dir: -1 },
-  inbox: { col: 'date', dir: -1 }, dn: { col: 'date', dir: -1 } };
+  dn: { col: 'date', dir: -1 } };
 let SORT = {};
 try { SORT = JSON.parse(localStorage.getItem('clj.sort') || '{}') || {}; } catch { /* date order */ }
 const sortOf = t => SORT[t] || SORT_DEFAULT[t];
