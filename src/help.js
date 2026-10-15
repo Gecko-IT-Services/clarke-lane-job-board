@@ -27,8 +27,8 @@ function flow(office) {
     ['Dispatch', 'Delivery note, emailed, delivered', 'M3 7h11v9H3z M14 10h4l3 3v3h-7z M7 19a1.5 1.5 0 1 0 0-.01 M17 19a1.5 1.5 0 1 0 0-.01', 'dispatch'],
     ['Xero', 'Draft invoice for Keith to approve', 'M6 3h9l3 3v15H6z M9 10h6 M9 14h6 M9 18h3', 'xero'],
   ].filter(s => office || ['floor', 'dispatch'].includes(s[3]));
-  const more = [['Home', 'Start of the day: what needs attention', 'home'], ['Map', 'Where deliveries are going, what is nearby', 'map'],
-    ...(office ? [['Customers', 'Buyers, goods in, delivery addresses', 'customers']] : [])];
+  const more = [['Home', 'Start of the day: what needs attention', 'home'], ['Delivery map', 'On Dispatch: where deliveries are going, what is nearby', 'map'],
+    ...(office ? [['Customers', 'On Sales orders: buyers, goods in, delivery addresses', 'customers']] : [])];
   return `<div class="hjourney"><b class="hlbl">${office ? 'From quote to invoice' : 'Where your part fits'}</b>
     <div class="hflow" style="--n:${all.length}">${all.map(([t, d, path, k]) => `<a class="hstep" href="#help-${k}"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg></span>
       <span><b>${t}</b><small>${d}</small></span></a>`).join('')}</div>
@@ -206,7 +206,7 @@ function xero() {
 
 function mapAndCustomers(office) {
   return `<section class="hsec" id="help-map">${head(0, 'Map')}
-    <p>Where the open orders are going, one pin per postcode, so Levi can see when a second delivery fits the same run.</p>
+    <p>Where the open orders are going, one pin per postcode, so Levi can see when a second delivery fits the same run. Open it with <b>Delivery map</b> at the top of <b>Dispatch</b>.</p>
     ${pic(`<div class="hfilters">${[['Running late', '#B4321F', 1, true], ['Out for delivery', '#2557A7', 1, true], ['Ready to dispatch', '#25744A', 2, true], ['Due in the next 7 days', '#B45309', 3, true], ['Later', '#64646A', 6, false]]
         .map(([t, c, k, on]) => `<span class="hpill ${on ? 'on' : ''}" style="--k:${c}"><span class="hbox">${on ? '✓' : ''}</span>${t} <small>${k}</small></span>`).join('')} ${n(1)}</div>
       <div class="hmap"><span class="hpin" style="--k:#B4321F;left:58%;top:22%"></span><span class="hpin" style="--k:#2557A7;left:44%;top:70%"></span><span class="hpin" style="--k:#25744A;left:52%;top:52%"></span><span class="hpin" style="--k:#B45309;left:30%;top:40%"></span>
@@ -219,7 +219,7 @@ function mapAndCustomers(office) {
       'The van\'s live position is not shown yet; it can be added later if the van gets a tracker or the driver shares his phone\'s location.'])}
   </section>
   ${office ? `<section class="hsec" id="help-customers">${head(0, 'Customers (contact book)')}
-    <p>Xero's contacts are often the customer's accounts people. The <b>Customers</b> tab keeps the people operations actually deal with, and where goods go. Xero is not changed.</p>
+    <p>Xero's contacts are often the customer's accounts people. <b>Customers</b> (the button at the top of <b>Sales orders</b>) keeps the people operations actually deal with, and where goods go. Xero is not changed.</p>
     ${steps(['Pick a customer on the left (or type one under the list and press <b>Open</b>).',
       '<b>Add a person</b> with a role: Orders / buyer, Goods in / deliveries, Accounts or Other. Tick <b>Main contact</b> for the one to use first.',
       '<b>Add a delivery address</b>, with the postcode, and tick <b>Usual delivery address</b> for the normal one.',

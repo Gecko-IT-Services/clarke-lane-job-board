@@ -73,7 +73,8 @@ export function renderDispatch({ lists: s, office, view, chosen, search, desp, f
   const find = v === 'all' ? `<input type="search" id="dsearch" placeholder="Search note, order or customer" aria-label="Search dispatch notes" value="${esc(search || '')}">` : '';
 
   return `<div class="home">
-    <div class="hhead"><div><h2>Dispatch</h2><p class="sub">Send all of a job or part of it. Each dispatch gets its own note, and only what went out is invoiced.</p></div></div>
+    <div class="hhead"><div><h2>Dispatch</h2><p class="sub">Send all of a job or part of it. Each dispatch gets its own note, and only what went out is invoiced.</p></div>
+      <div class="hbtns"><button class="btn" type="button" data-tab="map" title="Where deliveries are going, and what is nearby">Delivery map</button></div></div>
     <div class="hcards">${cards}</div>
     ${form || ''}
     <section><div class="hsec-h"><h3>${q ? 'Search results' : V.title}</h3><span class="note">${q ? `${notes(list.length)} found` : V.sub}</span>${seg}${find}${v === 'xero' && xero ? xero.send : ''}</div>${table}${chooser}</section>
