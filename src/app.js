@@ -12,13 +12,14 @@ import { renderWon } from './won.js';
 import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
 import { renderSalesOrders } from './orders.js';
+import { renderDispatch } from './dispatch.js';
 import { drawMap, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard } from './core/jobs.js';
+import { dashboard, dispatchLists } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
-  byRunningOrder, partsLeft, moveInOrder, compareValues, nextStep } from './core/jobs.js';
+  byRunningOrder, partsLeft, moveInOrder, nextStep } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 
@@ -69,7 +70,7 @@ const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.get
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
-  station: null, open: null, conv: null, desp: null, error: null, busy: false };
+  station: null, open: null, conv: null, desp: null, dispView: 'ready', dispChosen: false, dsearch: '', error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
 /** Ordered quotes with where each stands (waiting / job / dismissed), or null until read. */
@@ -173,28 +174,6 @@ function statusChips(j) {
 }
 const onBoardStage = j => ['upcoming', 'current'].includes(stage(j));
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
-
-/* ---------- sortable column headings (office tables). Each computer remembers its own choice. ---------- */
-const SORT_DEFAULT = { dn: { col: 'date', dir: -1 } };
-let SORT = {};
-try { SORT = JSON.parse(localStorage.getItem('clj.sort') || '{}') || {}; } catch { /* date order */ }
-const sortOf = t => SORT[t] || SORT_DEFAULT[t];
-function sortTh(t, col, label, style = '') {
-  const cur = sortOf(t), on = cur.col === col;
-  return `<th ${style} aria-sort="${on ? (cur.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="sorth" data-sort="${t}:${col}" title="Sort by ${esc(label)}">${esc(label)}<span class="arr">${on ? (cur.dir > 0 ? '▲' : '▼') : ''}</span></button></th>`;
-}
-/** getters: { col: row => value }. Ties keep the order the rows came in. */
-function sortRows(t, rows, getters) {
-  const cur = sortOf(t), g = getters[cur.col] || getters[SORT_DEFAULT[t].col];
-  return rows.map((r, i) => [r, i]).sort((a, b) => compareValues(g(a[0]), g(b[0]), cur.dir) || a[1] - b[1]).map(x => x[0]);
-}
-function setSort(t, col) {
-  const cur = sortOf(t);
-  SORT[t] = cur.col === col ? { col, dir: -cur.dir } : { col, dir: 1 };
-  if (SORT[t].col === SORT_DEFAULT[t].col && SORT[t].dir === SORT_DEFAULT[t].dir) delete SORT[t];
-  try { localStorage.setItem('clj.sort', JSON.stringify(SORT)); } catch { /* not kept */ }
-  render();
-}
 
 /* ---------- running order: the office brings jobs forward; the shop floor follows it ---------- */
 const boardVisible = () => S.boardList || [];
@@ -769,10 +748,9 @@ function renderQuotes() {
 
 /* ---------- dispatch ---------- */
 function waitingForXero(pend) {
-  if (!pend.length) return `<div class="panel"><h3>Waiting for Xero</h3><div class="empty">Nothing waiting. Every delivered dispatch is in Xero.</div></div>`;
   const connected = !!S.xero;
   if (connected && !S.xc && !S.xcErr) loadXeroContacts();
-  const rows = pend.map(([x, d]) => {
+  const rows = pend.map(({ job: x, d }) => {
     const m = contactFor(x.customer);
     const picked = S.sendPick[d.id] ?? !!m;
     const contactCell = !connected ? '' : !S.xc ? '<span class="note">…</span>'
@@ -781,20 +759,22 @@ function waitingForXero(pend) {
           ${S.xc.contacts.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>`;
     return `<tr${S.sendErr[d.id] ? ' class="rowerr"' : ''}>${connected ? `<td><input type="checkbox" data-sendpick="${d.id}" ${picked && m ? 'checked' : ''} ${m ? '' : 'disabled'} aria-label="Send ${esc(d.dn)}"></td>` : ''}
       <td><button class="btn link mono" type="button" data-dn="${d.id}" data-job="${x.id}">${esc(d.dn)}</button></td>
-      <td style="text-align:left">${esc(x.customer)}${S.sendErr[d.id] ? `<div class="note bad">${esc(S.sendErr[d.id])}</div>` : ''}</td>
-      ${connected ? `<td style="text-align:left">${contactCell}</td>` : ''}
-      <td style="text-align:left" class="mono">${esc([x.so, dnPo(x, d), d.dn].filter(Boolean).join(' / '))}</td><td>${fmt(d.date)}</td><td>${gbp(despatchValue(x, d), 2)}</td>
-      <td><form class="inv" data-inv="${d.id}"><input type="text" id="inv-${d.id}" placeholder="INV-" aria-label="Xero invoice number for ${esc(d.dn)} if raised by hand"><button class="btn sm" type="submit">Save</button></form></td></tr>`;
+      <td>${esc(x.customer)}${S.sendErr[d.id] ? `<div class="note bad">${esc(S.sendErr[d.id])}</div>` : ''}</td>
+      ${connected ? `<td>${contactCell}</td>` : ''}
+      <td class="mono wide">${esc([x.so, dnPo(x, d), d.dn].filter(Boolean).join(' / '))}</td><td class="wide">${fmt(d.deliveredOn)}</td><td class="num">${gbp(despatchValue(x, d), 2)}</td>
+      <td class="act"><form class="inv" data-inv="${d.id}"><input type="text" id="inv-${d.id}" placeholder="INV-" aria-label="Xero invoice number for ${esc(d.dn)} if raised by hand"><button class="btn sm" type="submit">Save</button></form></td></tr>`;
   }).join('');
-  const ready = pend.filter(([x, d]) => contactFor(x.customer) && (S.sendPick[d.id] ?? true));
-  const total = ready.reduce((a, [x, d]) => a + (despatchValue(x, d) || 0), 0);
+  const ready = pend.filter(({ job: x, d }) => contactFor(x.customer) && (S.sendPick[d.id] ?? true));
+  const total = ready.reduce((a, { job: x, d }) => a + (despatchValue(x, d) || 0), 0);
   const how = !connected ? '<p class="note">Connect Xero on the Xero tab to send these as draft invoices with one click. Until then, raise each in Xero by hand and type its invoice number here.</p>'
     : S.xcErr ? `<div class="err">${esc(S.xcErr)} <button class="btn sm" type="button" data-xcreload>Try again</button></div>`
     : !S.xc ? '<p class="note">Reading the contacts from Xero…</p>'
     : `<p class="note">Each one becomes a <b>draft</b> invoice in Xero for exactly what went out on that dispatch note, referenced sales order / PO / dispatch note, on account <b>${esc(S.xc.defaults.accountCode)}</b>${S.xc.defaults.taxType ? ` with VAT code <b>${esc(S.xc.defaults.taxType)}</b>` : ''} (as on ${esc(S.xc.defaults.from)}). Keith checks and approves them in Xero. The board never approves or sends an invoice.</p>`;
-  return `<div class="panel"><h3>Waiting for Xero <span class="note">${pend.length}</span></h3>${how}
-    <div style="overflow-x:auto"><table class="lines"><thead><tr>${connected ? '<th></th>' : ''}<th>Dispatch note</th><th style="text-align:left">Customer</th>${connected ? '<th style="text-align:left">Xero contact</th>' : ''}<th style="text-align:left">Reference</th><th>Sent</th><th>Net</th><th>Invoiced by hand?</th></tr></thead><tbody>${rows}</tbody></table></div>
-    ${connected && S.xc ? `<div class="actions"><button class="btn pri" type="button" data-sendxero ${ready.length && !S.busy ? '' : 'disabled'}>${S.busy ? 'Sending…' : `Create ${ready.length} draft invoice${ready.length === 1 ? '' : 's'} in Xero`}</button>${ready.length ? `<span class="note">${gbp(total, 2)} net</span>` : ''}</div>` : ''}</div>`;
+  return {
+    table: `<table class="lines home xero"><thead><tr>${connected ? '<th></th>' : ''}<th>Note</th><th>Customer</th>${connected ? '<th>Xero contact</th>' : ''}<th class="wide">Reference</th><th class="wide">Delivered</th><th class="num">Net</th><th class="act">Invoiced by hand?</th></tr></thead><tbody>${rows}</tbody></table>`,
+    how,
+    send: connected && S.xc ? `<div class="hbtns"><button class="btn pri" type="button" data-sendxero ${ready.length && !S.busy ? '' : 'disabled'}>${S.busy ? 'Sending…' : `Create ${ready.length} draft invoice${ready.length === 1 ? '' : 's'} in Xero`}</button>${ready.length ? `<span class="note">${gbp(total, 2)} net</span>` : ''}</div>` : '',
+  };
 }
 /** The Xero contact a customer's invoices go to, or null while Mandy has to choose. */
 function contactFor(customer) {
@@ -839,67 +819,28 @@ function deliveryRow(j) {
     const done = ls.every(l => left(j, l) === 0), part = !done && ls.some(l => sent(j, l) > 0), late = !done && c < today;
     return `<div class="call ${done ? 'done' : late ? 'late' : ''}"><i>${i + 1}</i><b>${fmt(c)}</b>${done ? 'sent' : part ? 'part sent' : late ? 'late' : 'due'}</div>`; }).join('')}</div>`;
 }
-/** Dispatch notes with their email, delivery and Xero state, and the buttons to move them on. */
-function despatchTable(rows, money) {
-  rows = sortRows('dn', rows, { dn: ([, d]) => d.dn, customer: ([x]) => x.customer, so: ([x]) => x.so, date: ([, d]) => d.date + String(d.id).padStart(9, '0'),
-    emailed: ([, d]) => d.emailedAt || '', delivered: ([, d]) => d.deliveredOn || '' });
-  return `<div style="overflow-x:auto;margin-top:8px"><table class="lines dtable"><thead><tr>${sortTh('dn', 'dn', 'Note')}${sortTh('dn', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('dn', 'so', 'Order', 'style="text-align:left"')}${sortTh('dn', 'date', 'Dispatched')}${sortTh('dn', 'emailed', 'Emailed')}${sortTh('dn', 'delivered', 'Delivered')}${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
-    ${rows.map(([x, d]) => d.cancelled
-      ? `<tr class="muted"><td class="mono"><s>${esc(d.dn)}</s></td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
-        <td colspan="${money ? 4 : 3}" style="text-align:left"><span class="chip">Cancelled ${fmt(d.cancelled.at.slice(0, 10))}</span> <span class="note">by ${esc(d.cancelled.by || '')}. Its quantities went back to outstanding.</span></td></tr>`
-      : `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
-      <td>${d.emailedAt ? `<span class="chip ok">${fmt(d.emailedAt.slice(0, 10))}</span>` : `<button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">Email…</button>`}</td>
-      <td>${d.deliveredOn ? `<span class="chip ok">${fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : ''}</span>${!d.xero ? ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>` : ''}`
-        : `<form class="inv" data-deliver="${d.id}"><input type="text" id="rcv-${d.id}" placeholder="Signed by (optional)" aria-label="Who signed for ${esc(d.dn)}"><button class="btn sm pri" type="submit">Mark delivered</button></form>`}</td>
-      ${money ? `<td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : d.deliveredOn ? '<span class="chip soon">waiting</span>' : '<span class="note">after delivery</span>'}</td>` : ''}
-      <td style="white-space:nowrap"><button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">View</button>${money && !d.xero ? ` <button class="btn link sm" type="button" data-cancdn="${d.id}">Cancel</button>` : ''}</td></tr>
-      ${S.cancelDn === d.id ? `<tr class="confirmrow"><td colspan="${money ? 8 : 7}" style="text-align:left"><div class="warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <span><b>Cancel ${esc(d.dn)}?</b> It stays on the list marked cancelled, its number is not reused, and everything on it goes back to outstanding on ${esc(x.so)}. Use this when the goods did not go, or came back.</span>
-        <button class="btn sm pri" type="button" data-cancdnyes="${d.id}">Yes, cancel ${esc(d.dn)}</button><button class="btn sm" type="button" data-cancdnno>Keep it</button></div></td></tr>` : ''}`).join('')}
-    </tbody></table></div>`;
+/** The dispatch note form for the picked job: what is outstanding, with this dispatch's quantities. */
+function despatchForm(j) {
+  const missing = needed(j).filter(p => !j.procs[p].done), del = deliveryLabel(j);
+  return `<div class="panel dform"><h3>Dispatch ${esc(j.so)} · ${esc(j.customer)}</h3>
+    <p class="note">${[j.po ? 'PO ' + esc(j.po) : 'No PO', del].filter(Boolean).join(' · ')}. The quantities start at everything due by ${fmt(nextDue(j))}. Anything not sent stays outstanding on the order.</p>
+    ${missing.length ? `<div class="warn">Not ticked yet: ${esc(missing.join(', '))}. Check the parts are finished before they go.</div>` : ''}
+    ${deliveryRow(j)}
+    <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Sent</th><th>Left</th><th>This dispatch</th></tr></thead><tbody>
+    ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this dispatch">` : '—'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create dispatch note${del ? ` (${del.toLowerCase()})` : ''}</button><button class="btn" type="button" data-despclose>Close</button></div>
+    <p class="note" id="dn-msg"></p></div>`;
 }
+/** The note form opens above the list: bring it into view when it is opened from further down. */
+const showDespForm = () => $('v-dispatch').querySelector('.dform')?.scrollIntoView({ block: 'nearest' });
 function renderDespatch() {
-  const open = S.jobs.filter(j => onBoardStage(j) && j.status === 'open').sort(byRunningOrder);
-  const held = S.jobs.filter(j => onBoardStage(j) && j.status === 'held');
-  if (S.desp && !open.some(j => j.id === S.desp)) S.desp = null;
-  const j = S.desp ? job(S.desp) : null;
+  const lists = dispatchLists(S.jobs, todayIso());
+  if (S.desp && !lists.open.some(j => j.id === S.desp)) S.desp = null;
   const money = office();
-  let form = '';
-  if (j) {
-    const missing = needed(j).filter(p => !j.procs[p].done);
-    const del = deliveryLabel(j);
-    form = `${missing.length ? `<div class="warn">Not ticked yet: ${esc(missing.join(', '))}. Check the parts are finished before they go.</div>` : ''}
-      ${deliveryRow(j)}
-      <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Dispatched</th><th>Outstanding</th><th>This dispatch</th></tr></thead><tbody>
-      ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this dispatch">` : '—'}</td></tr>`).join('')}
-      </tbody></table></div>
-      <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create dispatch note${del ? ` (${del.toLowerCase()})` : ''}</button></div>
-      <p class="note" id="dn-msg">The quantities default to everything due by ${fmt(nextDue(j))}. Anything not sent stays outstanding on the order, as in Sage.</p>`;
-  }
-  const all = []; S.jobs.forEach(x => x.despatches.forEach(d => all.push([x, d])));
-  const withCancelled = all.concat(S.jobs.flatMap(x => (x.cancelledDespatches || []).map(d => [x, d])));
-  all.sort((a, b) => (a[1].id < b[1].id ? 1 : -1));
-  const pend = all.filter(([, d]) => !d.xero && d.deliveredOn).reverse();
-  const undelivered = all.filter(([, d]) => !d.deliveredOn && !d.xero);
-  $('v-dispatch').innerHTML = `
-    <div class="sec-h"><h2>Dispatch</h2><span class="sub">Send all of a job or part of it. Each dispatch gets its own note, and only what went out is invoiced.</span></div>
-    ${(() => { const r = readyToDispatch().filter(x => x.id !== S.desp); return r.length ? `<div class="panel ready"><h3>Ready to dispatch <span class="note">${r.length}</span></h3>
-      <p class="note">Every process is ticked on these jobs. Check the parts, then press Dispatch to make the delivery note.</p>
-      <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Order</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer PO</th><th>Due</th><th style="text-align:left">To send</th><th></th></tr></thead><tbody>
-      ${r.map(x => `<tr><td class="mono" style="text-align:left">${esc(x.so)}</td><td style="text-align:left"><b>${esc(x.customer)}</b></td><td style="text-align:left">${esc(x.po) || '—'}</td>
-        <td>${dueChip(nextDue(x))}${deliveryLabel(x) ? ` <span class="note">${deliveryLabel(x)}</span>` : ''}</td><td style="text-align:left">${dispatchParts(x)}</td>
-        <td><button class="btn sm pri" type="button" data-desp="${x.id}">Dispatch</button></td></tr>`).join('')}</tbody></table></div></div>` : ''; })()}
-    <div class="panel"><h3>Dispatch goods</h3>
-      <label class="fl">Job
-      <select class="f" id="dsel"><option value="">Choose a job…</option>${open.map(x => `<option value="${x.id}" ${x.id === S.desp ? 'selected' : ''}>${esc(x.so)} · ${esc(x.customer)}${x.po ? ' · PO ' + esc(x.po) : ''}${allDone(x) ? ' · ready' : ''}</option>`).join('')}</select></label>
-      ${held.length ? `<p class="note">On hold, so not listed: ${held.map(h => esc(h.so)).join(', ')}.</p>` : ''}
-      ${form}</div>
-    <div class="panel"><h3>Out for delivery <span class="note">${undelivered.length}</span></h3>
-      <p class="note">Email the delivery note to the customer, then mark it delivered once the goods have arrived. Only delivered notes go to Xero.</p>
-      ${undelivered.length ? despatchTable(undelivered, money) : '<div class="empty">Nothing out for delivery.</div>'}</div>
-    ${money ? waitingForXero(pend) : ''}
-    <details class="panel"><summary><b>All dispatch notes</b> <span class="note">${withCancelled.length}</span></summary>
-      ${withCancelled.length ? despatchTable(withCancelled.sort((a, b) => b[1].id - a[1].id).slice(0, 100), money) : '<div class="empty">No dispatch notes yet.</div>'}</details>`;
+  $('v-dispatch').innerHTML = renderDispatch({ lists, office: money, view: S.dispView, chosen: S.dispChosen, search: S.dsearch, desp: S.desp,
+    form: S.desp ? despatchForm(job(S.desp)) : '', cancelDn: S.cancelDn, xero: money && lists.toXero.length ? waitingForXero(lists.toXero) : null },
+    { esc, fmt, gbp, dueChip, parts: dispatchParts });
 }
 
 /* ---------- job drawer ---------- */
@@ -1206,11 +1147,11 @@ document.addEventListener('click', e => {
   if ('signout' in d) return auth.signOut();
   if ('reload' in d) return location.reload();
   if (d.homeview) { S.homeView = d.homeview; try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
+  if (d.dispview) { S.dispView = d.dispview; S.dispChosen = true; if (S.tab !== 'dispatch') { S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); window.scrollTo(0, 0); } return render(); }
   if (d.orderview) { S.orderView = d.orderview; try { localStorage.setItem('clj.orderview', d.orderview); } catch { /* not kept */ } return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
-  if (d.sort) { const [t, col] = d.sort.split(':'); return setSort(t, col); }
   if (d.move) { e.stopPropagation(); return moveJob(+d.job, d.move, boardVisible()); }
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; render(); window.scrollTo(0, 0); return; }
@@ -1239,7 +1180,8 @@ document.addEventListener('click', e => {
   if (d.jobsheet) return openJobSheet(+d.jobsheet);
   if (d.sqset) return setSheet(d.sqset);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
-  if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); return render(); }
+  if ('despclose' in d) { S.desp = null; keepInputs = false; return render(); }
+  if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); render(); return showDespForm(); }
   if ('print' in d) return window.print();
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
@@ -1264,9 +1206,9 @@ document.addEventListener('input', e => {
     return;
   }
   if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
-  if (e.target.id === 'search' || e.target.id === 'osearch') {
+  if (['search', 'osearch', 'dsearch'].includes(e.target.id)) {
     const id = e.target.id; S[id] = e.target.value; const pos = e.target.selectionStart;
-    if (id === 'search') renderJobs(); else { if (S.form) collectForm(); renderOrders(); }
+    if (id === 'search') renderJobs(); else if (id === 'dsearch') render(); else { if (S.form) collectForm(); renderOrders(); }
     const el = $(id); el.focus(); el.setSelectionRange(pos, pos);
   }
   const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);
@@ -1279,7 +1221,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
-  if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
+  if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }

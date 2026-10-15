@@ -298,6 +298,26 @@ export function floorStations(jobs, today) {
   });
 }
 
+/** Dispatch tab: jobs that could go (ready = every process ticked) in the running order, and the
+ *  dispatch notes by where they are: out for delivery newest first, waiting for Xero oldest first,
+ *  all (cancelled included) newest first. */
+export function dispatchLists(jobs, today) {
+  const live = jobs.filter(j => ['upcoming', 'current'].includes(stage(j))).sort(byRunningOrder);
+  const open = live.filter(j => j.status === 'open');
+  const dn = jobs.flatMap(j => j.despatches.map(d => ({ job: j, d }))).sort((a, b) => b.d.id - a.d.id);
+  const out = dn.filter(x => !x.d.deliveredOn && !x.d.xero);
+  const toXero = dn.filter(x => x.d.deliveredOn && !x.d.xero).reverse();
+  const money = jobs.every(j => j.lines.every(l => l.price != null));
+  const wk = weekStart(today);
+  return {
+    ready: open.filter(allDone), open, held: live.filter(j => j.status === 'held'),
+    out, notEmailed: out.filter(x => !x.d.emailedAt), toXero,
+    toXeroValue: money ? round2(toXero.reduce((a, x) => a + (despatchValue(x.job, x.d) || 0), 0)) : null,
+    notes: dn.concat(jobs.flatMap(j => (j.cancelledDespatches || []).map(d => ({ job: j, d })))).sort((a, b) => b.d.id - a.d.id),
+    thisWeek: dn.filter(x => x.d.date >= wk && x.d.date <= today).length,
+  };
+}
+
 export const dayNo = s => Math.round(new Date(s.slice(0, 10) + 'T12:00:00Z') / 864e5);
 const plusDays = (s, n) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Monday of the week containing `today` (YYYY-MM-DD). */

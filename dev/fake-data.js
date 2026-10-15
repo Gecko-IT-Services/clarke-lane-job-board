@@ -7,7 +7,8 @@ let jobs = [
             { id: 12, lineNo: 2, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23' },
             { id: 13, lineNo: 3, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-30' }],
     procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T09:00:00Z' }, 'Fold': { done: false } },
-    despatches: [{ id: 1, dn: 'DN-0001', date: '2026-10-14', lines: { 11: 10 }, xero: null, deliveredOn: '2026-10-14' }] },
+    despatches: [{ id: 1, dn: 'DN-0001', date: '2026-10-14', lines: { 11: 10 }, xero: null, deliveredOn: '2026-10-14' },
+      { id: 5, dn: 'DN-0005', date: '2026-10-15', lines: { 12: 10 }, xero: null, emailedAt: '2026-10-15T09:30:00Z' }] },
   { id: 2, so: 'SO-9782', quote: '', spQuoteId: null, customer: 'Second Example Ltd', contactName: '', contactEmail: '', po: '',
     ordered: '2026-10-14', due: '2026-11-04', notes: 'Rush', address: '', status: 'open',
     lines: [{ id: 21, lineNo: 1, part: 'Cabinet', qty: 5, price: 310, due: '2026-11-04' }, { id: 22, lineNo: 2, part: 'Carriage', qty: 1, price: 25, due: '2026-11-04' }],
@@ -35,7 +36,7 @@ export const amendJob = async (id, p) => {
   j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' }));
 };
 export const setJobStatus = async (id, status) => { find(id).status = status; };
-let dn = 3;
+let dn = 6;
 export const createDespatch = async (jobId, lines) => { const j = find(jobId); if (j.status !== 'open') throw new Error(`${j.so} is on hold.`); const d = { id: dn, dn: 'DN-000' + dn++, date: '2026-10-15', lines: Object.fromEntries(lines.map(l => [l.job_line_id, l.qty])), xero: null }; j.despatches.push(d); return { id: d.id, dn_number: d.dn }; };
 export const markInvoiced = async (id, no) => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) d.xero = { no }; };
 export const onChange = async () => {};
@@ -81,9 +82,10 @@ export const dismissXeroOrder = async (id, d) => { xorders.find(x => x.id === id
 export const setRunningOrder = async ids => { for (const j of jobs) { const n = ids.indexOf(j.id); j.priority = n < 0 ? null : n + 1; } };
 jobs.push(
   { id: 3, so: 'SO-9783', quote: '', spQuoteId: null, customer: 'Fourth Example Ltd', contactName: '', contactEmail: '', po: 'PO-77', ordered: '2026-10-15', due: '2026-11-12', notes: '', address: '', status: 'open',
-    lines: [{ id: 31, lineNo: 1, part: 'Guard plate', qty: 40, price: 8.5, due: '2026-11-12' }], procs: { 'Laser': { done: false }, 'Fold': { done: false } }, despatches: [] },
+    lines: [{ id: 31, lineNo: 1, part: 'Guard plate', qty: 40, price: 8.5, due: '2026-11-12' }], procs: { 'Laser': { done: false }, 'Fold': { done: false } }, despatches: [{ id: 3, dn: 'DN-0003', date: '2026-10-15', lines: { 31: 10 }, xero: null }] },
   { id: 4, so: 'SO-9784', quote: '', spQuoteId: null, customer: 'Fifth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-15', due: '2026-11-20', notes: '', address: '', status: 'open',
-    lines: [{ id: 41, lineNo: 1, part: 'Frame', qty: 2, price: 140, due: '2026-10-09' }], procs: { 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [] }
+    lines: [{ id: 41, lineNo: 1, part: 'Frame', qty: 2, price: 140, due: '2026-10-09' }], procs: { 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [],
+    cancelledDespatches: [{ id: 4, dn: 'DN-0004', date: '2026-10-13', lines: { 41: 1 }, xero: null, cancelled: { at: '2026-10-14T09:00:00Z', by: 'Levi' } }] }
   ,{ id: 5, so: 'SO-9785', quote: '', spQuoteId: null, customer: 'Sixth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-12', due: '2026-10-22', notes: '', address: '', status: 'held',
     lines: [{ id: 51, lineNo: 1, part: 'Bracket', qty: 12, price: 9.5, due: '2026-10-22' }], procs: { 'Laser': { done: false } }, despatches: [] },
   { id: 6, so: 'SO-9786', quote: '', spQuoteId: null, customer: 'Seventh Example Ltd', contactName: '', contactEmail: '', po: 'PO-90', ordered: '2026-10-10', due: '2026-10-20', notes: '', address: '', status: 'open',
