@@ -361,17 +361,66 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-jobs table.home.board tr.ready td{background:var(--ok-soft)}
 #v-jobs table.home .chips:not(:empty){margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
 /* help */
-#v-help .hflow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:6px 0 18px}
-#v-help .hstep{flex:1 1 140px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:3px}
-#v-help .hstep:hover{border-color:var(--ink)}
-#v-help .hstep svg{width:26px;height:26px;color:var(--ok)}
-#v-help .hstep b{font-family:var(--display);font-size:20px;text-transform:uppercase;letter-spacing:.04em}
-#v-help .hstep span{font-size:13px;color:var(--muted)}
-#v-help .harrow{align-self:center;font-size:22px;color:var(--muted)}
-#v-help .help{display:flex;flex-direction:column;gap:16px;max-width:980px}
-#v-help .hsec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;scroll-margin-top:120px}
-#v-help .hsec h3{font-size:26px;margin-bottom:6px}
-#v-help .hsec>p{margin:4px 0 10px;max-width:70ch}
+#v-help .hlayout{display:grid;grid-template-columns:180px minmax(0,1fr);gap:28px;align-items:start;max-width:1240px;margin-top:14px}
+#v-help .htoc{position:sticky;top:calc(var(--hdr) + 16px);display:flex;flex-direction:column;gap:2px}
+#v-help .htoc a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap;transition:background .16s var(--ease),color .16s var(--ease)}
+#v-help .htoc a:hover{background:var(--surface);color:var(--ink)}
+#v-help .htoc small{width:20px;height:20px;border-radius:6px;background:var(--steel-soft);color:var(--ink);display:inline-grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+#v-help .htoc small.dot{background:none} #v-help .htoc small.dot::after{content:'';width:5px;height:5px;border-radius:50%;background:var(--line)}
+#v-help .help{display:flex;flex-direction:column;gap:20px;min-width:0}
+#v-help .hlbl{display:block;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:14px}
+#v-help .hjourney{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 20px 16px}
+#v-help .hflow{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr))}
+#v-help .hstep{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:0 6px;text-decoration:none;color:var(--ink)}
+#v-help .hstep+.hstep::before{content:'';position:absolute;top:25px;right:50%;width:100%;height:2px;background:var(--ok);opacity:.35}
+#v-help .hstep .ic{position:relative;z-index:1;width:52px;height:52px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;flex:none;transition:transform .16s var(--ease),background-color .16s var(--ease),color .16s var(--ease)}
+#v-help .hstep .ic svg{width:24px;height:24px}
+#v-help .hstep:hover .ic{background:var(--ok);color:var(--surface);transform:translateY(-2px)}
+#v-help .hstep b,#v-help .hmore a b{display:block;font-family:var(--display);font-size:18px;text-transform:uppercase;letter-spacing:.04em;line-height:1.1}
+#v-help .hstep small,#v-help .hmore a small{display:block;font-size:12.5px;color:var(--muted);line-height:1.35;margin-top:2px}
+#v-help .hmore{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+#v-help .hmore .hlbl{grid-column:1/-1;margin-bottom:0}
+#v-help .hmore a{display:block;padding:10px 12px;border-radius:10px;background:var(--field);text-decoration:none;color:var(--ink);transition:background-color .16s var(--ease)}
+#v-help .hmore a:hover{background:var(--steel-soft)}
+#v-help .hcallout{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-radius:12px;background:var(--warn-soft);color:var(--ink);text-decoration:none;font-weight:600}
+#v-help .hcallout b{font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--warn)}
+#v-help .hcallout span{margin-left:auto;color:var(--warn);font-size:18px;transition:transform .16s var(--ease)} #v-help .hcallout:hover span{transform:translateX(3px)}
+#v-help .hsec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;scroll-margin-top:calc(var(--hdr) + 16px)}
+#v-help .hsec h3{font-size:28px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+#v-help .hno{width:34px;height:34px;border-radius:10px;background:var(--ink);color:var(--surface);display:inline-grid;place-items:center;font-size:20px;flex:none}
+#v-help .hsec>p{margin:4px 0 12px;max-width:72ch;color:var(--muted)} #v-help .hsec>p b{color:var(--ink)}
+#v-help .hsteps{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:14px 28px}
+#v-help .hsteps li{position:relative;padding-left:34px;line-height:1.45}
+#v-help .hsteps li>.hn:first-child{position:absolute;left:0;top:0;margin:0}
+#v-help .htips{margin-top:16px;padding:14px 18px;border-radius:12px;background:var(--field)}
+#v-help .htips>b{display:block;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:8px}
+#v-help .htips ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;max-width:80ch}
+#v-help .htips li{line-height:1.45} #v-help .htips li::marker{color:var(--muted)}
+#v-help .hsec h4{font-family:var(--display);font-size:19px;margin:26px 0 6px;padding-top:18px;border-top:1px solid var(--line);text-transform:uppercase;letter-spacing:.05em}
+#v-help .hsec h4:first-of-type{border-top:0;padding-top:0;margin-top:14px}
+#v-help .hsec.key{box-shadow:inset 4px 0 0 var(--warn)}
+#v-help .hcardsx{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px;margin-top:6px}
+#v-help .hcardx{padding:14px 16px;border-radius:12px;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:1.4}
+#v-help .hcardx b{font-size:15px}
+#v-help .hcardx.t-bad{background:var(--bad-soft)} #v-help .hcardx.t-warn{background:var(--warn-soft)} #v-help .hcardx.t-ok{background:var(--ok-soft)} #v-help .hcardx.t-info{background:var(--info-soft)}
+#v-help .hfaq{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:0 28px;align-items:start}
+#v-help .hq{border-top:1px solid var(--line);padding:11px 0}
+#v-help .hq summary{font-weight:700;cursor:pointer}
+#v-help .hq p{margin:6px 0 0;color:var(--muted)}
+@media (max-width:1000px){
+  #v-help .hlayout{grid-template-columns:minmax(0,1fr);gap:16px}
+  #v-help .htoc{top:var(--hdr);z-index:5;flex-direction:row;overflow-x:auto;gap:6px;margin:0 -16px;padding:8px 16px;background:var(--bg);scrollbar-width:none}
+  #v-help .htoc a{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 6px}
+  #v-help .hsec{scroll-margin-top:calc(var(--hdr) + 64px)}
+}
+@media (max-width:640px){
+  #v-help .hflow{grid-template-columns:minmax(0,1fr);gap:14px}
+  #v-help .hstep{flex-direction:row;text-align:left;align-items:center;gap:14px;padding:0}
+  #v-help .hstep .ic{width:44px;height:44px}
+  #v-help .hstep+.hstep::before{top:auto;bottom:22px;right:auto;left:21px;width:2px;height:calc(100% + 14px)}
+  #v-help .hsec{padding:18px 16px}
+  #v-help .hsec h3{font-size:24px}
+}
 #v-help .hpic{margin:10px 0 12px}
 #v-help .hframe{background:var(--bg);border:1px dashed var(--line);border-radius:12px;padding:14px;overflow-x:auto;pointer-events:none;user-select:none}
 #v-help .hframe table{background:var(--surface);border-radius:10px;width:100%;border-collapse:collapse}
@@ -396,11 +445,6 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-help .hcheck .tick{width:22px;height:22px}
 #v-help .hcheck .tick svg{width:14px;height:14px}
 #v-help .hn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--warn);color:#fff;font:700 12px var(--body);margin:0 4px;vertical-align:middle;flex:none;letter-spacing:0;text-transform:none}
-#v-help .hsteps{margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px;max-width:75ch}
-#v-help .hsteps li{line-height:1.45}
-#v-help .hsec h4{font-family:var(--display);font-size:19px;margin:16px 0 4px;text-transform:uppercase;letter-spacing:.05em}
-#v-help .hsec.key{border:2px solid var(--warn)}
-#v-help .hkey{margin:-6px 0 14px;font-weight:600}
 #v-help figcaption{font-size:12.5px;color:var(--muted);margin-top:4px}
 #v-help .badge.go{font-size:12px;background:#25744A;color:#fff;border-radius:999px;padding:1px 8px;font-weight:700}
 #v-help .hmail{background:var(--surface);border-radius:10px;border:1px solid var(--line);max-width:460px}
@@ -417,14 +461,6 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-help .hmap{position:relative;height:200px;border-radius:10px;background:linear-gradient(135deg,#dfe9d6,#e8efe0 40%,#d5e3ee);overflow:hidden}
 #v-help .hpin{position:absolute;width:18px;height:18px;border-radius:50%;background:var(--k);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transform:translate(-50%,-50%)}
 #v-help .hpop{position:absolute;left:50%;top:58%;background:#fff;color:#111;border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 3px 12px rgba(0,0,0,.25);max-width:280px}
-#v-help .htabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:6px 14px;margin:0 0 14px;max-width:980px}
-#v-help .htabs div{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-#v-help .htabs b{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-size:16px}
-#v-help .htabs span{font-size:12.5px;color:var(--muted)}
-#v-help .hq{border-top:1px solid var(--line);padding:10px 0}
-#v-help .hq summary{font-weight:700;cursor:pointer}
-#v-help .hq p{margin:6px 0 0;color:var(--muted)}
-@media (max-width:820px){ #v-help .harrow{display:none} }
 @media print{ #v-help .hframe{break-inside:avoid} }
 /* motion: short and quiet. Controls ease their colours and give a slight press; views fade in;
    drawer, scrim, toast and documents ease in and out (the exit needs display transitions, else it is instant) */
