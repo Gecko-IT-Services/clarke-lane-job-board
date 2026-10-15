@@ -84,3 +84,10 @@ the to-invoice rows carry the same information.
 ## Not in this change
 Left sidebar navigation like the reference (changes every page; separate step). Activity feed
 and money trends (not wanted, 15 Oct).
+
+## Drill-down (Philip, 15 Oct)
+The four cards are buttons (`card(..., attrs)`): **Running late**, **Due in the next 7 days**, **Ready to
+dispatch** and **Order book** (floor: **Open jobs**) each replace the table with the jobs behind that
+number (same row layout and actions as Needs attention; due-soon rows say "Due in N days"; the order
+book is every open order, soonest due first, with the total in the heading), scrolled into view, with
+"✕ Close this list" back to Needs attention. Only the Needs attention / Going out switch is remembered.
