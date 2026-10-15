@@ -37,13 +37,13 @@ button{cursor:pointer}
 :focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 
 .top{background:var(--chrome);color:var(--chrome-ink);padding-inline:16px;padding-block:14px}
-.top .in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top .in{max-width:1640px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .top .logo{height:44px;width:auto;display:block;flex:0 0 auto}
 .top .board{font-size:22px;color:#C8C8CC;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-left:1px solid #3A3A3F;padding-left:14px}
 .who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chrome-mute)}
 .who select{background:#1E1E22;color:#fff;border:1px solid #3A3A3F;border-radius:8px;padding:6px 10px;font-weight:600}
 nav.tabs{background:var(--chrome);border-top:1px solid #222226;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
-nav.tabs .in{max-width:1240px;margin:0 auto;display:flex;gap:4px;overflow-x:auto;padding-inline:16px;scrollbar-width:none}
+nav.tabs .in{max-width:1640px;margin:0 auto;display:flex;gap:4px;overflow-x:auto;padding-inline:16px;scrollbar-width:none}
 nav.tabs a{font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--chrome-mute);text-decoration:none;padding:12px 14px;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:8px;align-items:center}
 nav.tabs a[aria-current="page"]{color:#fff;border-color:#fff}
 nav.tabs .badge{font-family:var(--body);font-size:12px;background:#2A2A2F;color:#fff;border-radius:999px;padding:1px 8px}
@@ -51,7 +51,7 @@ nav.tabs .badge.go{background:#25744A;margin-right:4px}
 .panel.ready{border-color:var(--ok);box-shadow:inset 0 4px 0 var(--ok)}
 table.jobs tr.ready td{background:var(--ok-soft)}
 
-.wrap{max-width:1240px;margin:0 auto;padding-inline:16px;padding-block:18px 64px;display:flex;flex-direction:column;gap:18px}
+.wrap{max-width:1640px;margin:0 auto;padding-inline:16px;padding-block:18px 64px;display:flex;flex-direction:column;gap:18px}
 .banner{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap}
 .banner p{flex:1 1 420px;min-width:0}
 .view{display:flex;flex-direction:column;gap:14px}
@@ -82,7 +82,7 @@ input[type=text],input[type=search],input[type=date],input[type=number],select.f
 .tbl-wrap{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
 table.jobs{width:100%;border-collapse:collapse;font-size:14px}
 table.jobs th{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;text-align:left;padding:10px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-table.jobs th.p{text-align:center;width:60px;font-size:10.5px;letter-spacing:.04em;white-space:normal;line-height:1.15}
+table.jobs th.p{text-align:center;width:52px;padding-inline:4px;font-size:10.5px;letter-spacing:.04em;white-space:normal;line-height:1.15}
 table.jobs td{padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
 table.jobs tr:last-child td{border-bottom:0}
 table.jobs tbody tr{cursor:pointer}
@@ -92,6 +92,10 @@ td.cust .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 td.so{font-family:var(--mono);font-size:13px;white-space:nowrap}
 td.val{text-align:right;font-weight:700;white-space:nowrap}
 td.p{text-align:center}
+table.jobs td.p{padding-inline:4px}
+table.jobs td.cust{min-width:150px}
+table.jobs td.po{max-width:160px;overflow-wrap:anywhere}
+table.jobs td.ord{padding-right:4px}
 .tick{width:28px;height:28px;border-radius:7px;border:2px solid var(--muted);background:var(--surface);display:inline-flex;align-items:center;justify-content:center;padding:0}
 .tick.done{background:var(--ok);border-color:var(--ok);color:var(--surface)}
 .tick svg{width:18px;height:18px}
@@ -105,7 +109,7 @@ td.ord{white-space:nowrap;width:1%}
 td.ord .n{display:inline-block;min-width:22px;font-family:var(--mono);font-size:13px;color:var(--muted);text-align:right;margin-right:6px}
 td.ord .n.placed{color:var(--ink);font-weight:700}
 td.ord .mv{display:inline-flex;gap:2px}
-td.ord .mv .btn{padding:4px 7px;min-width:30px;line-height:1}
+td.ord .mv .btn{padding:3px 5px;min-width:24px;line-height:1;font-size:12px}
 .pin{display:none}
 .empty{color:var(--muted);padding:24px 16px;text-align:center}
 
