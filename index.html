@@ -575,13 +575,16 @@ div.fl{font-size:12.5px;font-weight:600;color:var(--muted)}
 form.inv{display:flex;gap:6px;justify-content:flex-end}
 form.inv input{width:110px}
 /* Sign-in: black and white, brushed metal (Philip: "remember this is precision engineering").
-   A machined aluminium nameplate, screwed in at the corners, centred on brushed black steel, with
-   drawing-office crop marks around it. All CSS: the brushing is SVG noise stretched sideways. */
+   A machined aluminium nameplate, screwed in at the corners, centred on plain black with the moving
+   dot grid from clarke-lane.co.uk (src/wave.js), and drawing-office crop marks around it. */
 .gate{--brush:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.003 0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   font-family:'Archivo',var(--body);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;
-  padding:40px 16px 28px;position:relative;overflow:hidden;color:#E8E8EA;
-  background:radial-gradient(ellipse 60% 45% at 50% 38%,rgba(255,255,255,.09),transparent 70%),linear-gradient(180deg,#161618 0%,#0B0B0C 55%,#050506 100%)}
-.gate::before{content:"";position:absolute;inset:0;pointer-events:none;background:var(--brush) 0 0/600px 600px;opacity:.22;mix-blend-mode:overlay}
+  padding:40px 16px 28px;position:relative;overflow:hidden;color:#E8E8EA;background:#0C0C0E}
+.gate .gate-wave{position:absolute;inset:0;pointer-events:none}
+/* Fades the dots out towards the edges and softly behind the plate, as on their site. */
+.gate::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse 34% 40% at 50% 50%,rgba(12,12,14,.55),transparent 75%),linear-gradient(0deg,#0C0C0E 0,transparent 22%,transparent 80%,#0C0C0E 100%)}
+.gate .marks,.gate .gfoot{z-index:2}
 .gate .marks{position:relative;padding:16px;width:100%;max-width:452px;
   --m:rgba(255,255,255,.38);background:
   linear-gradient(var(--m),var(--m)) left top/18px 1px no-repeat,linear-gradient(var(--m),var(--m)) left top/1px 18px no-repeat,
@@ -661,7 +664,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;
