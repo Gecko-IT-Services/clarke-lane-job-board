@@ -10,6 +10,7 @@ import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { icon, XERO, MICROSOFT } from './icons.js';
 import { renderWon } from './won.js';
+import { startWave, endWave } from './wave.js';
 import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
 import { renderSalesOrders } from './orders.js';
@@ -94,7 +95,7 @@ async function boot() {
       <p class="note">Ask Gecko IT to add this address. Until then the board shows nothing.</p>
       <button class="btn" type="button" data-signout>Sign out</button>`);
   }
-  $('gate').hidden = true; $('app').hidden = false;
+  $('gate').hidden = true; $('app').hidden = false; endWave();
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>${icon('signout')}Sign out</button>`;
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.orderview'); if (['dispatched', 'held', 'cancelled'].includes(v)) S.orderView = v; } catch { /* none kept */ }
@@ -115,7 +116,7 @@ async function boot() {
   data.onChange(debounce(reload, 400)).catch(() => {});
   setInterval(() => { if (!document.hidden) reload(); }, 60000);   // backstop if realtime drops
 }
-function gate(html) { $('app').hidden = true; $('gate').hidden = false; $('gate-body').innerHTML = html; }
+function gate(html) { $('app').hidden = true; $('gate').hidden = false; $('gate-body').innerHTML = html; startWave($('gate')); }
 function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
 
 async function reload() {
