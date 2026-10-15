@@ -1269,7 +1269,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'search' || e.target.id === 'osearch') {
     const id = e.target.id; S[id] = e.target.value; const pos = e.target.selectionStart;
-    if (id === 'search') renderJobs(); else renderOrders();
+    if (id === 'search') renderJobs(); else { if (S.form) collectForm(); renderOrders(); }
     const el = $(id); el.focus(); el.setSelectionRange(pos, pos);
   }
   const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);

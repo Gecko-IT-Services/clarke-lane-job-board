@@ -79,7 +79,7 @@ columns on Jobs. `table.jobs` styles stay: the Shop floor and Help pictures stil
 - `src/app.js`: wire both in, `data-orderview` click branch and `clj.orderview` restore; remove
   `salesOrders()`, `jobBoard()` and the `#ofilter` handler.
 - `index.html`: Home's block applies to `#v-orders` and `#v-jobs` too; tick pill styles; phone
-  layout (≤560px): Sales orders hides Ordered, Jobs hides the ⤒ ▲ ▼ arrows (rank number stays).
+  layout (≤560px): the switches fill the width; Sales orders hides Ordered and Net, Jobs hides the Order column and Outstanding.
 - `src/help.js`: Jobs text and picture use the new stage names and the one Processes column; drop
   the "click a heading to sort" step on Jobs; Sales orders text mentions the switch.
 

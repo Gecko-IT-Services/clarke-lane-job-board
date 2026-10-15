@@ -351,10 +351,11 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 #v-help .hframe th,#v-help .hframe td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
 #v-help .hframe th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:center}
 #v-help .hframe .panel{padding:12px}
-#v-help .hframe table.board th,#v-help .hframe table.board td{text-align:left;vertical-align:middle}
-#v-help .hframe table.board th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
-#v-help .hframe table.board .ref{display:block;font-size:12.5px;color:var(--muted)}
+#v-help .hframe :is(table.board,table.orders) th,#v-help .hframe :is(table.board,table.orders) td{text-align:left;vertical-align:middle}
+#v-help .hframe :is(table.board,table.orders) th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
+#v-help .hframe :is(table.board,table.orders) .ref{display:block;font-size:12.5px;color:var(--muted)}
 #v-help .hframe table.board .chips{margin-top:4px}
+#v-help .hframe table.orders .num{text-align:right}
 #v-help .hframe table.board tr.ready td{background:var(--ok-soft)}
 #v-help .hframe .stations{margin-bottom:10px}
 #v-help .sbtn{border:2px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 14px;font-family:var(--display);font-size:18px;font-weight:700;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
@@ -418,8 +419,6 @@ details.splitter[open]{flex-basis:100%;background:var(--field);border-radius:10p
 .njlines input[type=text]{width:100%}
 .njlines input[type=date]{width:150px}
 .newjob textarea{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:inherit;resize:vertical}
-table.solist tbody tr{cursor:pointer}
-table.solist tbody tr:hover td{background:var(--field)}
 tr.muted td{color:var(--muted)}
 .bad{color:var(--bad)}
 @media (max-width:560px){.row3{grid-template-columns:minmax(0,1fr)}}
