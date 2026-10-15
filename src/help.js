@@ -146,6 +146,7 @@ function faq(office) {
   if (office) q.push(
     ['A quote I marked Ordered is not on Won quotes.', 'Press Refresh. If it is still missing, check the quote says Ordered in the calculator.'],
     ['I made an order by mistake.', 'Open it and press Delete (made by mistake). That only works while nothing has been dispatched; after that, use Cancel.'],
+    ['A dispatch note was made by mistake, or the goods came back.', 'On the Dispatch tab press Cancel beside the note, then Yes. The note stays on the list marked cancelled, and its quantities go back to outstanding on the order. Once a note is invoiced in Xero it can only be credited in Xero.'],
     ['The customer wants to change the order.', 'Open it and press Amend: change quantities, prices or dates, or add lines. Lines already dispatched cannot go below what was sent.'],
     ['Hold an order?', 'Open it and press Hold. A held order cannot be dispatched until you press Release.'],
     ['The same order again?', 'Open the old one and press Repeat order. You get a new order with the same parts and prices, new dates and a blank PO.'],

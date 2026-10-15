@@ -259,3 +259,11 @@ acknowledgement's toolbar; the "created" message points to it. No email option (
 Expected to fall away once the board is used on its own.
 - (15 Oct) The first tab is **Won quotes** (was "New orders"): quotes Levi has marked Ordered, waiting
   to become sales orders (plus the one-off Xero import). Phone orders start at Sales orders › New order.
+
+## Cancel a dispatch note (15 Oct)
+Office only, before it is invoiced in Xero (`cancel_despatch`): the note stays, marked cancelled
+(`cancelled_at/by`), its DN number is never reused, and its lines move to `cancelled_lines` so every
+"already sent" sum (create_despatch, amend_job, the board) treats them as outstanding again without
+those functions changing. A cancelled note can't be emailed, delivered or invoiced (`mark_despatch`,
+`xero_mark_sent`, the edge function all refuse). Dispatch › Cancel → confirm row → Yes. No hard delete
+(it would leave unexplained gaps in DN numbers); test data is cleaned up by Gecko directly.

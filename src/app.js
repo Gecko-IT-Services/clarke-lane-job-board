@@ -231,6 +231,13 @@ async function restore(spId) {
   try { await data.restoreQuote(spId); toast(`${q?.quoteNo || 'Quote'} is back in Ordered, ready to become a job.`); }
   catch (e) { toast(e.message, null, true); reload(); }
 }
+async function cancelDispatchNote(id) {
+  const x = S.jobs.find(j => j.despatches.some(d => d.id === id)), d = x?.despatches.find(y => y.id === id);
+  S.cancelDn = null;
+  try { await data.cancelDespatch(id); toast(`${d?.dn || 'Dispatch note'} cancelled. Its quantities are outstanding again on ${x?.so || 'the order'}.`); }
+  catch (e) { toast(e.message, null, true); }
+  reload();
+}
 async function markDelivery(id, what, receivedBy = '') {
   try { await data.markDespatch(id, what, receivedBy); toast(what === 'delivered' ? 'Marked delivered. It is now waiting for Xero.' : 'Set back to out for delivery.'); }
   catch (e) { toast(e.message, null, true); }
@@ -743,12 +750,18 @@ function despatchTable(rows, money) {
   rows = sortRows('dn', rows, { dn: ([, d]) => d.dn, customer: ([x]) => x.customer, so: ([x]) => x.so, date: ([, d]) => d.date + String(d.id).padStart(9, '0'),
     emailed: ([, d]) => d.emailedAt || '', delivered: ([, d]) => d.deliveredOn || '' });
   return `<div style="overflow-x:auto;margin-top:8px"><table class="lines dtable"><thead><tr>${sortTh('dn', 'dn', 'Note')}${sortTh('dn', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('dn', 'so', 'Order', 'style="text-align:left"')}${sortTh('dn', 'date', 'Dispatched')}${sortTh('dn', 'emailed', 'Emailed')}${sortTh('dn', 'delivered', 'Delivered')}${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
-    ${rows.map(([x, d]) => `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
+    ${rows.map(([x, d]) => d.cancelled
+      ? `<tr class="muted"><td class="mono"><s>${esc(d.dn)}</s></td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
+        <td colspan="${money ? 4 : 3}" style="text-align:left"><span class="chip">Cancelled ${fmt(d.cancelled.at.slice(0, 10))}</span> <span class="note">by ${esc(d.cancelled.by || '')}. Its quantities went back to outstanding.</span></td></tr>`
+      : `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
       <td>${d.emailedAt ? `<span class="chip ok">${fmt(d.emailedAt.slice(0, 10))}</span>` : `<button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">Email…</button>`}</td>
       <td>${d.deliveredOn ? `<span class="chip ok">${fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : ''}</span>${!d.xero ? ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>` : ''}`
         : `<form class="inv" data-deliver="${d.id}"><input type="text" id="rcv-${d.id}" placeholder="Signed by (optional)" aria-label="Who signed for ${esc(d.dn)}"><button class="btn sm pri" type="submit">Mark delivered</button></form>`}</td>
       ${money ? `<td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : d.deliveredOn ? '<span class="chip soon">waiting</span>' : '<span class="note">after delivery</span>'}</td>` : ''}
-      <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">View</button></td></tr>`).join('')}
+      <td style="white-space:nowrap"><button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">View</button>${money && !d.xero ? ` <button class="btn link sm" type="button" data-cancdn="${d.id}">Cancel</button>` : ''}</td></tr>
+      ${S.cancelDn === d.id ? `<tr class="confirmrow"><td colspan="${money ? 8 : 7}" style="text-align:left"><div class="warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span><b>Cancel ${esc(d.dn)}?</b> It stays on the list marked cancelled, its number is not reused, and everything on it goes back to outstanding on ${esc(x.so)}. Use this when the goods did not go, or came back.</span>
+        <button class="btn sm pri" type="button" data-cancdnyes="${d.id}">Yes, cancel ${esc(d.dn)}</button><button class="btn sm" type="button" data-cancdnno>Keep it</button></div></td></tr>` : ''}`).join('')}
     </tbody></table></div>`;
 }
 function renderDespatch() {
@@ -770,6 +783,7 @@ function renderDespatch() {
       <p class="note" id="dn-msg">The quantities default to everything due by ${fmt(nextDue(j))}. Anything not sent stays outstanding on the order, as in Sage.</p>`;
   }
   const all = []; S.jobs.forEach(x => x.despatches.forEach(d => all.push([x, d])));
+  const withCancelled = all.concat(S.jobs.flatMap(x => (x.cancelledDespatches || []).map(d => [x, d])));
   all.sort((a, b) => (a[1].id < b[1].id ? 1 : -1));
   const pend = all.filter(([, d]) => !d.xero && d.deliveredOn).reverse();
   const undelivered = all.filter(([, d]) => !d.deliveredOn && !d.xero);
@@ -790,8 +804,8 @@ function renderDespatch() {
       <p class="note">Email the delivery note to the customer, then mark it delivered once the goods have arrived. Only delivered notes go to Xero.</p>
       ${undelivered.length ? despatchTable(undelivered, money) : '<div class="empty">Nothing out for delivery.</div>'}</div>
     ${money ? waitingForXero(pend) : ''}
-    <details class="panel"><summary><b>All dispatch notes</b> <span class="note">${all.length}</span></summary>
-      ${all.length ? despatchTable(all.slice(0, 100), money) : '<div class="empty">No dispatch notes yet.</div>'}</details>`;
+    <details class="panel"><summary><b>All dispatch notes</b> <span class="note">${withCancelled.length}</span></summary>
+      ${withCancelled.length ? despatchTable(withCancelled.sort((a, b) => b[1].id - a[1].id).slice(0, 100), money) : '<div class="empty">No dispatch notes yet.</div>'}</details>`;
 }
 
 /* ---------- job drawer ---------- */
@@ -836,7 +850,8 @@ function renderDrawer() {
         <td>${d.emailedAt ? fmt(d.emailedAt.slice(0, 10)) : '—'}</td><td>${d.deliveredOn ? fmt(d.deliveredOn) : '<span class="note">not yet</span>'}</td>
         ${money ? `<td>${gbp(despatchValue(j, d), 2)}</td><td>${d.xero ? `<span class="chip ok">${esc(d.xero.no)}</span>` : d.deliveredOn ? '<span class="chip soon">waiting</span>' : '<span class="note">after delivery</span>'}</td>` : ''}
         <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>
-      <p class="note">Mark deliveries on the Dispatch tab.</p>` : '<div class="note">Nothing dispatched yet.</div>'}</div>
+      <p class="note">Mark deliveries on the Dispatch tab.</p>` : '<div class="note">Nothing dispatched yet.</div>'}
+      ${(j.cancelledDespatches || []).length ? `<p class="note">Cancelled dispatch notes: ${j.cancelledDespatches.map(d => esc(d.dn)).join(', ')}.</p>` : ''}</div>
     <div class="actions">
       <button class="btn" type="button" data-jobsheet="${j.id}">Job sheet</button>
       ${money ? `<button class="btn" type="button" data-repeat="${j.id}">Repeat order</button>` : ''}
@@ -1050,6 +1065,9 @@ document.addEventListener('click', e => {
   if ('print' in d) return window.print();
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
+  if (d.cancdn) { S.cancelDn = +d.cancdn; return render(); }
+  if ('cancdnno' in d) { S.cancelDn = null; return render(); }
+  if (d.cancdnyes) return cancelDispatchNote(+d.cancdnyes);
   if ('closedoc' in d) return closeDoc();
   if (t.id === 'mkdn') return makeDespatch();
   if (d.xero) return xeroAction(d.xero);

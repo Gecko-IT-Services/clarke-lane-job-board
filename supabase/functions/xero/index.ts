@@ -198,11 +198,12 @@ async function send(items: { despatchId: number; contactId: string }[]) {
     try {
       // Amounts come from the database, never from the browser.
       const { data: row, error } = await admin.from('despatches')
-        .select('id, dn_number, despatched_on, delivered_on, xero_invoice_id, xero_invoice_no, job_id, ' +
+        .select('id, dn_number, despatched_on, delivered_on, cancelled_at, xero_invoice_id, xero_invoice_no, job_id, ' +
           'jobs(so_number, customer_po), despatch_lines(qty, job_lines(part, line_no, job_line_prices(unit_price)))')
         .eq('id', it.despatchId).single();
       if (error || !row) throw new Error('Dispatch not found.');
       if (row.xero_invoice_id || row.xero_invoice_no) { out.push({ despatchId: it.despatchId, ok: true, invoiceNo: row.xero_invoice_no, already: true }); continue; }
+      if (row.cancelled_at) throw new Error(`${row.dn_number} is cancelled.`);
       if (!row.delivered_on) throw new Error(`${row.dn_number} is not marked delivered yet.`);
       if (!it.contactId) throw new Error('Choose the Xero contact first.');
       const job: any = row.jobs;

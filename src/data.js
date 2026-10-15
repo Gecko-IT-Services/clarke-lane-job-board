@@ -35,7 +35,7 @@ export async function loadJobs({ office }) {
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
     ordered: j.ordered_on, due: j.due_date, notes: j.notes, address: j.delivery_address, status: j.status,
     createdBy: j.created_by, ackEmailedAt: j.ack_emailed_at, priority: j.priority ?? null,
-    lines: [], procs: {}, despatches: [],
+    lines: [], procs: {}, despatches: [], cancelledDespatches: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
     { id: l.id, lineNo: l.line_no, part: l.part, qty: l.qty, due: l.due_date, price: office ? (price.get(l.id) ?? null) : null });
@@ -45,6 +45,11 @@ export async function loadJobs({ office }) {
     const o = { id: d.id, dn: d.dn_number, date: d.despatched_on, by: d.despatched_by, lines: {},
       xero: d.xero_invoice_no ? { no: d.xero_invoice_no, at: d.sent_to_xero_at } : null,
       emailedAt: d.emailed_at, deliveredOn: d.delivered_on, deliveredBy: d.delivered_by, receivedBy: d.received_by };
+    if (d.cancelled_at) {   // kept for the record only: none of its quantities count as sent
+      o.cancelled = { at: d.cancelled_at, by: d.cancelled_by };
+      for (const x of d.cancelled_lines || []) o.lines[x.job_line_id] = x.qty;
+      byJob.get(d.job_id)?.cancelledDespatches.push(o); continue;
+    }
     dById.set(d.id, o); byJob.get(d.job_id)?.despatches.push(o);
   }
   for (const dl of dlines.data) { const d = dById.get(dl.despatch_id); if (d) d.lines[dl.job_line_id] = dl.qty; }
@@ -114,6 +119,12 @@ export async function markDespatch(despatchId, what, receivedBy = '') {
   const sb = await getSupabase();
   const { error } = await sb.rpc('mark_despatch', { p_despatch_id: despatchId, p_what: what, p_received_by: receivedBy });
   if (error) fail('Not saved', error);
+}
+/** Cancel a dispatch note not yet invoiced: it stays, marked cancelled; its quantities are outstanding again. */
+export async function cancelDespatch(despatchId) {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('cancel_despatch', { p_despatch_id: despatchId });
+  if (error) fail('Not cancelled', error);
 }
 export async function markAckEmailed(jobId) {
   const sb = await getSupabase();
