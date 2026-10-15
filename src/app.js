@@ -488,7 +488,7 @@ async function submitOrder() {
       const who = n.customer.trim();
       S.form = null; keepInputs = false; await reload();
       showDoc('soa', j.id);
-      toast(`${j.so_number} created for ${who}. It is in Upcoming on the job board.`);
+      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Upcoming.`);
     }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
@@ -500,7 +500,7 @@ async function loadXeroStatus() {
   render();
 }
 /** The one-off changeover import: reads Xero's open sales orders and keeps them on the board
- *  (xero_orders), so New orders offers them until each is made a job or marked not a job.
+ *  (xero_orders), so New orders offers them until each becomes a sales order or is marked not a job.
  *  Nothing reads Xero's sales orders by itself; running it again only adds new ones. */
 const openSo = q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED', 'INVOICED'].includes(q.status);
 let xeroReading = false;
@@ -556,7 +556,7 @@ function renderXero() {
        <p class="note">You will be sent to Xero to sign in. Pick Clarke Lane Engineering when it asks which organisation.</p>`;
   const waiting = xeroWaiting();
   const importPanel = !x ? '' : `<div class="panel"><h3>Changeover: bring in Xero's sales orders</h3>
-      <p>Do this once, on the day the board takes over from raising sales orders in Xero. It copies every open sales order (SO-…) from Xero onto New orders, ready to make into jobs. After that the board is the only place orders are raised, and Xero is not read for orders again.</p>
+      <p>Do this once, on the day the board takes over from raising sales orders in Xero. It copies every open sales order (SO-…) from Xero onto New orders, ready to become sales orders. After that the board is the only place orders are raised, and Xero is not read for orders again.</p>
       ${last ? `<p><b>Imported ${imported.length} sales order${imported.length === 1 ? '' : 's'}</b>, last on ${fmtLong(last.importedAt)} by ${esc(last.importedBy)}. ${waiting.length} still waiting on New orders.</p>` : '<p class="note">Not imported yet.</p>'}
       <div class="actions"><button class="btn ${last ? '' : 'pri'}" type="button" data-xero="import" ${busy}>${xeroReading ? 'Reading Xero…' : last ? 'Import again (adds only new ones)' : 'Import open sales orders'}</button></div>
       ${r ? `<p class="note">The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none'}</b>, so the next order made on the board will be <b>SO-${r.counterNext ?? '…'}</b>. The board always keeps its numbers past Xero's.</p>` : ''}</div>`;
@@ -636,10 +636,10 @@ function inboxRow(r) {
   if (r.state === 'job') act = `<button class="btn link" type="button" data-open="${r.jobId}">${esc(r.so)}</button>`;
   else if (r.state === 'dismissed') act = r.kind === 'xero' ? `<button class="btn sm" type="button" data-xrestore="${esc(r.xeroId)}">Put back</button>`
     : `<button class="btn sm" type="button" data-restore="${r.spId}">Put back</button>`;
-  else if (r.kind === 'xero') act = `<button class="btn sm pri" type="button" data-fromxero="${esc(r.xeroId)}">Make job</button>
+  else if (r.kind === 'xero') act = `<button class="btn sm pri" type="button" data-fromxero="${esc(r.xeroId)}">Create sales order</button>
     <button class="btn sm" type="button" data-xdismiss="${esc(r.xeroId)}" title="Stop offering this sales order here. Xero is not changed.">Not a job</button>`;
   else if (S.conv?.spId === r.spId) act = '<span class="note">Reading the lines…</span>';
-  else act = `<button class="btn sm pri" type="button" data-start="${r.spId}">Make job</button>
+  else act = `<button class="btn sm pri" type="button" data-start="${r.spId}">Create sales order</button>
     <button class="btn sm" type="button" data-dismiss="${r.spId}" title="Stop offering this quote here. The quote itself is not changed.">Not a job</button>`;
   return `<tr><td>${r.date ? fmtLong(r.date) : '—'}</td><td class="mono">${esc(r.ref)}</td><td>${src}</td>
     <td style="text-align:left"><b>${esc(r.customer)}</b></td><td style="text-align:left">${esc(r.who) || ''}</td>

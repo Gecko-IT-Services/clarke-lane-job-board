@@ -30,10 +30,10 @@ function newOrders() {
     <p>Levi prices the job in his quote calculator as normal. When the customer orders, he presses <b>Mark as Ordered</b> there. Within a minute the quote appears on <b>New orders</b>, newest first.</p>
     ${pic(`<table class="lines inbox"><thead><tr><th>Date</th><th>Number</th><th>From</th><th style="text-align:left">Customer</th><th>Net</th><th></th></tr></thead><tbody>
       <tr><td>15 Oct 2026</td><td class="mono">Q-0312</td><td>Quote</td><td style="text-align:left"><b>Example Fabrications Ltd</b></td><td class="num">£1,240.00</td>
-        <td><div class="acts"><span class="btn sm pri">Make job</span>${n(1)}<span class="btn sm">Not a job</span>${n(2)}</div></td></tr>
+        <td><div class="acts"><span class="btn sm pri">Create sales order</span>${n(1)}<span class="btn sm">Not a job</span>${n(2)}</div></td></tr>
       <tr><td>14 Oct 2026</td><td class="mono">Q-0309</td><td>Quote</td><td style="text-align:left"><b>Sample Engineering Co</b></td><td class="num">£386.50</td>
-        <td><div class="acts"><span class="btn sm pri">Make job</span><span class="btn sm">Not a job</span></div></td></tr></tbody></table>`)}
-    ${steps([`${n(1)} <b>Make job</b> opens the order form with the customer, parts, quantities and prices copied from the quote. The processes it can tell from the quote (folds, welds, inserts, paint…) are already ticked.`,
+        <td><div class="acts"><span class="btn sm pri">Create sales order</span><span class="btn sm">Not a job</span></div></td></tr></tbody></table>`)}
+    ${steps([`${n(1)} <b>Create sales order</b> opens the order form with the customer, parts, quantities and prices copied from the quote. The processes it can tell from the quote (folds, welds, inserts, paint…) are already ticked.`,
       `${n(2)} <b>Not a job</b> stops a quote being offered here, for example one already finished some other way. The quote itself is not changed, and <b>Put back</b> undoes it.`,
       'Not there yet? Press <b>Refresh</b>, and check the quote is marked Ordered in the calculator.',
       'An order that came by phone or email with no quote: <b>Sales orders › New order</b>.'])}
@@ -46,7 +46,7 @@ function orderForm() {
     ${pic(`<table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th>Net</th><th>Next due</th><th>Dispatched</th><th>Invoiced</th></tr></thead><tbody>
       <tr><td class="mono">SO-9790</td><td>15 Oct</td><td style="text-align:left"><b>Sample Engineering Co</b></td><td>£386.50</td><td><span class="chip soon">20 Nov</span></td><td><span class="chip">Not dispatched</span></td><td><span class="chip">Not invoiced</span></td></tr>
       <tr><td class="mono">SO-9781</td><td>14 Oct</td><td style="text-align:left"><b>Demo Metals Ltd</b></td><td>£1,068.00</td><td></td><td><span class="chip ok">Dispatched</span></td><td><span class="chip ok">Invoiced</span></td></tr></tbody></table>`)}
-    <p><b>Make job</b> on New orders, or <b>New order</b> at the top of this tab, opens the order form. It works like a Sage sales order. Check it, then press <b>Create order</b>.</p>
+    <p><b>Create sales order</b> on New orders, or <b>New order</b> at the top of this tab, opens the order form. It works like a Sage sales order. Check it, then press <b>Create order</b>.</p>
     ${pic(`<div class="hform">
       <div class="hrow"><label>Customer ${n(1)}<span class="f">Example Fabrications Ltd</span></label><label>Customer PO ${n(2)}<span class="f">PO-4471</span></label></div>
       <table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Qty</th><th>Price</th><th>Due ${n(3)}</th></tr></thead><tbody>

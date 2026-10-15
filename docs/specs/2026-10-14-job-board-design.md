@@ -245,3 +245,6 @@ shop floor sees only Shop floor, Dispatch and questions. When a screen changes, 
 Sales orders is its own tab (office only, it shows values), second after New orders:
 **New orders → Sales orders → Jobs → Shop floor → Dispatch → Xero → Help**. New order, Make job, Amend
 and Repeat open the order form there. Jobs is the job board only. Each tab has its own search box.
+- (15 Oct) The New orders button is **Create sales order** (was "Make job"): an order and its job are
+  one record, shown with prices on Sales orders and without on Jobs (Upcoming until started). No
+  separate "release to the floor" step, by design.

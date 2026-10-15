@@ -187,7 +187,8 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 /* documents: printed paper, deliberately light in both themes */
 .docwrap{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);overflow-y:auto;padding-inline:16px;padding-block:calc(20px + env(safe-area-inset-top,0px)) 40px}
 .docbar{max-width:794px;margin:0 auto 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:#fff;font-size:13.5px}
-.docbar .btn{margin-left:auto}
+.docbar .btn{color:var(--ink)} .docbar .btn.pri{color:var(--bg)}
+.docbar .btn:first-of-type{margin-left:auto}
 .paper{max-width:794px;margin:0 auto;background:var(--paper);color:var(--paper-ink);padding:44px 48px;border-radius:4px;font-size:13.5px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:22px}
 .paper .ph{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:flex-start}
 .paper .ph svg{height:46px;width:auto}
