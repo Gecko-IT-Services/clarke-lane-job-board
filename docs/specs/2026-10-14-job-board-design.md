@@ -304,3 +304,10 @@ or +10 working days, processes guessed from descriptions, default Laser). app.js
 wrapper whose writes all refuse ("This is a preview, so nothing is saved"), except ticks on preview
 jobs and the running order, held in memory. An orange banner shows throughout; sessionStorage keeps it
 on across a refresh; Leave preview (or closing the tab) ends it. The changeover import is not used.
+
+## Address (15 Oct)
+The board is at **https://jobs.clarke-lane.co.uk/** (GitHub Pages custom domain; CNAME `jobs` →
+gecko-it-services.github.io, set in Clook DNS). The old github.io address redirects there. Entra SPA
+redirect URIs: jobs.clarke-lane.co.uk, the github.io address and localhost:8080. The Xero edge function
+returns to the new address and accepts calls from both origins. Browser storage is per address, so
+everyone signs in once more after the move and the tablet's station is picked again.

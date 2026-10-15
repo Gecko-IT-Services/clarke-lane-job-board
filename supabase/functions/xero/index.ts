@@ -26,8 +26,9 @@ const CLIENT_SECRET = Deno.env.get('XERO_CLIENT_SECRET') || '';
 const SCOPES = Deno.env.get('XERO_SCOPES') ||
   'openid profile email offline_access accounting.invoices accounting.contacts.read';
 const CALLBACK = `${SB_URL}/functions/v1/xero/callback`;
-const BOARD = 'https://gecko-it-services.github.io/clarke-lane-job-board/';
-const ORIGINS = ['https://gecko-it-services.github.io', 'http://localhost:8080'];
+const BOARD = 'https://jobs.clarke-lane.co.uk/';
+// The old GitHub address redirects to jobs.clarke-lane.co.uk; kept here in case it is used before the redirect.
+const ORIGINS = ['https://jobs.clarke-lane.co.uk', 'https://gecko-it-services.github.io', 'http://localhost:8080'];
 const GO_LIVE = '2026-10-01';   // Clarke Lane's first day in Xero
 
 class HttpError extends Error { constructor(public status: number, msg: string) { super(msg); } }
