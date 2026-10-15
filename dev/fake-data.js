@@ -35,7 +35,7 @@ export const amendJob = async (id, p) => {
   j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' }));
 };
 export const setJobStatus = async (id, status) => { find(id).status = status; };
-let dn = 2;
+let dn = 3;
 export const createDespatch = async (jobId, lines) => { const j = find(jobId); if (j.status !== 'open') throw new Error(`${j.so} is on hold.`); const d = { id: dn, dn: 'DN-000' + dn++, date: '2026-10-15', lines: Object.fromEntries(lines.map(l => [l.job_line_id, l.qty])), xero: null }; j.despatches.push(d); return { id: d.id, dn_number: d.dn }; };
 export const markInvoiced = async (id, no) => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) d.xero = { no }; };
 export const onChange = async () => {};
@@ -89,7 +89,12 @@ jobs.push(
   { id: 6, so: 'SO-9786', quote: '', spQuoteId: null, customer: 'Seventh Example Ltd', contactName: '', contactEmail: '', po: 'PO-90', ordered: '2026-10-10', due: '2026-10-20', notes: '', address: '', status: 'open',
     lines: [{ id: 61, lineNo: 1, part: 'Cover', qty: 8, price: 22, due: '2026-10-20' }], procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T10:00:00Z' } }, despatches: [] }
   ,{ id: 7, so: 'SO-9787', quote: '', spQuoteId: null, customer: 'Eighth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-13', due: '2026-10-19', notes: '', address: '', status: 'open',
-    lines: [{ id: 71, lineNo: 1, part: 'Tray', qty: 6, price: 18, due: '2026-10-19' }], procs: { 'Fold': { done: false } }, despatches: [] });
+    lines: [{ id: 71, lineNo: 1, part: 'Tray', qty: 6, price: 18, due: '2026-10-19' }], procs: { 'Fold': { done: false } }, despatches: [] }
+  ,{ id: 8, so: 'SO-9788', quote: '', spQuoteId: null, customer: 'Ninth Example Ltd', contactName: '', contactEmail: '', po: 'PO-55', ordered: '2026-10-01', due: '2026-10-12', notes: '', address: '', status: 'open',
+    lines: [{ id: 81, lineNo: 1, part: 'Shelf', qty: 4, price: 30, due: '2026-10-12' }], procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-09T10:00:00Z' }, 'Fold': { done: true, by: 'Shop Floor', at: '2026-10-10T10:00:00Z' } },
+    despatches: [{ id: 2, dn: 'DN-0002', date: '2026-10-12', lines: { 81: 4 }, xero: { no: 'INV-0001', at: '2026-10-13T10:00:00Z' }, deliveredOn: '2026-10-12' }] }
+  ,{ id: 9, so: 'SO-9789', quote: '', spQuoteId: null, customer: 'Tenth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-05', due: '2026-10-25', notes: '', address: '', status: 'cancelled',
+    lines: [{ id: 91, lineNo: 1, part: 'Panel', qty: 3, price: 45, due: '2026-10-25' }], procs: { 'Laser': { done: false } }, despatches: [] });
 export const cancelDespatch = async id => { for (const j of jobs) { const d = j.despatches.find(x => x.id === id); if (d) {
   if (d.xero) throw new Error(`${d.dn} is invoiced in Xero, so it cannot be cancelled here.`);
   j.despatches = j.despatches.filter(x => x !== d); (j.cancelledDespatches ||= []).push({ ...d, cancelled: { at: new Date().toISOString(), by: 'levi@clarke-lane.co.uk' } }); } } };

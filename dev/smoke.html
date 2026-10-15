@@ -99,6 +99,12 @@ table.jobs td.ord{padding-right:4px}
 .tick{width:28px;height:28px;border-radius:7px;border:2px solid var(--muted);background:var(--surface);display:inline-flex;align-items:center;justify-content:center;padding:0}
 .tick.done{background:var(--ok);border-color:var(--ok);color:var(--surface)}
 .tick svg{width:18px;height:18px}
+.pt{display:inline-flex;align-items:center;gap:6px;min-height:34px;border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 8px;margin:2px 4px 2px 0;background:var(--surface);color:var(--muted);font:600 13px var(--body);cursor:pointer}
+.pt .bx{width:16px;height:16px;border-radius:4px;border:2px solid currentColor;display:inline-grid;place-items:center}
+.pt svg{width:12px;height:12px}
+.pt.done{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.pt:hover{border-color:var(--muted)}
+.pt:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .na{color:var(--line);font-weight:700}
 .sorth{all:unset;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
 .sorth:hover{color:var(--ink)}
@@ -325,6 +331,8 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h input[type=search]{flex:0 1 260px;min-width:0}
 @media (max-width:560px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hbtns,:is(#v-home,#v-quotes,#v-orders,#v-jobs) .seg,:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home:not(.orders):not(.board) th:nth-child(3),:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home:not(.orders):not(.board) td:nth-child(3){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home.orders th:nth-child(2),:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home.orders td:nth-child(2){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home.board td.ord .mv{display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h input[type=search]{flex:1 1 100%} }
 
+#v-jobs table.home.board tr.ready td{background:var(--ok-soft)}
+#v-jobs table.home .chips:not(:empty){margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
 /* help */
 #v-help .hflow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:6px 0 18px}
 #v-help .hstep{flex:1 1 140px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:3px}
@@ -343,6 +351,11 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 #v-help .hframe th,#v-help .hframe td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
 #v-help .hframe th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:center}
 #v-help .hframe .panel{padding:12px}
+#v-help .hframe table.board th,#v-help .hframe table.board td{text-align:left;vertical-align:middle}
+#v-help .hframe table.board th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
+#v-help .hframe table.board .ref{display:block;font-size:12.5px;color:var(--muted)}
+#v-help .hframe table.board .chips{margin-top:4px}
+#v-help .hframe table.board tr.ready td{background:var(--ok-soft)}
 #v-help .hframe .stations{margin-bottom:10px}
 #v-help .sbtn{border:2px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 14px;font-family:var(--display);font-size:18px;font-weight:700;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
 #v-help .sbtn.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
@@ -475,7 +488,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

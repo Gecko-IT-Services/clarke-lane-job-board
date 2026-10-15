@@ -94,7 +94,7 @@ function calloffs() {
     ${steps([`${n(6)} The job board and shop floor show which delivery is next (<b>Delivery 2 of 4</b>) and its due date. The shop floor shows how many are needed for the next delivery.`,
       `${n(7)} On <b>Dispatch</b>, the quantities are already filled in for <b>the next delivery only</b>; later deliveries stay at 0 until their turn. Change them if the customer wants more now.`,
       'Each delivery gets its own <b>dispatch note</b>, which lists what is still to come on the order, and its own <b>draft invoice</b> in Xero once delivered. So the customer is invoiced per call-off, for exactly what went.',
-      'The order stays on the board until the last delivery has gone, then moves to <b>Completed</b>.'])}
+      'The order stays on the board until the last delivery has gone, then moves to <b>Finished</b>.'])}
 
     <h4>When the customer changes a call-off</h4>
     ${steps(['Open the order on <b>Sales orders</b> and press <b>Amend</b>.',
@@ -107,17 +107,17 @@ function calloffs() {
 }
 
 function jobsBoard() {
-  const row = (o, mv, cust, so, due, ticks, ready) => `<tr class="${ready ? 'ready' : ''}"><td class="ord"><span class="n ${mv ? 'placed' : ''}">${o}</span><span class="mv"><span class="btn sm">⤒</span><span class="btn sm">▲</span><span class="btn sm">▼</span></span></td>
-    <td class="cust"><b>${cust}</b>${ready ? '<div class="meta"><span class="chip ok">Ready to dispatch</span></div>' : ''}</td><td class="so">${so}</td><td>${due}</td>
-    ${ticks.map(t => `<td class="p">${t === null ? '<span class="na">–</span>' : box(t)}</td>`).join('')}</tr>`;
+  const pt = (name, done) => `<span class="pt ${done ? 'done' : ''}"><span class="bx">${done ? TICK : ''}</span>${name}</span>`;
+  const row = (o, mv, cust, ref, due, pills, ready) => `<tr class="${ready ? 'ready' : ''}"><td class="ord"><span class="n ${mv ? 'placed' : ''}">${o}</span><span class="mv"><span class="btn sm">⤒</span><span class="btn sm">▲</span><span class="btn sm">▼</span></span></td>
+    <td><b>${cust}</b><span class="ref mono">${ref}</span>${ready ? '<div class="chips"><span class="chip ok">Ready to dispatch</span></div>' : ''}</td><td>${due}</td><td>${pills}</td></tr>`;
   return `<section class="hsec" id="help-jobs"><h3>4 · Jobs</h3>
-    <p>Every open order, one row each. <b>Upcoming</b> is not started, <b>Current</b> has something ticked or sent, <b>Completed</b> is all dispatched.</p>
-    ${pic(`<table class="jobs"><thead><tr><th>Order ${n(1)}</th><th>Customer</th><th>Sales order</th><th>Due ${n(2)}</th><th class="p">Laser</th><th class="p">Fold</th><th class="p">Weld</th><th class="p">P/Coat</th></tr></thead><tbody>
-      ${row(1, true, 'Sample Engineering Co', 'SO-9790', '<span class="chip soon">20 Nov</span>', [false, null, false, false])}
-      ${row(2, false, 'Example Fabrications Ltd', 'SO-9786', '<span class="chip late">17 Oct</span>', [true, true, null, true], true)}
-      ${row(3, false, 'Demo Metals Ltd', 'SO-9788', '<span class="chip">29 Oct</span>', [true, false, null, null])}</tbody></table>`)}
+    <p>Every open order, one row each. <b>Not started</b> has nothing ticked or sent, <b>In progress</b> has something ticked or sent, <b>Finished</b> is all dispatched.</p>
+    ${pic(`<table class="lines home board"><thead><tr><th>Order ${n(1)}</th><th>Customer</th><th>Due</th><th>Processes ${n(2)}</th></tr></thead><tbody>
+      ${row(1, true, 'Sample Engineering Co', 'SO-9790 · PO-114', '<span class="chip soon">20 Nov</span>', pt('Laser') + pt('Weld') + pt('P/Coat'))}
+      ${row(2, false, 'Example Fabrications Ltd', 'SO-9786 · no PO', '<span class="chip late">17 Oct</span>', pt('Laser', true) + pt('Fold', true) + pt('P/Coat', true), true)}
+      ${row(3, false, 'Demo Metals Ltd', 'SO-9788 · PO-92', '<span class="chip">29 Oct</span>', pt('Laser', true) + pt('Fold'))}</tbody></table>`)}
     ${steps([`${n(1)} <b>Bring a job forward:</b> ⤒ sends it to the top, and ▲ ▼ move it one place. The shop floor follows this order straight away. <b>Put everything back in date order</b> (under the table) undoes it all.`,
-      `${n(2)} <b>Sort:</b> click any heading to sort by it, and click again to reverse. ▲ or ▼ shows which one is in use. The arrows to move jobs only show when sorted by Order.`,
+      `${n(2)} <b>Tick a process</b> by clicking its pill when that step is finished. Click it again to undo.`,
       'A green row means every process is ticked: the job is ready to dispatch.',
       '<b>Job sheet</b> (open the job, or from the order acknowledgement): a printed copy for the job folder with the drawing. It has the parts, due dates and a box for each process, and no prices. Before printing, <b>What is this sheet for?</b> lets you set <b>To make</b> for each line, for example just this week\'s call-off for VFS or Wessex. It starts on the next delivery; <b>Everything outstanding</b> fills in the rest. This only changes the sheet, never the order. The board is still the live record, so tick processes there too.',
       'Click a row to open the whole order. From there: <b>Amend</b>, <b>Hold</b> / <b>Release</b>, <b>Cancel</b>, <b>Repeat order</b>, <b>Order acknowledgement</b> and <b>Dispatch…</b>.',

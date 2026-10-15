@@ -9,6 +9,7 @@ import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { renderWon } from './won.js';
+import { renderBoard } from './board.js';
 import { renderSalesOrders } from './orders.js';
 import { drawMap, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
@@ -173,7 +174,7 @@ const onBoardStage = j => ['upcoming', 'current'].includes(stage(j));
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
 
 /* ---------- sortable column headings (office tables). Each computer remembers its own choice. ---------- */
-const SORT_DEFAULT = { board: { col: 'order', dir: 1 }, boardDone: { col: 'dispatched', dir: -1 },
+const SORT_DEFAULT = {
   dn: { col: 'date', dir: -1 } };
 let SORT = {};
 try { SORT = JSON.parse(localStorage.getItem('clj.sort') || '{}') || {}; } catch { /* date order */ }
@@ -318,59 +319,16 @@ function renderTabs() {
 }
 
 /* ---------- jobs ---------- */
-function procCell(j, p) {
-  const s = j.procs[p]; if (!s) return '<span class="na" aria-label="Not needed">–</span>';
-  const title = s.done ? `${p} done by ${s.by}, ${fmtTime(s.at)}` : `Mark ${p} done`;
-  return `<button type="button" class="tick ${s.done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(title)}" aria-label="${esc(title)}">${s.done ? TICK : ''}</button>`;
-}
 function renderJobs() {
-  $('v-jobs').innerHTML = `<div class="sec-h"><h2>Jobs</h2><span class="sub">What is being made, in the running order.</span></div>` + jobBoard();
+  const { html, list } = renderBoard({ jobs: S.jobs, today: todayIso(), office: office(), stageKey: S.stage, search: S.search,
+    anyPlaced: S.jobs.some(j => j.priority != null && onBoardStage(j)) }, { esc, fmt, fmtTime, gbp, dueChip, statusChips, match: jobMatch, TICK });
+  S.boardList = list;
+  $('v-jobs').innerHTML = html;
 }
 /** Sales orders: the office's own tab, as Sage's Sales Order Processing. New and Amend open here. */
 function renderOrders() {
   $('v-orders').innerHTML = renderSalesOrders({ jobs: S.jobs, today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
     { esc, fmt, gbp, dueChip, match: orderMatch });
-}
-function jobBoard() {
-  const q = S.search.toLowerCase();
-  const by = { upcoming: [], current: [], completed: [] };
-  S.jobs.forEach(j => by[stage(j)]?.push(j));
-  const list = by[S.stage].filter(j => !q || [j.so, j.customer, j.po, j.quote, ...j.lines.map(l => l.part), ...linePos(j)].some(s => (s || '').toLowerCase().includes(q)));
-  const money = office();
-  const done = S.stage === 'completed', tk = done ? 'boardDone' : 'board';
-  const rank = new Map(runningOrder().map((j, i) => [j.id, i + 1]));
-  const sortedList = sortRows(tk, list, { order: j => rank.get(j.id) ?? 1e9, customer: j => j.customer, so: j => j.so, po: j => j.po,
-    due: j => nextDue(j), dispatched: j => lastDespatch(j), value: j => (done ? value(j) : value(j, { remaining: true })) });
-  list.length = 0; list.push(...sortedList);
-  S.boardList = list;
-  const canMove = money && !done && sortOf(tk).col === 'order' && sortOf(tk).dir === 1 && !q;
-  const anyPlaced = S.jobs.some(j => j.priority != null && onBoardStage(j));
-  const seg = [['upcoming', 'Upcoming'], ['current', 'Current'], ['completed', 'Completed']].map(([k, t]) =>
-    `<button type="button" data-stage="${k}" aria-pressed="${S.stage === k}">${t}<span class="c">${by[k].length}</span></button>`).join('');
-  const sum = list.reduce((a, j) => a + (value(j, { remaining: true }) || 0), 0);
-  const rows = list.map(j => {
-    const pin = needed(j).map(p => `<button type="button" class="tick ${j.procs[p].done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${j.procs[p].done}">${j.procs[p].done ? TICK : ''}${SHORT[p]}</button>`).join('');
-    const dueCell = stage(j) === 'completed' ? `<span class="chip">sent ${fmt(lastDespatch(j))}</span>` : dueChip(nextDue(j));
-    const ord = done ? '' : `<td class="ord"><span class="n ${j.priority != null ? 'placed' : ''}" title="${j.priority != null ? 'Brought forward' : 'In date order'}">${rank.get(j.id) ?? ''}</span>${canMove ? `<span class="mv">
-        <button type="button" class="btn sm" data-move="top" data-job="${j.id}" title="Bring to the top" aria-label="Bring ${esc(j.so)} to the top">⤒</button><button type="button" class="btn sm" data-move="up" data-job="${j.id}" title="Up one" aria-label="Move ${esc(j.so)} up one" ${list[0] === j ? 'disabled' : ''}>▲</button><button type="button" class="btn sm" data-move="down" data-job="${j.id}" title="Down one" aria-label="Move ${esc(j.so)} down one" ${list[list.length - 1] === j ? 'disabled' : ''}>▼</button></span>` : ''}</td>`;
-    return `<tr data-open="${j.id}" class="${!done && allDone(j) && j.status === 'open' ? 'ready' : ''}">${ord}
-      <td class="cust"><b>${esc(j.customer)}</b><div class="meta">${statusChips(j)}</div><div class="pin">${pin}</div></td>
-      <td class="so">${esc(j.so)}</td><td class="po">${esc(j.po) || '—'}</td><td class="due">${dueCell}</td>
-      ${PROCESSES.map(p => `<td class="p">${procCell(j, p)}</td>`).join('')}
-      ${money ? `<td class="val num">${gbp(S.stage === 'completed' ? value(j) : value(j, { remaining: true }))}</td>` : ''}</tr>`;
-  }).join('');
-  const blurb = { upcoming: 'Confirmed orders nobody has started yet.', current: 'At least one process done, or part dispatched.', completed: 'Everything dispatched.' }[S.stage];
-  const empty = S.jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
-    : (money ? 'No jobs yet. Make one from Won quotes, or press New order on Sales orders.' : 'No jobs yet. They appear here once the office creates them.');
-  return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to dispatch.` : ''}</p>
-    <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
-      <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="jobs"><thead><tr>${done ? '' : sortTh(tk, 'order', 'Order')}${sortTh(tk, 'customer', 'Customer')}${sortTh(tk, 'so', 'Sales order')}${sortTh(tk, 'po', 'Customer PO')}${done ? sortTh(tk, 'dispatched', 'Dispatched') : sortTh(tk, 'due', 'Due')}
-      ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? sortTh(tk, 'value', done ? 'Value' : 'Outstanding', 'style="text-align:right"') : ''}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="16" class="empty">${empty}</td></tr>`}</tbody></table></div>
-    <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full order.
-      ${money && !done ? (canMove ? ' Use ⤒ ▲ ▼ to bring a job forward; the shop floor follows this order.' : ' To bring a job forward, sort by Order (click the heading) and use the arrows.') : ''}
-      ${money && anyPlaced && !done ? ' <button type="button" class="btn link sm" data-move="reset">Put everything back in date order</button>' : ''}</p>`;
 }
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
 const blankLine = due => ({ part: '', qty: '', price: '', due: due || '' });
@@ -385,6 +343,7 @@ function openOrderForm(prefill = {}, amendId = null) {
 const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
 const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
 const orderMatch = (j, q) => [j.so, j.customer, j.po, j.quote, ...linePos(j)].some(s => (s || '').toLowerCase().includes(q));
+const jobMatch = (j, q) => orderMatch(j, q) || j.lines.some(l => (l.part || '').toLowerCase().includes(q));
 /** Sage-style "copy order": a new order from an old one. New number, new PO, dates moved forward. */
 function openRepeat(id) {
   const j = job(id);
