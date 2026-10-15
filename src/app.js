@@ -8,6 +8,7 @@ import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
+import { renderWon } from './won.js';
 import { drawMap, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
 import { dashboard } from './core/jobs.js';
@@ -91,6 +92,7 @@ async function boot() {
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>Sign out</button>`;
   try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
+  try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
   fromHash();
   if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
   await reload();
@@ -841,48 +843,18 @@ function renderFloor() {
 function inboxRows() {
   const rows = [];
   for (const q of quotes() || []) rows.push({ kind: 'quote', key: 'q' + q.spId, date: q.quoteDate, ref: q.quoteNo, customer: q.customer,
-    who: q.contactName, net: q.sellTotal != null ? q.sellTotal + (q.carriage || 0) : null, state: q.state, so: q.so, jobId: q.jobId, spId: q.spId });
+    who: q.contactName, net: q.sellTotal != null ? q.sellTotal + (q.carriage || 0) : null, state: q.state, so: q.so, jobId: q.jobId, spId: q.spId,
+    madeOn: q.jobId ? job(q.jobId)?.ordered : null });
   for (const x of S.xeroOrders || []) {
     const j = onBoard(x);
     rows.push({ kind: 'xero', key: 'x' + x.id, date: x.date, ref: x.number, customer: x.customer, who: x.reference ? 'Ref ' + x.reference : '',
-      net: x.subTotal, state: j ? 'job' : x.dismissed ? 'dismissed' : 'waiting', so: j?.so, jobId: j?.id, xeroId: x.id });
+      net: x.subTotal, state: j ? 'job' : x.dismissed ? 'dismissed' : 'waiting', so: j?.so, jobId: j?.id, xeroId: x.id, madeOn: j?.ordered });
   }
   return rows.sort((p, q) => ((q.date || '') < (p.date || '') ? -1 : (q.date || '') > (p.date || '') ? 1 : p.ref < q.ref ? 1 : -1));
 }
-function inboxRow(r) {
-  const src = r.kind === 'quote' ? 'Quote' : 'Xero import';
-  let act;
-  if (r.state === 'job') act = `<button class="btn link" type="button" data-open="${r.jobId}">${esc(r.so)}</button>`;
-  else if (r.state === 'dismissed') act = r.kind === 'xero' ? `<button class="btn sm" type="button" data-xrestore="${esc(r.xeroId)}">Put back</button>`
-    : `<button class="btn sm" type="button" data-restore="${r.spId}">Put back</button>`;
-  else if (r.kind === 'xero') act = `<button class="btn sm pri" type="button" data-fromxero="${esc(r.xeroId)}">Create sales order</button>
-    <button class="btn sm" type="button" data-xdismiss="${esc(r.xeroId)}" title="Stop offering this sales order here. Xero is not changed.">Not a job</button>`;
-  else if (S.conv?.spId === r.spId) act = '<span class="note">Reading the lines…</span>';
-  else act = `<button class="btn sm pri" type="button" data-start="${r.spId}">Create sales order</button>
-    <button class="btn sm" type="button" data-dismiss="${r.spId}" title="Stop offering this quote here. The quote itself is not changed.">Not a job</button>`;
-  return `<tr><td>${r.date ? fmtLong(r.date) : '—'}</td><td class="mono">${esc(r.ref)}</td><td>${src}</td>
-    <td style="text-align:left"><b>${esc(r.customer)}</b></td><td style="text-align:left">${esc(r.who) || ''}</td>
-    <td class="num">${r.net != null ? gbp(r.net, 2) : ''}</td><td><div class="acts">${act}</div></td></tr>`;
-}
-function inboxTable(rows, empty) {
-  rows = sortRows('inbox', rows, { date: r => r.date, ref: r => r.ref, from: r => r.kind, customer: r => r.customer, who: r => r.who, net: r => r.net });
-  return `<div class="tbl-wrap"><table class="lines inbox"><thead><tr>${sortTh('inbox', 'date', 'Date')}${sortTh('inbox', 'ref', 'Number')}${sortTh('inbox', 'from', 'From')}${sortTh('inbox', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('inbox', 'who', 'Contact / ref', 'style="text-align:left"')}${sortTh('inbox', 'net', 'Net')}<th></th></tr></thead>
-    <tbody>${rows.map(inboxRow).join('') || `<tr><td colspan="7" class="empty">${empty}</td></tr>`}</tbody></table></div>`;
-}
 function renderQuotes() {
-  const rows = inboxRows();
-  const waiting = rows.filter(r => r.state === 'waiting'), made = rows.filter(r => r.state === 'job').slice(0, 20), gone = rows.filter(r => r.state === 'dismissed');
-  const reading = [];
-  if (!S.quotesRaw && !S.quotesErr) reading.push('the quote calculator');
-  const errs = [S.quotesErr ? `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(S.quotesErr)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>` : '',
-  ].join('');
-  $('v-quotes').innerHTML = `<div class="sec-h"><h2>Won quotes</h2><span class="sub">Quotes Levi has marked Ordered in the quote calculator, newest first, and any sales orders brought in from Xero at changeover.</span>
-      <span class="right"><button class="btn sm" type="button" data-reloadquotes>Refresh</button></span></div>
-    ${errs}${reading.length ? `<p class="note">Reading ${reading.join(' and ')}…</p>` : ''}
-    <div class="group-h">Waiting to become sales orders <span class="note">${waiting.length}</span></div>
-    ${inboxTable(waiting, reading.length ? 'Reading…' : 'Nothing waiting. Quotes Levi marks Ordered in the quote calculator appear here.')}
-    ${made.length ? `<details class="gone"><summary class="group-h">Already sales orders <span class="note">latest ${made.length}</span></summary>${inboxTable(made, '')}</details>` : ''}
-    ${gone.length ? `<details class="gone"><summary class="group-h">Marked not a job <span class="note">${gone.length}</span></summary>${inboxTable(gone, '')}</details>` : ''}`;
+  $('v-quotes').innerHTML = renderWon({ rows: inboxRows(), today: todayIso(), view: S.wonView, reading: !S.quotesRaw && !S.quotesErr,
+    error: S.quotesErr, converting: S.conv?.spId }, { esc, fmt, gbp });
 }
 
 /* ---------- dispatch ---------- */
@@ -1300,6 +1272,7 @@ document.addEventListener('click', e => {
   if ('signout' in d) return auth.signOut();
   if ('reload' in d) return location.reload();
   if (d.homeview) { S.homeView = d.homeview; try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
+  if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if (d.sort) { const [t, col] = d.sort.split(':'); return setSort(t, col); }
