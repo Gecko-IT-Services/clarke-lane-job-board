@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs, addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
-  suggestProcesses, describeLine, unitPrice, allDone } from '../src/core/jobs.js';
+  suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists } from '../src/core/jobs.js';
 
 const job = over => ({
   id: 1, so: 'SO-9729', customer: 'BSA Regal Group Ltd', po: 'M32991', due: '2026-10-30', status: 'open',
@@ -205,4 +205,44 @@ console.log('jobs: ok');
   assert.deepEqual([none.waiting, none.made, none.gone, none.oldest, none.madeThisWeek, none.wonMonth, none.wonMonthValue], [[], [], [], null, 0, 0, 0]);
   assert.equal(wonQuotes([{ ref: 'X', date: null, net: 5, state: 'waiting' }], today).oldest, null, 'no age, no oldest');
   console.log('jobs won quotes: ok');
+}
+
+// — Sales orders tab: lists, order and sums. —
+{
+  const L = due => [{ id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 13.1, due }, { id: 11, lineNo: 2, part: 'Plate', qty: 5, price: 2, due }];
+  const all = { lines: { 10: 20, 11: 5 } };
+  const a = job({ id: 1, so: 'SO-1', lines: L('2026-10-10') });
+  const b = job({ id: 2, so: 'SO-2', status: 'held', lines: L('2026-10-20') });
+  const c = job({ id: 3, so: 'SO-3', lines: L('2026-10-17') });
+  const d = job({ id: 4, so: 'SO-4', lines: L('2026-10-01'), despatches: [{ ...all, date: '2026-10-12', xero: null }] });
+  const e = job({ id: 5, so: 'SO-5', lines: L('2026-10-01'), despatches: [{ ...all, date: '2026-10-14', xero: { no: 'INV-1' } }] });
+  const f = job({ id: 6, so: 'SO-6', status: 'cancelled', ordered: '2026-10-01', lines: L('2026-10-01'), despatches: [{ lines: { 10: 1 }, date: '2026-10-02', xero: null }] });
+  const g = job({ id: 7, so: 'SO-7', status: 'cancelled', ordered: '2026-10-05', lines: L('2026-10-01') });
+  const h = job({ id: 8, so: 'SO-8', lines: L('2026-10-16'), despatches: [{ lines: { 10: 10 }, date: '2026-10-13', xero: null }] });
+  const ids = xs => xs.map(x => x.id);
+  const s = salesSummary([a, b, c, d, e, f, g, h], '2026-10-15');
+  assert.deepEqual(ids(s.outstanding), [1, 8, 3, 2], 'soonest due first, held included');
+  assert.deepEqual(ids(s.late), [1]);
+  assert.deepEqual(ids(s.held), [2]);
+  assert.deepEqual(ids(s.dispatched), [5, 4], 'newest dispatch first');
+  assert.deepEqual(ids(s.cancelled), [7, 6], 'newest order first');
+  assert.equal(s.outstandingValue, 957, '272 × 3 + 141 still to send on SO-8');
+  assert.equal(s.lateValue, 272);
+  assert.equal(s.heldValue, 272);
+  assert.equal(s.uninvoiced, 2, 'SO-4 and SO-8; cancelled SO-6 and invoiced SO-5 do not count');
+  assert.equal(s.uninvoicedValue, 403, '272 for SO-4 + 131 for SO-8');
+  const none = salesSummary([], '2026-10-15');
+  assert.deepEqual([none.outstanding, none.late, none.uninvoiced, none.uninvoicedValue, none.outstandingValue], [[], [], 0, 0, 0]);
+
+  // — Jobs tab: running order for the open stages, newest dispatch first for finished. —
+  const up1 = job({ id: 11, so: 'SO-11', lines: L('2026-10-20') });
+  const up2 = job({ id: 12, so: 'SO-12', lines: L('2026-10-18') });
+  const up3 = job({ id: 13, so: 'SO-13', lines: L('2026-10-25'), priority: 1 });
+  const cur = job({ id: 14, so: 'SO-14', lines: L('2026-10-19'), procs: { 'Laser': { done: true }, 'Fold': { done: false } } });
+  const bl = boardLists([up1, up2, up3, cur, d, e, g]);
+  assert.deepEqual(ids(bl.upcoming), [13, 12, 11], 'brought forward first, then by due date');
+  assert.deepEqual(ids(bl.current), [14]);
+  assert.deepEqual(ids(bl.completed), [5, 4]);
+  assert.ok(!Object.values(bl).flat().includes(g), 'cancelled is off the board');
+  console.log('jobs sales orders and board: ok');
 }
