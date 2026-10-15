@@ -232,3 +232,11 @@ When every process on an open job is ticked: the shop floor row and the job boar
 "Ready to dispatch"; the Dispatch tab shows a green "N ready" badge (everyone, floor included); and
 the Dispatch tab opens with a **Ready to dispatch** panel (running order: order, customer, PO, due,
 parts to send, Dispatch button that opens the dispatch form for that job). Held jobs are not listed.
+
+## Help (15 Oct)
+A **Help** tab (last tab, everyone) in `src/help.js`: the journey left to right as five linked steps,
+then one section per step with a small illustration of that screen and numbered pointers that match
+the numbered instructions underneath. Illustrations are built from the board's own CSS with made-up
+customers (never real ones; the repo is public), are aria-hidden and not clickable. Office sees all
+sections (New orders, the order form, job board, shop floor, dispatch, Xero, emails, questions); the
+shop floor sees only Shop floor, Dispatch and questions. When a screen changes, update its section.
