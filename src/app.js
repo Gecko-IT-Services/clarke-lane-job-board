@@ -1150,7 +1150,8 @@ window.addEventListener('hashchange', () => { fromHash(); render(); nudge(); });
 let idleT;
 function nudge() {
   clearTimeout(idleT);
-  idleT = setTimeout(() => { if (S.tab !== 'floor' || (S.station == null && S.open == null && $('doc').hidden)) return; closeDoc(); S.station = null; S.open = null; S.ask = null; render(); window.scrollTo(0, 0); }, 120000);
+  // The shared factory screen only: an office user's half-done drawer is never closed under them.
+  idleT = setTimeout(() => { if (S.tab !== 'floor' || (office() && !S.kiosk) || (S.station == null && S.open == null && $('doc').hidden)) return; closeDoc(); S.station = null; S.open = null; S.ask = null; render(); window.scrollTo(0, 0); }, 120000);
 }
 ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, nudge, { passive: true }));
 nudge();
