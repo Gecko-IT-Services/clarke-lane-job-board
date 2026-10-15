@@ -18,7 +18,7 @@ import { dashboard } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
-  byRunningOrder, moveInOrder, compareValues } from './core/jobs.js';
+  byRunningOrder, partsLeft, moveInOrder, compareValues } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 
@@ -734,11 +734,9 @@ function makeJobFromXero(id) {
 
 /* ---------- shop floor: the touch screen in the factory. Same rows as the job board, bigger boxes. ---------- */
 /** Outstanding parts, one line per part however many delivery lines it is split over. */
-function floorParts(j) {
-  const by = new Map();
-  for (const l of j.lines) { const k = l.part; const r = by.get(k) || { left: 0, next: 0 }; r.left += left(j, l); if (l.due <= nextDue(j)) r.next += left(j, l); by.set(k, r); }
-  return [...by.entries()].filter(([, r]) => r.left > 0).map(([part, r]) =>
-    `<div><b>${r.left}</b> × ${esc(part)}${r.next && r.next !== r.left ? ` <span class="note">(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
+function dispatchParts(j) {
+  return partsLeft(j).map(r =>
+    `<div><b>${r.left}</b> × ${esc(r.part)}${r.next && r.next !== r.left ? ` <span class="note">(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
 }
 function procButtons(j, focus) {
   return needed(j).map(p => { const s = j.procs[p];
@@ -888,7 +886,7 @@ function renderDespatch() {
       <p class="note">Every process is ticked on these jobs. Check the parts, then press Dispatch to make the delivery note.</p>
       <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Order</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer PO</th><th>Due</th><th style="text-align:left">To send</th><th></th></tr></thead><tbody>
       ${r.map(x => `<tr><td class="mono" style="text-align:left">${esc(x.so)}</td><td style="text-align:left"><b>${esc(x.customer)}</b></td><td style="text-align:left">${esc(x.po) || '—'}</td>
-        <td>${dueChip(nextDue(x))}${deliveryLabel(x) ? ` <span class="note">${deliveryLabel(x)}</span>` : ''}</td><td style="text-align:left">${floorParts(x)}</td>
+        <td>${dueChip(nextDue(x))}${deliveryLabel(x) ? ` <span class="note">${deliveryLabel(x)}</span>` : ''}</td><td style="text-align:left">${dispatchParts(x)}</td>
         <td><button class="btn sm pri" type="button" data-desp="${x.id}">Dispatch</button></td></tr>`).join('')}</tbody></table></div></div>` : ''; })()}
     <div class="panel"><h3>Dispatch goods</h3>
       <label class="fl">Job

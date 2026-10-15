@@ -4,9 +4,8 @@
  * floorQueue() / floorStations() in core/jobs.js (tested); this file only draws it.
  * h: the formatting helpers from app.js. Never shows prices.
  */
-import { floorQueue, floorStations, nextStep, needed, allDone, nextDue, left, deliveryLabel, SHORT } from './core/jobs.js';
+import { floorQueue, floorStations, nextStep, partsLeft, dayNo, needed, allDone, nextDue, deliveryLabel, SHORT } from './core/jobs.js';
 
-const dayNo = s => Math.round(new Date(s.slice(0, 10) + 'T12:00:00Z') / 864e5);
 const count = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 export const clockHtml = now => `<b>${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</b>${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
 
@@ -26,12 +25,8 @@ export function renderShopFloor({ jobs, today, station, now, canFull, isFull }, 
   }
 
   const isAll = station === 'all', list = floorQueue(jobs, station), open = isAll ? list : floorQueue(jobs, 'all');
-  const parts = j => {
-    const by = new Map();
-    for (const l of j.lines) { const r = by.get(l.part) || { left: 0, next: 0 }; r.left += left(j, l); if (l.due <= nextDue(j)) r.next += left(j, l); by.set(l.part, r); }
-    return [...by.entries()].filter(([, r]) => r.left > 0).map(([part, r]) =>
-      `<span><b>${r.left}</b> × ${esc(part)}${r.next && r.next !== r.left ? ` (${r.next} for the next delivery)` : ''}</span>`).join('');
-  };
+  const parts = j => partsLeft(j).map(r =>
+    `<span><b>${r.left}</b> × ${esc(r.part)}${r.next && r.next !== r.left ? ` (${r.next} for the next delivery)` : ''}</span>`).join('');
   const card = (j, i) => {
     const held = j.status === 'held', ready = !held && allDone(j), due = nextDue(j);
     const late = due && due < today, days = late ? dayNo(today) - dayNo(due) : 0, soon = !late && due && dayNo(due) - dayNo(today) <= 7;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs, addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
-  suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists, nextStep, floorQueue, floorStations } from '../src/core/jobs.js';
+  suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists, nextStep, floorQueue, floorStations, partsLeft, dayNo } from '../src/core/jobs.js';
 
 const job = over => ({
   id: 1, so: 'SO-9729', customer: 'BSA Regal Group Ltd', po: 'M32991', due: '2026-10-30', status: 'open',
@@ -266,4 +266,16 @@ console.log('jobs: ok');
   assert.deepEqual(st.map(s => s.p), PROCESSES);
   assert.deepEqual([t['Laser'].waiting, t['Laser'].late, t['Weld'].waiting, t['Weld'].late, t['Fold'].waiting, t['Tap'].waiting], [1, 0, 2, 1, 1, 0]);
   console.log('jobs shop floor: ok');
+}
+
+// — Parts still to make, one entry per part however many delivery lines. —
+{
+  const p = job({ lines: [
+    { id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 1, due: '2026-10-10' },
+    { id: 11, lineNo: 2, part: 'Plate', qty: 5, price: 1, due: '2026-10-10' },
+    { id: 12, lineNo: 3, part: 'Bracket', qty: 30, price: 1, due: '2026-10-20' }],
+    despatches: [{ lines: { 11: 5, 10: 5 }, date: '2026-10-02' }] });
+  assert.deepEqual(partsLeft(p), [{ part: 'Bracket', left: 45, next: 15 }], 'Plate fully sent drops out; next = due by the next delivery');
+  assert.equal(dayNo('2026-10-02') - dayNo('2026-10-01'), 1);
+  console.log('jobs partsLeft: ok');
 }

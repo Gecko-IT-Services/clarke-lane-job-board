@@ -276,6 +276,13 @@ export function boardLists(jobs) {
 /** The next process a job needs, in Levi's order, or null when all are done. */
 export const nextStep = job => needed(job).find(p => !job.procs[p].done) || null;
 
+/** Quantity still to make per distinct part (first-seen order) and how much of it is due by the next delivery. */
+export function partsLeft(job) {
+  const by = new Map(), nd = nextDue(job);
+  for (const l of job.lines) { const r = by.get(l.part) || { part: l.part, left: 0, next: 0 }; r.left += left(job, l); if (l.due <= nd) r.next += left(job, l); by.set(l.part, r); }
+  return [...by.values()].filter(r => r.left > 0);
+}
+
 /** Shop floor: open jobs (not started or in progress, held included) in the running order; for a
  *  station, only those that still need it. */
 export function floorQueue(jobs, station) {
@@ -291,7 +298,7 @@ export function floorStations(jobs, today) {
   });
 }
 
-const dayNo = s => Math.round(new Date(s.slice(0, 10) + 'T12:00:00Z') / 864e5);
+export const dayNo = s => Math.round(new Date(s.slice(0, 10) + 'T12:00:00Z') / 864e5);
 const plusDays = (s, n) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Monday of the week containing `today` (YYYY-MM-DD). */
 export function weekStart(today) {
