@@ -740,7 +740,7 @@ function dispatchParts(j) {
 }
 function procButtons(j, focus) {
   return needed(j).map(p => { const s = j.procs[p];
-    return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
+    return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"${j.status === 'held' && !office() ? ' disabled' : ''}><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
 }
 function renderFloor() {
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
@@ -1161,13 +1161,13 @@ function render() {
 function fromHash() { const h = location.hash.slice(1) === 'despatch' ? 'dispatch' : location.hash.slice(1); if (TABS.some(([k]) => k === h)) S.tab = h; }
 document.addEventListener('fullscreenchange', () => { if (S.tab === 'floor') renderFloor(); });
 setInterval(() => { const c = $('fclock'); if (c) c.innerHTML = clockHtml(new Date()); }, 15000);
-window.addEventListener('hashchange', () => { fromHash(); render(); });
+window.addEventListener('hashchange', () => { fromHash(); render(); nudge(); });
 
 /* The shop floor screen is shared: two minutes untouched, it goes back to the station tiles. */
 let idleT;
 function nudge() {
   clearTimeout(idleT);
-  idleT = setTimeout(() => { if (S.tab !== 'floor' || (S.station == null && S.open == null)) return; S.station = null; S.open = null; render(); window.scrollTo(0, 0); }, 120000);
+  idleT = setTimeout(() => { if (S.tab !== 'floor' || (S.station == null && S.open == null && $('doc').hidden)) return; closeDoc(); S.station = null; S.open = null; S.ask = null; render(); window.scrollTo(0, 0); }, 120000);
 }
 ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, nudge, { passive: true }));
 nudge();

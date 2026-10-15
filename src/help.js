@@ -144,7 +144,7 @@ function shopFloor(office) {
       'A job <b>on hold</b> can\'t be ticked: the office has paused it, so don\'t start it.',
       '<span class="chip late">Brought forward</span> means the office has moved this job up. Do it first.',
       'Tap <b>Job details</b> to see the full job.',
-      'After <b>2 minutes</b> untouched the screen goes back to the tiles. <b>Full screen</b> hides the browser bars.'])}
+      'After <b>2 minutes</b> untouched the screen goes back to the tiles. <b>Full screen</b> hides the browser bars, where the browser allows it.'])}
   </section>`;
 }
 
