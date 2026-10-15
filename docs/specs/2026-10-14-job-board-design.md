@@ -202,3 +202,13 @@ amount), and the Waiting for Xero list shows the exact net to type in until then
 - Missing column: toast names the list and column to add.
 - Two people ticking at once: last write wins per process; done_by/done_at shows who.
 - Xero send fails for one despatch: that row stays "not sent" with the reason; others proceed.
+
+## Tab order and the shop floor screen (15 Oct)
+Tabs run left to right in the order work flows: **New orders → Jobs → Shop floor → Dispatch → Xero**
+(the floor account sees Jobs, Shop floor, Dispatch, and opens on Shop floor). Shop floor is now
+Sage-style rows like the rest of the board, not cards: Due, Sales order, Customer and parts still to
+make, then the nine process columns as 48px touch boxes (tap = done, tap again = undo, with the
+time it was ticked underneath and an Undo toast). Station buttons along the top filter to jobs
+waiting for that process and highlight its column. Rows don't open on tap (too easy to hit by
+accident on a touch screen); the SO number opens the job. Under 820px wide the process columns
+fold into labelled buttons under each job.

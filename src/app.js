@@ -49,6 +49,7 @@ async function boot() {
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>Sign out</button>`;
   try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   fromHash();
+  if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
   await reload();
   if (office()) {
     loadQuotes();
@@ -209,7 +210,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['jobs', 'Jobs'], ['floor', 'Shop floor'], ['quotes', 'New orders'], ['dispatch', 'Dispatch'], ['xero', 'Xero']];
+const TABS = [['quotes', 'New orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero']];   // left to right, the order work flows
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
@@ -513,17 +514,23 @@ function makeJobFromXero(id) {
     lines: q.lines.filter(l => l.qty > 0).map(l => ({ part: l.description, qty: String(l.qty), price: String(l.unit), due })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine(due)]) });
 }
 
-/* ---------- shop floor ---------- */
-function procButtons(j, focus) {
-  return needed(j).map(p => { const s = j.procs[p];
-    return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
-}
-/** Outstanding parts, one row per part however many delivery lines it is split over. */
+/* ---------- shop floor: the touch screen in the factory. Same rows as the job board, bigger boxes. ---------- */
+/** Outstanding parts, one line per part however many delivery lines it is split over. */
 function floorParts(j) {
   const by = new Map();
   for (const l of j.lines) { const k = l.part; const r = by.get(k) || { left: 0, next: 0 }; r.left += left(j, l); if (l.due <= nextDue(j)) r.next += left(j, l); by.set(k, r); }
   return [...by.entries()].filter(([, r]) => r.left > 0).map(([part, r]) =>
-    `<div><b>${r.left}</b> × ${esc(part)}${r.next && r.next !== r.left ? ` <span>(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
+    `<div><b>${r.left}</b> × ${esc(part)}${r.next && r.next !== r.left ? ` <span class="note">(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
+}
+function procButtons(j, focus) {
+  return needed(j).map(p => { const s = j.procs[p];
+    return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
+}
+function floorTick(j, p, focus) {
+  const s = j.procs[p]; if (!s) return '<span class="na" aria-label="Not needed">–</span>';
+  const label = s.done ? `${p} done ${fmtTime(s.at)}. Tap to undo.` : `Tap when ${p} is done`;
+  return `<button type="button" class="tick big ${s.done ? 'done' : ''} ${focus ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(label)}" aria-label="${esc(label)} on ${esc(j.so)}">${s.done ? TICK : ''}</button>
+    ${s.done ? `<small>${esc(fmtTime(s.at))}</small>` : ''}`;
 }
 function renderFloor() {
   const open = S.jobs.filter(onBoardStage).sort(byDue);
@@ -532,19 +539,22 @@ function renderFloor() {
   const btns = [['all', 'All jobs', open.length], ...PROCESSES.map(p => [p, p, count(p)])]
     .map(([k, t, c]) => `<button type="button" data-station="${esc(k)}" aria-pressed="${st === k}">${esc(t)}<span class="c">${c}</span></button>`).join('');
   const list = st === 'all' ? open : open.filter(j => j.procs[st] && !j.procs[st].done);
-  const cards = list.map(j => `<article class="fcard ${allDone(j) ? 'ready' : ''}">
-      <div class="h"><span class="so">${esc(j.so)}</span>${dueChip(nextDue(j))}</div>
-      <div class="cust">${esc(j.customer)}</div>
-      <div class="parts">${floorParts(j)}
-        ${deliveryLabel(j) ? `<div>${deliveryLabel(j)}, due ${fmt(nextDue(j))}</div>` : ''}
-        ${j.po ? `<div>PO ${esc(j.po)}</div>` : ''}${j.status === 'held' ? '<div class="bad"><b>On hold</b></div>' : ''}</div>
-      ${allDone(j) ? '<div class="readybar">All processes done. Ready to dispatch.</div>' : ''}
-      <div class="pbtns">${procButtons(j, st)}</div>
-      <button type="button" class="btn link" data-open="${j.id}" style="align-self:flex-start">Job details</button></article>`).join('');
+  const rows = list.map(j => {
+    const pin = needed(j).map(p => `<button type="button" class="tick ${j.procs[p].done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${j.procs[p].done}">${j.procs[p].done ? TICK : ''}${SHORT[p]}</button>`).join('');
+    const state = j.status === 'held' ? '<span class="chip bad">On hold</span>' : allDone(j) ? '<span class="chip ok">Ready to dispatch</span>' : '';
+    return `<tr class="${allDone(j) ? 'ready' : ''}">
+      <td class="due">${dueChip(nextDue(j))}${deliveryLabel(j) ? `<div class="note">${deliveryLabel(j)}</div>` : ''}</td>
+      <td class="so"><button type="button" class="btn link" data-open="${j.id}" title="Job details">${esc(j.so)}</button></td>
+      <td class="cust"><b>${esc(j.customer)}</b><div class="parts">${floorParts(j)}</div>${state ? `<div class="meta">${state}</div>` : ''}<div class="pin">${pin}</div></td>
+      ${PROCESSES.map(p => `<td class="p ${st === p ? 'focus' : ''}">${floorTick(j, p, st === p)}</td>`).join('')}</tr>`;
+  }).join('');
   $('v-floor').innerHTML = `
-    <div class="sec-h"><h2>Shop floor</h2><span class="sub">Pick your station to see only the jobs waiting for it, soonest first. This screen remembers the station.</span></div>
+    <div class="sec-h"><h2>Shop floor</h2><span class="sub">Tap the box when your process is finished on a job. Tap again to undo. Pick your station to see only the jobs waiting for it; this screen remembers it.</span></div>
     <div class="stations" role="group" aria-label="Station">${btns}</div>
-    <div class="floor">${cards || `<div class="empty">${st === 'all' ? 'No open jobs.' : `Nothing waiting for ${esc(st)}.`}</div>`}</div>`;
+    <div class="tbl-wrap"><table class="jobs floor"><thead><tr><th>Due</th><th>Sales order</th><th>Customer and parts</th>
+      ${PROCESSES.map(p => `<th class="p ${st === p ? 'focus' : ''}">${esc(p)}</th>`).join('')}</tr></thead>
+      <tbody>${rows || `<tr><td colspan="12" class="empty">${st === 'all' ? 'No open jobs.' : `Nothing waiting for ${esc(st)}.`}</td></tr>`}</tbody></table></div>
+    <p class="note">Soonest due first. A dash means the job doesn't need that process. Tap the sales order number for the full job.</p>`;
 }
 
 /* ---------- new orders: Levi's ordered quotes and Xero sales orders, as Sage-style rows ---------- */
