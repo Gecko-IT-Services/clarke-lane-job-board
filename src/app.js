@@ -833,7 +833,7 @@ function despatchForm(j) {
     <p class="note" id="dn-msg"></p></div>`;
 }
 /** The note form opens above the list: bring it into view when it is opened from further down. */
-const showDespForm = () => $('v-dispatch').querySelector('.dform')?.scrollIntoView({ block: 'nearest' });
+const showDespForm = () => $('v-dispatch').querySelector('.dform')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 function renderDespatch() {
   const lists = dispatchLists(S.jobs, todayIso());
   if (S.desp && !lists.open.some(j => j.id === S.desp)) S.desp = null;
