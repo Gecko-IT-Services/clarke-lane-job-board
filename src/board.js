@@ -6,6 +6,7 @@
  */
 import { boardLists, dashboard, byRunningOrder, needed, allDone, nextDue, value, lastDespatch, SHORT } from './core/jobs.js';
 import { card } from './home.js';
+import { icon } from './icons.js';
 
 export function renderBoard({ jobs, today, office, stageKey, search, anyPlaced }, h) {
   const { esc, fmt, fmtTime, gbp, dueChip, statusChips, match, TICK } = h;
@@ -55,7 +56,7 @@ export function renderBoard({ jobs, today, office, stageKey, search, anyPlaced }
 
   return { list, html: `<div class="home">
     <div class="hhead"><div><h2>Jobs</h2><p class="sub">What is being made, in the running order. Tick a process when it is finished.</p></div>
-      <div class="hbtns"><button class="btn" type="button" data-tab="dispatch">Dispatch</button></div></div>
+      <div class="hbtns"><button class="btn" type="button" data-tab="dispatch">${icon('truck')}Dispatch</button></div></div>
     <div class="hcards">${cards}</div>
     <section><div class="hsec-h"><h3>${STAGES[st]}</h3><span class="note">${sub}</span>${seg}${find}</div>${table}<p class="note">${note}</p></section>
   </div>` };

@@ -15,16 +15,16 @@
   --chrome:#111214; --chrome-ink:#FFFFFF; --chrome-mute:#A9A9AE; --steel:#3A3A3F; --steel-soft:#E4E4E7;
   --ok:#25744A; --ok-soft:#E0F1E7; --warn:#B45309; --warn-soft:#FDEED9; --bad:#B4321F; --bad-soft:#FBE4E0; --info:#2B5BD7; --info-soft:#E6EEFF;
   --paper:#FFFFFF; --paper-ink:#111214; --paper-line:#C9C9CE; --paper-mute:#5A5A60;
-  --display:'Barlow Condensed','Arial Narrow',Arial,sans-serif; --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --xero-ink:#000856; --display:'Barlow Condensed','Arial Narrow',Arial,sans-serif; --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0C0C0D; --surface:#17171A; --field:#202024; --line:#323238; --ink:#EDEDEF; --muted:#9C9CA3;
   --chrome:#000000; --steel:#B4B4BA; --steel-soft:#2A2A2F;
-  --ok:#5CC48A; --ok-soft:#173526; --warn:#F0A54B; --warn-soft:#3A2812; --bad:#F07B66; --bad-soft:#3D1C17; --info:#8FADFF; --info-soft:#1A2440; color-scheme:dark}}
+  --ok:#5CC48A; --ok-soft:#173526; --warn:#F0A54B; --warn-soft:#3A2812; --bad:#F07B66; --bad-soft:#3D1C17; --info:#8FADFF; --info-soft:#1A2440; --xero-ink:#3ECCFF; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0C0C0D; --surface:#17171A; --field:#202024; --line:#323238; --ink:#EDEDEF; --muted:#9C9CA3;
   --chrome:#000000; --steel:#B4B4BA; --steel-soft:#2A2A2F;
-  --ok:#5CC48A; --ok-soft:#173526; --warn:#F0A54B; --warn-soft:#3A2812; --bad:#F07B66; --bad-soft:#3D1C17; --info:#8FADFF; --info-soft:#1A2440; color-scheme:dark}
+  --ok:#5CC48A; --ok-soft:#173526; --warn:#F0A54B; --warn-soft:#3A2812; --bad:#F07B66; --bad-soft:#3D1C17; --info:#8FADFF; --info-soft:#1A2440; --xero-ink:#3ECCFF; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4}
 h1,h2,h3{font-family:var(--display);font-weight:700;margin:0;text-wrap:balance;letter-spacing:.01em}
@@ -43,7 +43,7 @@ button{cursor:pointer}
 .who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chrome-mute);flex:none}
 .who select{background:#1E1E22;color:#fff;border:1px solid #3A3A3F;border-radius:8px;padding:6px 10px;font-weight:600}
 nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;align-self:stretch;min-width:0}
-nav.tabs a{font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--chrome-mute);text-decoration:none;padding:3px 12px 0;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:8px;align-items:center}
+nav.tabs a{font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--chrome-mute);text-decoration:none;padding:3px 9px 0;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:6px;align-items:center}
 nav.tabs a:hover{color:#E4E4E7;border-bottom-color:#3A3A3F}
 nav.tabs a[aria-current="page"]{color:#fff;border-color:#fff}
 @media (max-width:1100px){
@@ -72,6 +72,16 @@ nav.tabs .badge.go{background:#25744A;margin-right:4px}
 .btn.sm{padding:4px 10px;font-size:13.5px}
 .btn.link{border:0;background:none;padding:0;text-decoration:underline;font-weight:600}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+.btn svg{width:16px;height:16px;flex:none;margin-left:-2px}
+.btn.sm svg{width:14px;height:14px}
+.btn svg.xw,.btn.sm svg.xw{width:auto;height:.78em;margin:0 0 -.05em}
+.btn.xero{background:#3ECCFF;border-color:#3ECCFF;color:#000856}
+.btn.xero:hover{background:#6AD8FF;border-color:#6AD8FF}
+nav.tabs a > svg{width:15px;height:15px;flex:none;margin-top:-3px;opacity:.85}
+nav.tabs a > svg.xw{width:auto;height:13px;margin-top:-2px}
+.chip svg{width:13px;height:13px;vertical-align:-2px;margin-right:4px}
+.sec-h .xhead{line-height:0;align-self:center;color:var(--xero-ink)}
+.sec-h .xhead svg{height:28px;width:auto}
 input[type=text],input[type=search],input[type=date],input[type=number],select.f{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
 
 .seg{display:inline-flex;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
@@ -576,7 +586,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

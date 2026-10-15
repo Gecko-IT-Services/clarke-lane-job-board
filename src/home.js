@@ -4,22 +4,9 @@
  * dashboard() and attention() in core/jobs.js (tested); this file only draws them.
  * h: the formatting helpers from app.js.
  */
+import { icon, XERO } from './icons.js';
 import { dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue } from './core/jobs.js';
 
-const ICON = {
-  late: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  soon: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
-  ready: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
-  book: '<path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/>',
-  quote: '<path d="M4 4h16v12H5l-1 4z"/><path d="M8 9h8M8 12h5"/>',
-  hold: '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>',
-  invoice: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
-  start: '<path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l1 8v6H4v-6z"/>',
-  making: '<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/>',
-  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
-  truck: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17" r="1.8"/><circle cx="17" cy="17" r="1.8"/>',
-};
-const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** A summary card. It only takes its colour when there is something to see. label/shown are HTML: escape before passing. */
 export const card = (tone, ic, shown, label, on, attrs = '') => attrs
@@ -33,8 +20,8 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
   const hello = `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}${office && me?.name ? ', ' + esc(me.name.split(' ')[0]) : ''}`;
   const longDate = new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   const btns = office
-    ? '<button class="btn" type="button" data-tab="dispatch">Dispatch</button><button class="btn pri" type="button" data-neworder>New order</button>'
-    : '<button class="btn pri" type="button" data-tab="floor">Shop floor</button>';
+    ? `<button class="btn" type="button" data-tab="dispatch">${icon('truck')}Dispatch</button><button class="btn pri" type="button" data-neworder>${icon('plus')}New order</button>`
+    : `<button class="btn pri" type="button" data-tab="floor">${icon('floor')}Shop floor</button>`;
 
   const cards = [
     // Each card opens the jobs behind its number in the table below.
@@ -78,7 +65,7 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
       <td class="act"><button class="btn sm" type="button" data-tab="quotes">Make order</button></td></tr>`,
     invoice: r => `<tr data-open="${r.job.id}"><td>${who(r.job.customer, r.despatch.dn)}</td><td>Delivered ${fmt(r.despatch.deliveredOn)}</td>
       <td>Invoice it</td><td><span class="chip">To invoice</span></td>${money(despatchValue(r.job, r.despatch))}
-      <td class="act"><button class="btn sm" type="button" data-dispview="xero">Send to Xero</button></td></tr>`,
+      <td class="act"><button class="btn sm" type="button" data-dispview="xero">Send to ${XERO}</button></td></tr>`,
   };
   const outRow = j => {
     const ready = j.status === 'open' && allDone(j);

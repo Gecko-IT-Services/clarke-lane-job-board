@@ -6,6 +6,7 @@
  */
 import { salesSummary, stage, nextDue, value, despatchStatus, invoiceStatus, compareValues } from './core/jobs.js';
 import { card } from './home.js';
+import { icon } from './icons.js';
 
 const orders = n => `${n} order${n === 1 ? '' : 's'}`;
 
@@ -45,7 +46,7 @@ export function renderSalesOrders({ jobs, today, view, search, form }, h) {
 
   return `<div class="home">
     <div class="hhead"><div><h2>Sales orders</h2><p class="sub">Every order, with what has been dispatched and invoiced. Click one to open it.</p></div>
-      ${form ? '' : '<div class="hbtns"><button class="btn pri" type="button" data-neworder>New order</button></div>'}</div>
+      ${form ? '' : `<div class="hbtns"><button class="btn pri" type="button" data-neworder>${icon('plus')}New order</button></div>`}</div>
     ${form || ''}
     <div class="hcards">${cards}</div>
     <section><div class="hsec-h"><h3>${q ? 'Search results' : V.title}</h3><span class="note">${q ? `${orders(list.length)} found` : V.sub}</span>${seg}${find}</div>${table}</section>
