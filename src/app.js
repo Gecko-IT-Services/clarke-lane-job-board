@@ -9,6 +9,8 @@ import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { renderWon } from './won.js';
+import { renderBoard } from './board.js';
+import { renderSalesOrders } from './orders.js';
 import { drawMap, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
 import { dashboard } from './core/jobs.js';
@@ -65,7 +67,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
+const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -92,6 +94,7 @@ async function boot() {
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>Sign out</button>`;
   try { const t = localStorage.getItem('clj.station'); if (t && (t === 'all' || PROCESSES.includes(t))) S.station = t; } catch { /* none kept */ }
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
+  try { const v = localStorage.getItem('clj.orderview'); if (['dispatched', 'held', 'cancelled'].includes(v)) S.orderView = v; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
   fromHash();
   if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
@@ -171,8 +174,7 @@ const onBoardStage = j => ['upcoming', 'current'].includes(stage(j));
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
 
 /* ---------- sortable column headings (office tables). Each computer remembers its own choice. ---------- */
-const SORT_DEFAULT = { board: { col: 'order', dir: 1 }, boardDone: { col: 'dispatched', dir: -1 }, orders: { col: 'date', dir: -1 },
-  dn: { col: 'date', dir: -1 } };
+const SORT_DEFAULT = { dn: { col: 'date', dir: -1 } };
 let SORT = {};
 try { SORT = JSON.parse(localStorage.getItem('clj.sort') || '{}') || {}; } catch { /* date order */ }
 const sortOf = t => SORT[t] || SORT_DEFAULT[t];
@@ -316,82 +318,17 @@ function renderTabs() {
 }
 
 /* ---------- jobs ---------- */
-function procCell(j, p) {
-  const s = j.procs[p]; if (!s) return '<span class="na" aria-label="Not needed">–</span>';
-  const title = s.done ? `${p} done by ${s.by}, ${fmtTime(s.at)}` : `Mark ${p} done`;
-  return `<button type="button" class="tick ${s.done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(title)}" aria-label="${esc(title)}">${s.done ? TICK : ''}</button>`;
-}
 function renderJobs() {
-  $('v-jobs').innerHTML = `<div class="sec-h"><h2>Jobs</h2><span class="sub">What is being made, in the running order.</span></div>` + jobBoard();
+  const { html, list } = renderBoard({ jobs: S.jobs, today: todayIso(), office: office(), stageKey: S.stage, search: S.search,
+    anyPlaced: S.jobs.some(j => j.priority != null && onBoardStage(j)) }, { esc, fmt, fmtTime, gbp, dueChip, statusChips, match: jobMatch, TICK });
+  S.boardList = list;
+  $('v-jobs').innerHTML = html;
 }
 /** Sales orders: the office's own tab, as Sage's Sales Order Processing. New and Amend open here. */
 function renderOrders() {
-  $('v-orders').innerHTML = `<div class="sec-h"><h2>Sales orders</h2><span class="sub">Every order, with what has been dispatched and invoiced. Click one to open it.</span>
-      ${!S.form ? '<span class="right"><button class="btn pri" type="button" data-neworder>New order</button></span>' : ''}</div>
-    ${S.form ? orderForm() : ''}${salesOrders()}`;
+  $('v-orders').innerHTML = renderSalesOrders({ jobs: S.jobs, today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
+    { esc, fmt, gbp, dueChip, match: orderMatch });
 }
-function jobBoard() {
-  const q = S.search.toLowerCase();
-  const by = { upcoming: [], current: [], completed: [] };
-  S.jobs.forEach(j => by[stage(j)]?.push(j));
-  const list = by[S.stage].filter(j => !q || [j.so, j.customer, j.po, j.quote, ...j.lines.map(l => l.part), ...linePos(j)].some(s => (s || '').toLowerCase().includes(q)));
-  const money = office();
-  const done = S.stage === 'completed', tk = done ? 'boardDone' : 'board';
-  const rank = new Map(runningOrder().map((j, i) => [j.id, i + 1]));
-  const sortedList = sortRows(tk, list, { order: j => rank.get(j.id) ?? 1e9, customer: j => j.customer, so: j => j.so, po: j => j.po,
-    due: j => nextDue(j), dispatched: j => lastDespatch(j), value: j => (done ? value(j) : value(j, { remaining: true })) });
-  list.length = 0; list.push(...sortedList);
-  S.boardList = list;
-  const canMove = money && !done && sortOf(tk).col === 'order' && sortOf(tk).dir === 1 && !q;
-  const anyPlaced = S.jobs.some(j => j.priority != null && onBoardStage(j));
-  const seg = [['upcoming', 'Upcoming'], ['current', 'Current'], ['completed', 'Completed']].map(([k, t]) =>
-    `<button type="button" data-stage="${k}" aria-pressed="${S.stage === k}">${t}<span class="c">${by[k].length}</span></button>`).join('');
-  const sum = list.reduce((a, j) => a + (value(j, { remaining: true }) || 0), 0);
-  const rows = list.map(j => {
-    const pin = needed(j).map(p => `<button type="button" class="tick ${j.procs[p].done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${j.procs[p].done}">${j.procs[p].done ? TICK : ''}${SHORT[p]}</button>`).join('');
-    const dueCell = stage(j) === 'completed' ? `<span class="chip">sent ${fmt(lastDespatch(j))}</span>` : dueChip(nextDue(j));
-    const ord = done ? '' : `<td class="ord"><span class="n ${j.priority != null ? 'placed' : ''}" title="${j.priority != null ? 'Brought forward' : 'In date order'}">${rank.get(j.id) ?? ''}</span>${canMove ? `<span class="mv">
-        <button type="button" class="btn sm" data-move="top" data-job="${j.id}" title="Bring to the top" aria-label="Bring ${esc(j.so)} to the top">⤒</button><button type="button" class="btn sm" data-move="up" data-job="${j.id}" title="Up one" aria-label="Move ${esc(j.so)} up one" ${list[0] === j ? 'disabled' : ''}>▲</button><button type="button" class="btn sm" data-move="down" data-job="${j.id}" title="Down one" aria-label="Move ${esc(j.so)} down one" ${list[list.length - 1] === j ? 'disabled' : ''}>▼</button></span>` : ''}</td>`;
-    return `<tr data-open="${j.id}" class="${!done && allDone(j) && j.status === 'open' ? 'ready' : ''}">${ord}
-      <td class="cust"><b>${esc(j.customer)}</b><div class="meta">${statusChips(j)}</div><div class="pin">${pin}</div></td>
-      <td class="so">${esc(j.so)}</td><td class="po">${esc(j.po) || '—'}</td><td class="due">${dueCell}</td>
-      ${PROCESSES.map(p => `<td class="p">${procCell(j, p)}</td>`).join('')}
-      ${money ? `<td class="val num">${gbp(S.stage === 'completed' ? value(j) : value(j, { remaining: true }))}</td>` : ''}</tr>`;
-  }).join('');
-  const blurb = { upcoming: 'Confirmed orders nobody has started yet.', current: 'At least one process done, or part dispatched.', completed: 'Everything dispatched.' }[S.stage];
-  const empty = S.jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
-    : (money ? 'No jobs yet. Make one from Won quotes, or press New order on Sales orders.' : 'No jobs yet. They appear here once the office creates them.');
-  return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to dispatch.` : ''}</p>
-    <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
-      <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="jobs"><thead><tr>${done ? '' : sortTh(tk, 'order', 'Order')}${sortTh(tk, 'customer', 'Customer')}${sortTh(tk, 'so', 'Sales order')}${sortTh(tk, 'po', 'Customer PO')}${done ? sortTh(tk, 'dispatched', 'Dispatched') : sortTh(tk, 'due', 'Due')}
-      ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? sortTh(tk, 'value', done ? 'Value' : 'Outstanding', 'style="text-align:right"') : ''}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="16" class="empty">${empty}</td></tr>`}</tbody></table></div>
-    <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full order.
-      ${money && !done ? (canMove ? ' Use ⤒ ▲ ▼ to bring a job forward; the shop floor follows this order.' : ' To bring a job forward, sort by Order (click the heading) and use the arrows.') : ''}
-      ${money && anyPlaced && !done ? ' <button type="button" class="btn link sm" data-move="reset">Put everything back in date order</button>' : ''}</p>`;
-}
-/** The Sage-style list of sales orders, with dispatch and invoice status. Office only. */
-function salesOrders() {
-  const q = (S.osearch || '').toLowerCase();
-  const f = S.orderFilter;
-  const keep = j => f === 'all' ? true : f === 'cancelled' ? j.status === 'cancelled' : f === 'held' ? j.status === 'held'
-    : f === 'complete' ? stage(j) === 'completed' : stage(j) !== 'completed' && j.status !== 'cancelled';
-  const list = sortRows('orders', S.jobs.filter(keep).filter(j => !q || [j.so, j.customer, j.po, j.quote, ...linePos(j)].some(s => (s || '').toLowerCase().includes(q)))
-    .sort((a, b) => compareValues(b.so, a.so)), { so: j => j.so, date: j => j.ordered, customer: j => j.customer, po: j => j.po, net: j => value(j),
-    due: j => (stage(j) === 'completed' || j.status === 'cancelled' ? '' : nextDue(j)), dispatched: j => (j.status === 'cancelled' ? 'Cancelled' : despatchStatus(j)), invoiced: j => invoiceStatus(j) });
-  const rows = list.map(j => `<tr data-open="${j.id}"><td class="mono">${esc(j.so)}</td><td>${fmt(j.ordered)}</td><td style="text-align:left"><b>${esc(j.customer)}</b></td>
-      <td style="text-align:left">${esc(j.po) || '—'}</td><td class="num">${gbp(value(j), 2)}</td><td>${stage(j) === 'completed' || j.status === 'cancelled' ? '' : dueChip(nextDue(j))}</td>
-      <td>${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Dispatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}${j.status === 'held' ? ' <span class="chip late">On hold</span>' : ''}</td>
-      <td><span class="chip ${invoiceStatus(j) === 'Invoiced' ? 'ok' : ''}">${invoiceStatus(j)}</span></td></tr>`).join('');
-  const filters = [['outstanding', 'Outstanding'], ['complete', 'Dispatched'], ['held', 'On hold'], ['cancelled', 'Cancelled'], ['all', 'All']]
-    .map(([k, t]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${t}</option>`).join('');
-  return `<div class="sec-h" style="gap:10px"><label class="fl" style="flex-direction:row;align-items:center;gap:8px">Show <select class="f" id="ofilter">${filters}</select></label>
-      <input type="search" id="osearch" placeholder="Search order, customer or PO" value="${esc(S.osearch || '')}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="lines solist"><thead><tr>${sortTh('orders', 'so', 'Order')}${sortTh('orders', 'date', 'Date')}${sortTh('orders', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('orders', 'po', 'Customer order no.', 'style="text-align:left"')}${sortTh('orders', 'net', 'Net')}${sortTh('orders', 'due', 'Next due')}${sortTh('orders', 'dispatched', 'Dispatched')}${sortTh('orders', 'invoiced', 'Invoiced')}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="8" class="empty">No orders here.</td></tr>`}</tbody></table></div>`;
-}
-
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
 const blankLine = due => ({ part: '', qty: '', price: '', due: due || '' });
 function openOrderForm(prefill = {}, amendId = null) {
@@ -404,6 +341,8 @@ function openOrderForm(prefill = {}, amendId = null) {
 /** PO(s) for one dispatch note: its lines' own call-off POs, else the order's PO. */
 const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
 const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
+const orderMatch = (j, q) => [j.so, j.customer, j.po, j.quote, ...linePos(j)].some(s => (s || '').toLowerCase().includes(q));
+const jobMatch = (j, q) => orderMatch(j, q) || j.lines.some(l => (l.part || '').toLowerCase().includes(q));
 /** Sage-style "copy order": a new order from an old one. New number, new PO, dates moved forward. */
 function openRepeat(id) {
   const j = job(id);
@@ -551,7 +490,7 @@ async function submitOrder() {
       const who = n.customer.trim();
       S.form = null; keepInputs = false; await reload();
       showDoc('soa', j.id);
-      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Upcoming. Press Job sheet to print one for the folder.`);
+      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Not started. Press Job sheet to print one for the folder.`);
     }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
@@ -1272,6 +1211,7 @@ document.addEventListener('click', e => {
   if ('signout' in d) return auth.signOut();
   if ('reload' in d) return location.reload();
   if (d.homeview) { S.homeView = d.homeview; try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
+  if (d.orderview) { S.orderView = d.orderview; try { localStorage.setItem('clj.orderview', d.orderview); } catch { /* not kept */ } return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
@@ -1329,7 +1269,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'search' || e.target.id === 'osearch') {
     const id = e.target.id; S[id] = e.target.value; const pos = e.target.selectionStart;
-    if (id === 'search') renderJobs(); else renderOrders();
+    if (id === 'search') renderJobs(); else { if (S.form) collectForm(); renderOrders(); }
     const el = $(id); el.focus(); el.setSelectionRange(pos, pos);
   }
   const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);
@@ -1343,7 +1283,6 @@ document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
-  if (e.target.id === 'ofilter') { S.orderFilter = e.target.value; render(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }

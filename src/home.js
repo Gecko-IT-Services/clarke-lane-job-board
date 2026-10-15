@@ -12,6 +12,10 @@ const ICON = {
   ready: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
   book: '<path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/>',
   quote: '<path d="M4 4h16v12H5l-1 4z"/><path d="M8 9h8M8 12h5"/>',
+  hold: '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>',
+  invoice: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  start: '<path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l1 8v6H4v-6z"/>',
+  making: '<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/>',
 };
 const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;

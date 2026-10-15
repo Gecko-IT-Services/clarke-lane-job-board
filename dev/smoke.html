@@ -99,6 +99,12 @@ table.jobs td.ord{padding-right:4px}
 .tick{width:28px;height:28px;border-radius:7px;border:2px solid var(--muted);background:var(--surface);display:inline-flex;align-items:center;justify-content:center;padding:0}
 .tick.done{background:var(--ok);border-color:var(--ok);color:var(--surface)}
 .tick svg{width:18px;height:18px}
+.pt{display:inline-flex;align-items:center;gap:6px;min-height:34px;border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 8px;margin:2px 4px 2px 0;background:var(--surface);color:var(--muted);font:600 13px var(--body);cursor:pointer}
+.pt .bx{width:16px;height:16px;border-radius:4px;border:2px solid currentColor;display:inline-grid;place-items:center}
+.pt svg{width:12px;height:12px}
+.pt.done{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.pt:hover{border-color:var(--muted)}
+.pt:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .na{color:var(--line);font-weight:700}
 .sorth{all:unset;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
 .sorth:hover{color:var(--ink)}
@@ -278,52 +284,55 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 .mpop .btn.link{padding:0;font-weight:700}
 
 /* home */
-:is(#v-home,#v-quotes) > .home{display:flex;flex-direction:column;gap:26px}
-:is(#v-home,#v-quotes) .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
-:is(#v-home,#v-quotes) .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
-:is(#v-home,#v-quotes) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
-:is(#v-home,#v-quotes) .hbtns{margin-left:auto;display:flex;gap:8px}
-:is(#v-home,#v-quotes) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-:is(#v-home,#v-quotes) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
-:is(#v-home,#v-quotes) .hcard .ic{width:44px;height:44px;border-radius:10px;background:var(--field);color:var(--muted);display:grid;place-items:center;flex:none}
-:is(#v-home,#v-quotes) .hcard svg{width:22px;height:22px}
-:is(#v-home,#v-quotes) .hcard b{display:block;font-size:26px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
-:is(#v-home,#v-quotes) .hcard div span{font-size:14px;color:var(--muted)}
-:is(#v-home,#v-quotes) .hcard.t-bad{background:var(--bad-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-bad .ic{color:var(--bad)}
-:is(#v-home,#v-quotes) .hcard.t-warn{background:var(--warn-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-warn .ic{color:var(--warn)}
-:is(#v-home,#v-quotes) .hcard.t-ok{background:var(--ok-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-ok .ic{color:var(--ok)}
-:is(#v-home,#v-quotes) .hcard.t-info{background:var(--info-soft);border-color:transparent} :is(#v-home,#v-quotes) .hcard.t-info .ic{color:var(--info)}
-:is(#v-home,#v-quotes) .hcard[class*="t-"] .ic{background:var(--surface)}
-@media (max-width:900px){ :is(#v-home,#v-quotes) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (max-width:480px){ :is(#v-home,#v-quotes) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes) .hcard .ic{width:36px;height:36px} }
-:is(#v-home,#v-quotes) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
-:is(#v-home,#v-quotes) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
-:is(#v-home,#v-quotes) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
-:is(#v-home,#v-quotes) .snap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px}
-:is(#v-home,#v-quotes) .st{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-:is(#v-home,#v-quotes) .st:hover{border-color:var(--muted)}
-:is(#v-home,#v-quotes) .st:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-:is(#v-home,#v-quotes) .st .r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;font-size:14.5px}
-:is(#v-home,#v-quotes) .st .r1 small{color:var(--muted)}
-:is(#v-home,#v-quotes) .sbar{display:block;width:100%;height:6px;border-radius:3px;background:var(--field);overflow:hidden}
-:is(#v-home,#v-quotes) .sbar span{display:block;height:100%;border-radius:3px;min-width:4px;background:var(--ok)}
-:is(#v-home,#v-quotes) .sbar.late span{background:var(--bad)}
-:is(#v-home,#v-quotes) .seg{display:inline-flex;margin-left:auto;background:var(--field);border-radius:10px;padding:3px}
-:is(#v-home,#v-quotes) .seg button{border:0;background:none;border-radius:8px;padding:7px 14px;min-height:38px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
-:is(#v-home,#v-quotes) .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-:is(#v-home,#v-quotes) .seg em{font-style:normal;font-weight:500;margin-left:4px}
-:is(#v-home,#v-quotes) table.home th,:is(#v-home,#v-quotes) table.home td{text-align:left;padding:12px 14px;vertical-align:middle}
-:is(#v-home,#v-quotes) table.home th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
-:is(#v-home,#v-quotes) table.home .num,:is(#v-home,#v-quotes) table.home .act{text-align:right;white-space:nowrap}
-:is(#v-home,#v-quotes) table.home .ref{display:block;font-size:12.5px;color:var(--muted)}
-:is(#v-home,#v-quotes) table.home tbody tr[data-open]{cursor:pointer}
-:is(#v-home,#v-quotes) table.home tbody tr[data-open]:hover td{background:var(--field)}
-:is(#v-home,#v-quotes) .allclear{margin:0;padding:18px;color:var(--muted)}
-:is(#v-home,#v-quotes) .allclear.ok{color:var(--ok);font-weight:600}
-:is(#v-home,#v-quotes) .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-:is(#v-home,#v-quotes) .tbl-wrap{position:relative}
-@media (max-width:560px){ :is(#v-home,#v-quotes) .hbtns,:is(#v-home,#v-quotes) .seg,:is(#v-home,#v-quotes) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes) table.home th:nth-child(3),:is(#v-home,#v-quotes) table.home td:nth-child(3){display:none} }
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) > .home{display:flex;flex-direction:column;gap:26px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hbtns{margin-left:auto;display:flex;gap:8px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard .ic{width:44px;height:44px;border-radius:10px;background:var(--field);color:var(--muted);display:grid;place-items:center;flex:none}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard svg{width:22px;height:22px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard b{display:block;font-size:26px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard div span{font-size:14px;color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-bad{background:var(--bad-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-bad .ic{color:var(--bad)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-warn{background:var(--warn-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-warn .ic{color:var(--warn)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-ok{background:var(--ok-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-ok .ic{color:var(--ok)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-info{background:var(--info-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard.t-info .ic{color:var(--info)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard[class*="t-"] .ic{background:var(--surface)}
+@media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:480px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hcard .ic{width:36px;height:36px} }
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .snap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .st{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .st:hover{border-color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .st:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .st .r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;font-size:14.5px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .st .r1 small{color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .sbar{display:block;width:100%;height:6px;border-radius:3px;background:var(--field);overflow:hidden}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .sbar span{display:block;height:100%;border-radius:3px;min-width:4px;background:var(--ok)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .sbar.late span{background:var(--bad)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .seg{display:inline-flex;margin-left:auto;background:var(--field);border-radius:10px;padding:3px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .seg button{border:0;background:none;border-radius:8px;padding:7px 14px;min-height:38px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .seg em{font-style:normal;font-weight:500;margin-left:4px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home th,:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home td{text-align:left;padding:12px 14px;vertical-align:middle}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home .num,:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home .act{text-align:right;white-space:nowrap}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home .ref{display:block;font-size:12.5px;color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home tbody tr[data-open]{cursor:pointer}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home tbody tr[data-open]:hover td{background:var(--field)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .allclear{margin:0;padding:18px;color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .allclear.ok{color:var(--ok);font-weight:600}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .tbl-wrap{position:relative}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h input[type=search]{flex:0 1 260px;min-width:0}
+@media (max-width:560px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hbtns,:is(#v-home,#v-quotes,#v-orders,#v-jobs) .seg,:is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home:not(.orders):not(.board) th:nth-child(3),:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home:not(.orders):not(.board) td:nth-child(3){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home.orders th:nth-child(2),:is(#v-home,#v-quotes,#v-orders,#v-jobs) table.home.orders td:nth-child(2){display:none} #v-orders table.home.orders .num,#v-jobs table.home.board :is(.ord,.num){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs) .hsec-h input[type=search]{flex:1 1 100%} :is(#v-orders,#v-jobs) .seg{width:100%} :is(#v-orders,#v-jobs) .seg button{flex:1 1 0;min-width:0;padding:6px 6px;font-size:13px} }
 
+#v-jobs table.home.board tr.ready td{background:var(--ok-soft)}
+#v-jobs table.home .chips:not(:empty){margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
 /* help */
 #v-help .hflow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:6px 0 18px}
 #v-help .hstep{flex:1 1 140px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:3px}
@@ -342,6 +351,12 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 #v-help .hframe th,#v-help .hframe td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
 #v-help .hframe th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:center}
 #v-help .hframe .panel{padding:12px}
+#v-help .hframe :is(table.board,table.orders) th,#v-help .hframe :is(table.board,table.orders) td{text-align:left;vertical-align:middle}
+#v-help .hframe :is(table.board,table.orders) th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
+#v-help .hframe :is(table.board,table.orders) .ref{display:block;font-size:12.5px;color:var(--muted)}
+#v-help .hframe table.board .chips{margin-top:4px}
+#v-help .hframe table.orders .num{text-align:right}
+#v-help .hframe table.board tr.ready td{background:var(--ok-soft)}
 #v-help .hframe .stations{margin-bottom:10px}
 #v-help .sbtn{border:2px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 14px;font-family:var(--display);font-size:18px;font-weight:700;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
 #v-help .sbtn.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
@@ -404,8 +419,6 @@ details.splitter[open]{flex-basis:100%;background:var(--field);border-radius:10p
 .njlines input[type=text]{width:100%}
 .njlines input[type=date]{width:150px}
 .newjob textarea{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:inherit;resize:vertical}
-table.solist tbody tr{cursor:pointer}
-table.solist tbody tr:hover td{background:var(--field)}
 tr.muted td{color:var(--muted)}
 .bad{color:var(--bad)}
 @media (max-width:560px){.row3{grid-template-columns:minmax(0,1fr)}}
@@ -474,7 +487,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/orders.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

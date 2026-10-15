@@ -244,6 +244,35 @@ export function compareValues(a, b, dir = 1) {
   return String(a).localeCompare(String(b), 'en-GB', { numeric: true, sensitivity: 'base' }) * dir;
 }
 
+/** Sales orders tab: outstanding (held included) and on hold soonest due first, dispatched newest
+ *  dispatch first, cancelled newest order first; with the sums the cards show. */
+export function salesSummary(jobs, today) {
+  const soonest = (a, b) => compareValues(nextDue(a), nextDue(b)) || compareValues(a.so, b.so);
+  const newest = f => (a, b) => compareValues(f(a), f(b), -1) || compareValues(a.so, b.so, -1);
+  const outstanding = jobs.filter(j => !['completed', 'cancelled'].includes(stage(j))).sort(soonest);
+  const late = outstanding.filter(j => nextDue(j) && nextDue(j) < today);
+  const held = outstanding.filter(j => j.status === 'held');
+  const uninv = jobs.filter(j => j.status !== 'cancelled').flatMap(j => j.despatches.filter(d => !d.xero).map(d => ({ job: j, d })));
+  const toSend = xs => round2(xs.reduce((a, j) => a + (value(j, { remaining: true }) || 0), 0));
+  return {
+    outstanding, late, held,
+    dispatched: jobs.filter(j => stage(j) === 'completed').sort(newest(lastDespatch)),
+    cancelled: jobs.filter(j => j.status === 'cancelled').sort(newest(j => j.ordered)),
+    outstandingValue: toSend(outstanding), lateValue: toSend(late), heldValue: toSend(held),
+    uninvoiced: new Set(uninv.map(x => x.job.id)).size,
+    uninvoicedValue: round2(uninv.reduce((a, x) => a + (despatchValue(x.job, x.d) || 0), 0)),
+  };
+}
+
+/** Jobs tab: not started and in progress in the running order; finished newest dispatch first. */
+export function boardLists(jobs) {
+  const at = st => jobs.filter(j => stage(j) === st);
+  return {
+    upcoming: at('upcoming').sort(byRunningOrder), current: at('current').sort(byRunningOrder),
+    completed: at('completed').sort((a, b) => compareValues(lastDespatch(a), lastDespatch(b), -1) || compareValues(a.so, b.so, -1)),
+  };
+}
+
 const dayNo = s => Math.round(new Date(s.slice(0, 10) + 'T12:00:00Z') / 864e5);
 const plusDays = (s, n) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Monday of the week containing `today` (YYYY-MM-DD). */

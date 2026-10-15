@@ -42,10 +42,10 @@ function newOrders() {
 
 function orderForm() {
   return `<section class="hsec" id="help-form"><h3>2 · Sales orders</h3>
-    <p>The office's list of every order, like Sage's Sales Order Processing: value, customer PO, next due date, and whether it has been dispatched and invoiced. Click an order to open it. Use <b>Show</b> to see outstanding, dispatched, on hold, cancelled or all orders, and click any heading to sort.</p>
-    ${pic(`<table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th>Net</th><th>Next due</th><th>Dispatched</th><th>Invoiced</th></tr></thead><tbody>
-      <tr><td class="mono">SO-9790</td><td>15 Oct</td><td style="text-align:left"><b>Sample Engineering Co</b></td><td>£386.50</td><td><span class="chip soon">20 Nov</span></td><td><span class="chip">Not dispatched</span></td><td><span class="chip">Not invoiced</span></td></tr>
-      <tr><td class="mono">SO-9781</td><td>14 Oct</td><td style="text-align:left"><b>Demo Metals Ltd</b></td><td>£1,068.00</td><td></td><td><span class="chip ok">Dispatched</span></td><td><span class="chip ok">Invoiced</span></td></tr></tbody></table>`)}
+    <p>The office's list of every order, like Sage's Sales Order Processing: value, customer PO, next due date, and whether it has been dispatched and invoiced. Click an order to open it. The switch above the list shows <b>Outstanding</b> (soonest due first), <b>Dispatched</b>, <b>On hold</b> or <b>Cancelled</b>; the search looks through every order.</p>
+    ${pic(`<table class="lines home orders"><thead><tr><th>Customer</th><th>Ordered</th><th>Next due</th><th>Progress</th><th class="num">Net</th></tr></thead><tbody>
+      <tr><td><b>Sample Engineering Co</b><span class="ref mono">SO-9790 · no PO</span></td><td>15 Oct</td><td><span class="chip soon">20 Nov</span></td><td><span class="chip">Not dispatched</span> <span class="chip">Not invoiced</span></td><td class="num">£386.50</td></tr>
+      <tr><td><b>Demo Metals Ltd</b><span class="ref mono">SO-9781 · PO-1</span></td><td>14 Oct</td><td></td><td><span class="chip ok">Dispatched</span> <span class="chip ok">Invoiced</span></td><td class="num">£1,068.00</td></tr></tbody></table>`)}
     <p><b>Create sales order</b> on Won quotes, or <b>New order</b> at the top of this tab, opens the order form. It works like a Sage sales order. Check it, then press <b>Create order</b>.</p>
     ${pic(`<div class="hform">
       <div class="hrow"><label>Customer ${n(1)}<span class="f">Example Fabrications Ltd</span></label><label>Customer PO ${n(2)}<span class="f">PO-4471</span></label></div>
@@ -94,7 +94,7 @@ function calloffs() {
     ${steps([`${n(6)} The job board and shop floor show which delivery is next (<b>Delivery 2 of 4</b>) and its due date. The shop floor shows how many are needed for the next delivery.`,
       `${n(7)} On <b>Dispatch</b>, the quantities are already filled in for <b>the next delivery only</b>; later deliveries stay at 0 until their turn. Change them if the customer wants more now.`,
       'Each delivery gets its own <b>dispatch note</b>, which lists what is still to come on the order, and its own <b>draft invoice</b> in Xero once delivered. So the customer is invoiced per call-off, for exactly what went.',
-      'The order stays on the board until the last delivery has gone, then moves to <b>Completed</b>.'])}
+      'The order stays on the board until the last delivery has gone, then moves to <b>Finished</b>.'])}
 
     <h4>When the customer changes a call-off</h4>
     ${steps(['Open the order on <b>Sales orders</b> and press <b>Amend</b>.',
@@ -107,17 +107,17 @@ function calloffs() {
 }
 
 function jobsBoard() {
-  const row = (o, mv, cust, so, due, ticks, ready) => `<tr class="${ready ? 'ready' : ''}"><td class="ord"><span class="n ${mv ? 'placed' : ''}">${o}</span><span class="mv"><span class="btn sm">⤒</span><span class="btn sm">▲</span><span class="btn sm">▼</span></span></td>
-    <td class="cust"><b>${cust}</b>${ready ? '<div class="meta"><span class="chip ok">Ready to dispatch</span></div>' : ''}</td><td class="so">${so}</td><td>${due}</td>
-    ${ticks.map(t => `<td class="p">${t === null ? '<span class="na">–</span>' : box(t)}</td>`).join('')}</tr>`;
+  const pt = (name, done) => `<span class="pt ${done ? 'done' : ''}"><span class="bx">${done ? TICK : ''}</span>${name}</span>`;
+  const row = (o, mv, cust, ref, due, pills, ready) => `<tr class="${ready ? 'ready' : ''}"><td class="ord"><span class="n ${mv ? 'placed' : ''}">${o}</span><span class="mv"><span class="btn sm">⤒</span><span class="btn sm">▲</span><span class="btn sm">▼</span></span></td>
+    <td><b>${cust}</b><span class="ref mono">${ref}</span>${ready ? '<div class="chips"><span class="chip ok">Ready to dispatch</span></div>' : ''}</td><td>${due}</td><td>${pills}</td></tr>`;
   return `<section class="hsec" id="help-jobs"><h3>4 · Jobs</h3>
-    <p>Every open order, one row each. <b>Upcoming</b> is not started, <b>Current</b> has something ticked or sent, <b>Completed</b> is all dispatched.</p>
-    ${pic(`<table class="jobs"><thead><tr><th>Order ${n(1)}</th><th>Customer</th><th>Sales order</th><th>Due ${n(2)}</th><th class="p">Laser</th><th class="p">Fold</th><th class="p">Weld</th><th class="p">P/Coat</th></tr></thead><tbody>
-      ${row(1, true, 'Sample Engineering Co', 'SO-9790', '<span class="chip soon">20 Nov</span>', [false, null, false, false])}
-      ${row(2, false, 'Example Fabrications Ltd', 'SO-9786', '<span class="chip late">17 Oct</span>', [true, true, null, true], true)}
-      ${row(3, false, 'Demo Metals Ltd', 'SO-9788', '<span class="chip">29 Oct</span>', [true, false, null, null])}</tbody></table>`)}
+    <p>Every open order, one row each. <b>Not started</b> has nothing ticked or sent, <b>In progress</b> has something ticked or sent, <b>Finished</b> is all dispatched.</p>
+    ${pic(`<table class="lines home board"><thead><tr><th>Order ${n(1)}</th><th>Customer</th><th>Due</th><th>Processes ${n(2)}</th></tr></thead><tbody>
+      ${row(1, true, 'Sample Engineering Co', 'SO-9790 · PO-114', '<span class="chip soon">20 Nov</span>', pt('Laser') + pt('Weld') + pt('P/Coat'))}
+      ${row(2, false, 'Example Fabrications Ltd', 'SO-9786 · no PO', '<span class="chip late">17 Oct</span>', pt('Laser', true) + pt('Fold', true) + pt('P/Coat', true), true)}
+      ${row(3, false, 'Demo Metals Ltd', 'SO-9788 · PO-92', '<span class="chip">29 Oct</span>', pt('Laser', true) + pt('Fold'))}</tbody></table>`)}
     ${steps([`${n(1)} <b>Bring a job forward:</b> ⤒ sends it to the top, and ▲ ▼ move it one place. The shop floor follows this order straight away. <b>Put everything back in date order</b> (under the table) undoes it all.`,
-      `${n(2)} <b>Sort:</b> click any heading to sort by it, and click again to reverse. ▲ or ▼ shows which one is in use. The arrows to move jobs only show when sorted by Order.`,
+      `${n(2)} <b>Tick a process</b> by clicking its pill when that step is finished. Click it again to undo.`,
       'A green row means every process is ticked: the job is ready to dispatch.',
       '<b>Job sheet</b> (open the job, or from the order acknowledgement): a printed copy for the job folder with the drawing. It has the parts, due dates and a box for each process, and no prices. Before printing, <b>What is this sheet for?</b> lets you set <b>To make</b> for each line, for example just this week\'s call-off for VFS or Wessex. It starts on the next delivery; <b>Everything outstanding</b> fills in the rest. This only changes the sheet, never the order. The board is still the live record, so tick processes there too.',
       'Click a row to open the whole order. From there: <b>Amend</b>, <b>Hold</b> / <b>Release</b>, <b>Cancel</b>, <b>Repeat order</b>, <b>Order acknowledgement</b> and <b>Dispatch…</b>.',
