@@ -9,7 +9,7 @@ import { floorQueue, floorStations, nextStep, partsLeft, dayNo, needed, allDone,
 const count = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 export const clockHtml = now => `<b>${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</b>${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
 
-export function renderShopFloor({ jobs, today, station, now, canFull, isFull }, h) {
+export function renderShopFloor({ jobs, today, station, now, kiosk }, h) {
   const { esc, fmt, fmtTime, TICK } = h;
   const bar = inner => `<div class="kbar">${inner}<div class="clock" id="fclock">${clockHtml(now)}</div></div>`;
 
@@ -20,7 +20,7 @@ export function renderShopFloor({ jobs, today, station, now, canFull, isFull }, 
     return `<div class="kiosk">${bar('<div><h2>Shop floor</h2><p class="sub">Tap your station</p></div>')}
       <div class="tiles">${tiles}</div>
       <div class="kfoot"><button type="button" class="btn" data-station="all">All jobs <em>${floorQueue(jobs, 'all').length}</em></button>
-        ${canFull ? `<button type="button" class="btn" data-fullscreen="1">${isFull ? 'Exit full screen' : 'Full screen'}</button>` : ''}
+        <button type="button" class="btn" data-kiosk="${kiosk ? 'off' : 'on'}" aria-pressed="${!!kiosk}">${kiosk ? 'Leave kiosk mode' : 'Kiosk mode'}</button>
         <span class="note">Updates by itself. Goes back to this screen after 2 minutes untouched.</span></div></div>`;
   }
 
