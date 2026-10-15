@@ -24,7 +24,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { view: 'board', orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
+const S = { orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -252,13 +252,13 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['quotes', 'New orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
+const TABS = [['quotes', 'New orders'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
-  $('tabs').innerHTML = TABS.filter(([k]) => office() || (k !== 'quotes' && k !== 'xero')).map(([k, t]) => {
+  $('tabs').innerHTML = TABS.filter(([k]) => office() || !['quotes', 'orders', 'xero'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -272,12 +272,13 @@ function procCell(j, p) {
   return `<button type="button" class="tick ${s.done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(title)}" aria-label="${esc(title)}">${s.done ? TICK : ''}</button>`;
 }
 function renderJobs() {
-  const money = office();
-  const head = `<div class="sec-h"><h2>${S.view === 'orders' ? 'Sales orders' : 'Jobs'}</h2>
-      ${money ? `<div class="seg" role="group" aria-label="View"><button type="button" data-view="board" aria-pressed="${S.view === 'board'}">Job board</button><button type="button" data-view="orders" aria-pressed="${S.view === 'orders'}">Sales orders</button></div>` : ''}
-      ${money && !S.form ? '<span class="right"><button class="btn pri" type="button" data-neworder>New order</button></span>' : ''}</div>
-    ${S.form ? orderForm() : ''}`;
-  $('v-jobs').innerHTML = head + (S.view === 'orders' && money ? salesOrders() : jobBoard());
+  $('v-jobs').innerHTML = `<div class="sec-h"><h2>Jobs</h2><span class="sub">What is being made, in the running order.</span></div>` + jobBoard();
+}
+/** Sales orders: the office's own tab, as Sage's Sales Order Processing. New and Amend open here. */
+function renderOrders() {
+  $('v-orders').innerHTML = `<div class="sec-h"><h2>Sales orders</h2><span class="sub">Every order, with what has been dispatched and invoiced. Click one to open it.</span>
+      ${!S.form ? '<span class="right"><button class="btn pri" type="button" data-neworder>New order</button></span>' : ''}</div>
+    ${S.form ? orderForm() : ''}${salesOrders()}`;
 }
 function jobBoard() {
   const q = S.search.toLowerCase();
@@ -309,7 +310,7 @@ function jobBoard() {
   }).join('');
   const blurb = { upcoming: 'Confirmed orders nobody has started yet.', current: 'At least one process done, or part dispatched.', completed: 'Everything dispatched.' }[S.stage];
   const empty = S.jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
-    : (money ? 'No orders yet. Turn an ordered quote into one on the Quotes tab, or press New order.' : 'No jobs yet. They appear here once the office creates them.');
+    : (money ? 'No jobs yet. Make one from New orders, or press New order on Sales orders.' : 'No jobs yet. They appear here once the office creates them.');
   return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to dispatch.` : ''}</p>
     <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
       <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
@@ -322,7 +323,7 @@ function jobBoard() {
 }
 /** The Sage-style list of sales orders, with dispatch and invoice status. Office only. */
 function salesOrders() {
-  const q = S.search.toLowerCase();
+  const q = (S.osearch || '').toLowerCase();
   const f = S.orderFilter;
   const keep = j => f === 'all' ? true : f === 'cancelled' ? j.status === 'cancelled' : f === 'held' ? j.status === 'held'
     : f === 'complete' ? stage(j) === 'completed' : stage(j) !== 'completed' && j.status !== 'cancelled';
@@ -336,7 +337,7 @@ function salesOrders() {
   const filters = [['outstanding', 'Outstanding'], ['complete', 'Dispatched'], ['held', 'On hold'], ['cancelled', 'Cancelled'], ['all', 'All']]
     .map(([k, t]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${t}</option>`).join('');
   return `<div class="sec-h" style="gap:10px"><label class="fl" style="flex-direction:row;align-items:center;gap:8px">Show <select class="f" id="ofilter">${filters}</select></label>
-      <input type="search" id="search" placeholder="Search order, customer or PO" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
+      <input type="search" id="osearch" placeholder="Search order, customer or PO" value="${esc(S.osearch || '')}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
     <div class="tbl-wrap"><table class="lines solist"><thead><tr>${sortTh('orders', 'so', 'Order')}${sortTh('orders', 'date', 'Date')}${sortTh('orders', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('orders', 'po', 'Customer order no.', 'style="text-align:left"')}${sortTh('orders', 'net', 'Net')}${sortTh('orders', 'due', 'Next due')}${sortTh('orders', 'dispatched', 'Dispatched')}${sortTh('orders', 'invoiced', 'Invoiced')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="8" class="empty">No orders here.</td></tr>`}</tbody></table></div>`;
 }
@@ -347,7 +348,7 @@ function openOrderForm(prefill = {}, amendId = null) {
   const due = prefill.due || addWorkingDays(todayIso(), 10);
   S.form = { mode: amendId ? 'amend' : 'new', jobId: amendId, so: '', customer: '', po: '', contact: '', contactEmail: '',
     address: '', notes: '', due, lines: [blankLine(due)], procs: [], xeroQuoteId: null, spQuoteId: null, quoteNo: '', from: '', ...prefill };
-  S.open = null; S.tab = 'jobs'; history.replaceState(null, '', '#jobs'); keepInputs = false; render(); window.scrollTo(0, 0);
+  S.open = null; S.tab = 'orders'; history.replaceState(null, '', '#orders'); keepInputs = false; render(); window.scrollTo(0, 0);
   if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
 }
 /** Sage-style "copy order": a new order from an old one. New number, new PO, dates moved forward. */
@@ -979,12 +980,12 @@ function restoreInputs(m) {
 function render() {
   if (!S.me) return;
   const kept = snapshotInputs();
-  if (!office() && (S.tab === 'quotes' || S.tab === 'xero')) S.tab = 'jobs';
+  if (!office() && ['quotes', 'orders', 'xero'].includes(S.tab)) S.tab = 'floor';
   renderTabs();
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+  ({ orders: renderOrders, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   renderDrawer();
   restoreInputs(kept);
 }
@@ -1005,7 +1006,6 @@ document.addEventListener('click', e => {
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; try { localStorage.setItem('clj.station', d.station); } catch { /* not kept */ } return render(); }
   if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; return render(); }
-  if (d.view) { S.view = d.view; return render(); }
   if ('neworder' in d) return openOrderForm();
   if (d.amend) return openAmend(+d.amend);
   if (d.repeat) return openRepeat(+d.repeat);
@@ -1042,7 +1042,11 @@ $('scrim').addEventListener('click', () => { S.open = null; render(); });
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) { S.open = null; render(); } } });
 document.addEventListener('input', e => {
-  if (e.target.id === 'search') { S.search = e.target.value; const pos = e.target.selectionStart; renderJobs(); const s = $('search'); s.focus(); s.setSelectionRange(pos, pos); }
+  if (e.target.id === 'search' || e.target.id === 'osearch') {
+    const id = e.target.id; S[id] = e.target.value; const pos = e.target.selectionStart;
+    if (id === 'search') renderJobs(); else renderOrders();
+    const el = $(id); el.focus(); el.setSelectionRange(pos, pos);
+  }
   const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);
   if (m && S.form) {   // keep line nets and the order total current while typing
     collectForm();

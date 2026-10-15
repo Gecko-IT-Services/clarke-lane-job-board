@@ -240,3 +240,8 @@ the numbered instructions underneath. Illustrations are built from the board's o
 customers (never real ones; the repo is public), are aria-hidden and not clickable. Office sees all
 sections (New orders, the order form, job board, shop floor, dispatch, Xero, emails, questions); the
 shop floor sees only Shop floor, Dispatch and questions. When a screen changes, update its section.
+
+## Sales orders tab (15 Oct)
+Sales orders is its own tab (office only, it shows values), second after New orders:
+**New orders → Sales orders → Jobs → Shop floor → Dispatch → Xero → Help**. New order, Make job, Amend
+and Repeat open the order form there. Jobs is the job board only. Each tab has its own search box.

@@ -14,7 +14,8 @@ const steps = items => `<ol class="hsteps">${items.map(t => `<li>${t}</li>`).joi
 function flow(office) {
   const all = [
     ['New orders', 'Levi marks a quote Ordered', 'M4 6h16v12H4z M4 6l8 7 8-7', 'quotes'],
-    ['Jobs', 'The order becomes a job', 'M5 4h14v16H5z M8 9h8 M8 13h8 M8 17h5', 'jobs'],
+    ['Sales orders', 'The order is checked and saved', 'M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4', 'form'],
+    ['Jobs', 'It goes on the job board', 'M4 5h16v14H4z M4 10h16 M9 10v9', 'jobs'],
     ['Shop floor', 'Each process is ticked off', 'M5 12.5l4.5 4.5L19 7.5', 'floor'],
     ['Dispatch', 'Delivery note, emailed, delivered', 'M3 7h11v9H3z M14 10h4l3 3v3h-7z M7 19a1.5 1.5 0 1 0 0-.01 M17 19a1.5 1.5 0 1 0 0-.01', 'dispatch'],
     ['Xero', 'Draft invoice for Keith', 'M6 3h9l3 3v15H6z M9 10h6 M9 14h6 M9 18h3', 'xero'],
@@ -35,13 +36,17 @@ function newOrders() {
     ${steps([`${n(1)} <b>Make job</b> opens the order form with the customer, parts, quantities and prices copied from the quote. The processes it can tell from the quote (folds, welds, inserts, paint…) are already ticked.`,
       `${n(2)} <b>Not a job</b> stops a quote being offered here, for example one already finished some other way. The quote itself is not changed, and <b>Put back</b> undoes it.`,
       'Not there yet? Press <b>Refresh</b>, and check the quote is marked Ordered in the calculator.',
-      'An order that came by phone or email with no quote: <b>Jobs › New order</b>.'])}
+      'An order that came by phone or email with no quote: <b>Sales orders › New order</b>.'])}
   </section>`;
 }
 
 function orderForm() {
-  return `<section class="hsec" id="help-form"><h3>2 · Checking the order</h3>
-    <p>The form works like a Sage sales order. Check it, then press <b>Create order</b>.</p>
+  return `<section class="hsec" id="help-form"><h3>2 · Sales orders</h3>
+    <p>The office's list of every order, like Sage's Sales Order Processing: value, customer PO, next due date, and whether it has been dispatched and invoiced. Click an order to open it. Use <b>Show</b> to see outstanding, dispatched, on hold, cancelled or all orders, and click any heading to sort.</p>
+    ${pic(`<table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th>Net</th><th>Next due</th><th>Dispatched</th><th>Invoiced</th></tr></thead><tbody>
+      <tr><td class="mono">SO-9790</td><td>15 Oct</td><td style="text-align:left"><b>Sample Engineering Co</b></td><td>£386.50</td><td><span class="chip soon">20 Nov</span></td><td><span class="chip">Not dispatched</span></td><td><span class="chip">Not invoiced</span></td></tr>
+      <tr><td class="mono">SO-9781</td><td>14 Oct</td><td style="text-align:left"><b>Demo Metals Ltd</b></td><td>£1,068.00</td><td></td><td><span class="chip ok">Dispatched</span></td><td><span class="chip ok">Invoiced</span></td></tr></tbody></table>`)}
+    <p><b>Make job</b> on New orders, or <b>New order</b> at the top of this tab, opens the order form. It works like a Sage sales order. Check it, then press <b>Create order</b>.</p>
     ${pic(`<div class="hform">
       <div class="hrow"><label>Customer ${n(1)}<span class="f">Example Fabrications Ltd</span></label><label>Customer PO ${n(2)}<span class="f">PO-4471</span></label></div>
       <table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Qty</th><th>Price</th><th>Due ${n(3)}</th></tr></thead><tbody>
@@ -62,7 +67,7 @@ function jobsBoard() {
   const row = (o, mv, cust, so, due, ticks, ready) => `<tr class="${ready ? 'ready' : ''}"><td class="ord"><span class="n ${mv ? 'placed' : ''}">${o}</span><span class="mv"><span class="btn sm">⤒</span><span class="btn sm">▲</span><span class="btn sm">▼</span></span></td>
     <td class="cust"><b>${cust}</b>${ready ? '<div class="meta"><span class="chip ok">Ready to dispatch</span></div>' : ''}</td><td class="so">${so}</td><td>${due}</td>
     ${ticks.map(t => `<td class="p">${t === null ? '<span class="na">–</span>' : box(t)}</td>`).join('')}</tr>`;
-  return `<section class="hsec" id="help-jobs"><h3>3 · The job board</h3>
+  return `<section class="hsec" id="help-jobs"><h3>3 · Jobs</h3>
     <p>Every open order, one row each. <b>Upcoming</b> is not started, <b>Current</b> has something ticked or sent, <b>Completed</b> is all dispatched.</p>
     ${pic(`<table class="jobs"><thead><tr><th>Order ${n(1)}</th><th>Customer</th><th>Sales order</th><th>Due ${n(2)}</th><th class="p">Laser</th><th class="p">Fold</th><th class="p">Weld</th><th class="p">P/Coat</th></tr></thead><tbody>
       ${row(1, true, 'Sample Engineering Co', 'SO-9790', '<span class="chip soon">20 Nov</span>', [false, null, false, false])}
@@ -72,7 +77,7 @@ function jobsBoard() {
       `${n(2)} <b>Sort:</b> click any heading to sort by it, and click again to reverse. ▲ or ▼ shows which one is in use. The arrows to move jobs only show when sorted by Order.`,
       'A green row means every process is ticked: the job is ready to dispatch.',
       'Click a row to open the whole order. From there: <b>Amend</b>, <b>Hold</b> / <b>Release</b>, <b>Cancel</b>, <b>Repeat order</b>, <b>Order acknowledgement</b> and <b>Dispatch…</b>.',
-      '<b>Sales orders</b> (top of the Jobs tab) is the Sage-style list of every order, with dispatched and invoiced status.'])}
+      'Prices and values are on <b>Sales orders</b>; the shop floor never sees them.'])}
   </section>`;
 }
 
