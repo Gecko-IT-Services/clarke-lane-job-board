@@ -695,7 +695,7 @@ function renderMapTab() {
       html: `<button class="btn link" type="button" data-open="${j.id}">${esc(j.so)}</button> ${esc(j.customer)} · <span style="color:${KINDS[k].colour}">${KINDS[k].label.toLowerCase()}</span> · due ${fmt(nextDue(j))}` };
     (pc ? items : missing).push({ ...it, j });
   }
-  $('mapctl').innerHTML = Object.entries(KINDS).map(([k, x]) => `<label class="mk"><input type="checkbox" data-mapkind="${k}" ${S.mapShow[k] ? 'checked' : ''}><span class="dot" style="background:${x.colour}"></span>${x.label} <span class="note">${counts[k] || 0}</span></label>`).join('')
+  $('mapctl').innerHTML = Object.entries(KINDS).map(([k, x]) => `<label class="mk kind" style="--k:${x.colour}"><input type="checkbox" data-mapkind="${k}" ${S.mapShow[k] ? 'checked' : ''}>${x.label} <span class="cnt">${counts[k] || 0}</span></label>`).join('')
     + `<label class="mk">Nearby means within <select class="f" id="mapmiles">${[5, 10, 15, 25].map(m => `<option ${S.mapMiles === m ? 'selected' : ''}>${m}</option>`).join('')}</select> miles</label>`;
   const sig = JSON.stringify([items.map(i => [i.postcode, i.kind, i.html]), S.mapMiles]);
   const note = list => `${list.length ? `<div class="panel"><h3>Not on the map <span class="note">${list.length}</span></h3><p class="note">No postcode found for these. Add a delivery address on the order (Amend) or in Customers.</p>

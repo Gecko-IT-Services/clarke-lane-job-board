@@ -270,6 +270,12 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 #mapbox{height:min(62vh,600px);width:100%}
 #v-map .mapctl{display:flex;gap:8px 16px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 #v-map .mk{display:inline-flex;gap:6px;align-items:center;font-weight:600;font-size:14px}
+#v-map .mk.kind{border:2px solid var(--k);border-radius:999px;padding:5px 12px 5px 8px;cursor:pointer;color:var(--k);background:var(--surface)}
+#v-map .mk.kind input{accent-color:var(--k);width:18px;height:18px;margin:0}
+#v-map .mk.kind:has(input:checked){background:var(--k);color:#fff}
+#v-map .mk.kind:has(input:checked) input{accent-color:#fff}
+#v-map .mk.kind .cnt{font-family:var(--mono);font-size:12px;opacity:.85}
+#v-map .mk.kind:focus-within{outline:2px solid var(--ink);outline-offset:2px}
 #v-map .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
 .mpop ul{margin:4px 0;padding-left:16px} .mpop li{margin:2px 0} .mpop .near{margin-top:6px;font-weight:700;font-size:12px}
 .mpop .btn.link{padding:0;font-weight:700}
