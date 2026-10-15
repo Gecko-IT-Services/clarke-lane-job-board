@@ -14,7 +14,7 @@ import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
-import { drawMap, KINDS } from './map.js';
+import { drawMap, focusStop, fitAll, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
 import { dashboard, dispatchLists } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
@@ -598,8 +598,8 @@ function jobPostcode(j) {
 function renderMapTab() {
   const el = $('v-map');
   if (!el.dataset.ready) {
-    el.innerHTML = `<div class="sec-h"><h2>Map</h2><span class="sub">Where the open orders are going. Click a pin to see the jobs there and what else is nearby, so a second delivery can go on the same run.</span></div>
-      <div class="mapctl" id="mapctl"></div><div class="panel" style="padding:0;overflow:hidden"><div id="mapbox"></div></div><div id="mapnote"></div>`;
+    el.innerHTML = `<div class="sec-h"><h2>Map</h2><span class="sub">Where the open orders are going. Pick a stop to see the jobs there and what else is nearby, so a second delivery can go on the same run.</span></div>
+      <div class="mapctl" id="mapctl"></div><div class="mapgrid"><div class="mapframe"><div id="mapbox"></div></div><aside class="stops" id="mapstops"><p class="note">Placing the postcodes…</p></aside></div><div id="mapnote"></div>`;
     el.dataset.ready = '1';
   }
   if (S.xero && office() && !S.xc && !S.xcErr) loadXeroContacts();
@@ -614,8 +614,8 @@ function renderMapTab() {
     counts[k] = (counts[k] || 0) + 1;
     if (!S.mapShow[k]) continue;
     const j = job(id), pc = jobPostcode(j);
-    const it = { postcode: pc, kind: k, short: esc(j.so),
-      html: `<button class="btn link" type="button" data-open="${j.id}">${esc(j.so)}</button> ${esc(j.customer)} · <span style="color:${KINDS[k].colour}">${KINDS[k].label.toLowerCase()}</span> · due ${fmt(nextDue(j))}` };
+    const it = { postcode: pc, kind: k, short: esc(j.so), due: nextDue(j),
+      html: `<button class="btn link mono" type="button" data-open="${j.id}">${esc(j.so)}</button><span class="mc">${esc(j.customer)}</span><span class="mk-chip" style="--k:${KINDS[k].colour}">${KINDS[k].label}</span><span class="note">due ${fmt(nextDue(j))}</span>` };
     (pc ? items : missing).push({ ...it, j });
   }
   $('mapctl').innerHTML = Object.entries(KINDS).map(([k, x]) => `<label class="mk kind" style="--k:${x.colour}"><input type="checkbox" data-mapkind="${k}" ${S.mapShow[k] ? 'checked' : ''}>${x.label} <span class="cnt">${counts[k] || 0}</span></label>`).join('')
@@ -623,13 +623,20 @@ function renderMapTab() {
   const sig = JSON.stringify([items.map(i => [i.postcode, i.kind, i.html]), S.mapMiles]);
   const note = list => `${list.length ? `<div class="panel"><h3>Not on the map <span class="note">${list.length}</span></h3><p class="note">No postcode found for these. Add a delivery address on the order (Amend) or in Customers.</p>
     <div style="display:flex;gap:6px;flex-wrap:wrap">${list.map(i => `<button class="btn sm" type="button" data-open="${i.j.id}">${esc(i.j.so)} · ${esc(i.j.customer)}</button>`).join('')}</div></div>` : ''}
-    <p class="note">Map © OpenStreetMap contributors. Postcodes are placed using postcodes.io (only the postcode is sent). The van's live position can be added later.</p>`;
+    <p class="note">Map © OpenStreetMap contributors. Postcodes are placed using postcodes.io (only the postcode is sent). Distances are straight-line. The van's live position can be added later.</p>`;
+  const stopList = stops => `<div class="sh"><h3>Stops <span class="note">${stops.length}</span></h3>${stops.length > 1 ? '<button class="btn sm" type="button" data-mapfit>Show all</button>' : ''}</div>
+    ${stops.length ? `<ol>${stops.map(s => {
+      const custs = [...new Set(s.items.map(i => i.j.customer))];
+      return `<li><button type="button" data-mapstop="${esc(s.key)}" aria-current="false"><span class="mpin" style="--k:${KINDS[s.kind].colour}">${s.items.length}</span>
+        <span class="sb"><b class="mono">${esc(s.key)}</b><span class="sc">${esc(custs.join(', '))}</span>
+        <span class="note">${s.items.map(i => esc(i.j.so)).join(', ')} · due ${fmt(s.items[0].due)}${s.near.length ? ` · <b class="nb">${s.near.length} nearby</b>` : ''}</span></span></button></li>`;
+    }).join('')}</ol>` : '<p class="note">Nothing to show. Switch on more kinds of job above.</p>'}`;
   if (sig === mapSig) return;
   mapSig = sig;
   $('mapnote').innerHTML = note(missing);
   drawMap($('mapbox'), items, S.mapMiles, esc)
-    .then(r => { if (r.missing.length) $('mapnote').innerHTML = note([...missing, ...r.missing]); })
-    .catch(e => { mapSig = ''; $('mapnote').innerHTML = `<div class="err">${esc(e.message)}</div>`; });
+    .then(r => { $('mapstops').innerHTML = stopList(r.stops); if (r.missing.length) $('mapnote').innerHTML = note([...missing, ...r.missing]); })
+    .catch(e => { mapSig = ''; $('mapstops').innerHTML = ''; $('mapnote').innerHTML = `<div class="err">${esc(e.message)}</div>`; });
 }
 
 /* ---------- Xero ---------- */
@@ -1195,6 +1202,8 @@ document.addEventListener('click', e => {
   if (d.station) { S.station = d.station; render(); window.scrollTo(0, 0); return; }
   if (d.stations) { S.station = null; render(); window.scrollTo(0, 0); return; }
   if (d.kiosk) return setKiosk(d.kiosk === 'on');
+  if (d.mapstop) return focusStop(d.mapstop);
+  if ('mapfit' in d) return fitAll();
   if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; return render(); }
   if ('neworder' in d) return openOrderForm();
   if (d.amend) return openAmend(+d.amend);

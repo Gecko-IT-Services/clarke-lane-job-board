@@ -47,9 +47,10 @@ export const KINDS = {
 };
 
 /**
- * el: the map's element. items: [{ postcode, kind, html }] (html = one line for the popup, already escaped).
- * miles: how near counts as "on the way".
+ * el: the map's element. items: [{ postcode, kind, html, j }] (html = one line for the popup, already escaped).
+ * miles: how near counts as "on the way". Returns the stops (most urgent first) for the list beside the map.
  */
+let markers = new Map(), ring;
 export async function drawMap(el, items, miles, esc) {
   await loadLeaflet();
   const L = window.L;
@@ -63,18 +64,38 @@ export async function drawMap(el, items, miles, esc) {
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
     layer = L.layerGroup().addTo(map);
+    // The "nearby" ring follows whichever pin is open, and the list beside the map marks the same stop.
+    map.on('popupopen', e => { const s = e.popup._source.stop; ring = L.circle([s.lat, s.lng], { radius: s.miles * 1609.34, color: s.colour, weight: 1.5, dashArray: '5 5', fillOpacity: 0.06, interactive: false }).addTo(map); mark(s.key); });
+    map.on('popupclose', () => { ring?.remove(); ring = null; mark(''); });
   }
-  layer.clearLayers();
+  layer.clearLayers(); markers = new Map();
   for (const s of stops) {
-    const top = s.items.slice().sort((a, b) => KINDS[a.kind].rank - KINDS[b.kind].rank)[0];
-    const k = KINDS[top.kind];
-    const around = near[s.key].map(n => `<li>${esc(n.key)} · ${n.miles.toFixed(1)} mi: ${byPc.get(n.key).items.map(i => i.short).join(', ')}</li>`).join('');
-    L.circleMarker([s.lat, s.lng], { radius: 8 + Math.min(6, s.items.length * 2), color: '#fff', weight: 2, fillColor: k.colour, fillOpacity: 0.95 })
-      .bindPopup(`<div class="mpop"><b>${esc(s.key)}</b><ul>${s.items.map(i => `<li>${i.html}</li>`).join('')}</ul>
-        ${around ? `<div class="near">Within ${miles} miles:</div><ul>${around}</ul>` : `<div class="near">Nothing else within ${miles} miles.</div>`}</div>`, { maxWidth: 320 })
+    s.items.sort((a, b) => KINDS[a.kind].rank - KINDS[b.kind].rank || String(a.due).localeCompare(String(b.due)));
+    s.kind = s.items[0].kind; s.near = near[s.key];
+    const k = KINDS[s.kind];
+    const around = s.near.map(n => `<li><button class="btn link" type="button" data-mapstop="${esc(n.key)}">${esc(n.key)}</button> <span class="mi">${n.miles.toFixed(1)} mi</span> ${byPc.get(n.key).items.map(i => i.short).join(', ')}</li>`).join('');
+    const m = L.marker([s.lat, s.lng], { title: s.key, icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12],
+      html: `<span class="mpin" style="--k:${k.colour}">${s.items.length}</span>` }) })
+      .bindPopup(`<div class="mpop"><div class="mh"><b>${esc(s.key)}</b><span>${s.items.length} ${s.items.length === 1 ? 'job' : 'jobs'}</span></div><ul class="mj">${s.items.map(i => `<li>${i.html}</li>`).join('')}</ul>
+        ${around ? `<div class="near">Within ${miles} miles</div><ul class="mn">${around}</ul>` : `<div class="near">Nothing else within ${miles} miles</div>`}</div>`, { maxWidth: 340, minWidth: 260 })
       .addTo(layer);
+    m.stop = { key: s.key, lat: s.lat, lng: s.lng, miles, colour: k.colour };
+    markers.set(s.key, m);
   }
-  if (stops.length) map.fitBounds(L.latLngBounds(stops.map(s => [s.lat, s.lng])).pad(0.2), { maxZoom: 12 });
+  fitAll();
   setTimeout(() => map.invalidateSize(), 50);
-  return { placed: new Set(byPc.keys()), missing: items.filter(i => !places.get(i.postcode)) };
+  stops.sort((a, b) => KINDS[a.kind].rank - KINDS[b.kind].rank || String(a.items[0].due).localeCompare(String(b.items[0].due)));
+  return { stops, missing: items.filter(i => !places.get(i.postcode)) };
+}
+function mark(key) { document.querySelectorAll('#mapstops [data-mapstop]').forEach(b => b.setAttribute('aria-current', b.dataset.mapstop === key)); }
+/** Zoom to one stop and open its popup (from the list beside the map, or a "nearby" link). */
+export function focusStop(key) {
+  const m = markers.get(key); if (!m) return;
+  map.getContainer().scrollIntoView({ block: 'nearest', behavior: 'smooth' });   // phones: the list is under the map
+  map.setView(m.getLatLng(), Math.max(map.getZoom(), 11)); m.openPopup();
+}
+export function fitAll() {
+  if (!map || !markers.size) return;
+  map.closePopup();
+  map.fitBounds(window.L.latLngBounds([...markers.values()].map(m => m.getLatLng())).pad(0.2), { maxZoom: 12 });
 }
