@@ -252,12 +252,15 @@ async function deleteOrder(id) {
 
 /* ---------- tabs ---------- */
 const TABS = [['quotes', 'New orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero']];   // left to right, the order work flows
+/** Open jobs with every process ticked and something still to send, in the running order. */
+const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
   $('tabs').innerHTML = TABS.filter(([k]) => office() || (k !== 'quotes' && k !== 'xero')).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
-    return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${b ? `<span class="badge">${b}</span>` : ''}</a>`;
+    const go = k === 'dispatch' ? readyToDispatch().length : 0;
+    return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
   }).join('');
 }
 
@@ -297,7 +300,7 @@ function jobBoard() {
     const dueCell = stage(j) === 'completed' ? `<span class="chip">sent ${fmt(lastDespatch(j))}</span>` : dueChip(nextDue(j));
     const ord = done ? '' : `<td class="ord"><span class="n ${j.priority != null ? 'placed' : ''}" title="${j.priority != null ? 'Brought forward' : 'In date order'}">${rank.get(j.id) ?? ''}</span>${canMove ? `<span class="mv">
         <button type="button" class="btn sm" data-move="top" data-job="${j.id}" title="Bring to the top" aria-label="Bring ${esc(j.so)} to the top">⤒</button><button type="button" class="btn sm" data-move="up" data-job="${j.id}" title="Up one" aria-label="Move ${esc(j.so)} up one" ${list[0] === j ? 'disabled' : ''}>▲</button><button type="button" class="btn sm" data-move="down" data-job="${j.id}" title="Down one" aria-label="Move ${esc(j.so)} down one" ${list[list.length - 1] === j ? 'disabled' : ''}>▼</button></span>` : ''}</td>`;
-    return `<tr data-open="${j.id}">${ord}
+    return `<tr data-open="${j.id}" class="${!done && allDone(j) && j.status === 'open' ? 'ready' : ''}">${ord}
       <td class="cust"><b>${esc(j.customer)}</b><div class="meta">${statusChips(j)}</div><div class="pin">${pin}</div></td>
       <td class="so">${esc(j.so)}</td><td class="po">${esc(j.po) || '—'}</td><td class="due">${dueCell}</td>
       ${PROCESSES.map(p => `<td class="p">${procCell(j, p)}</td>`).join('')}
@@ -770,6 +773,12 @@ function renderDespatch() {
   const undelivered = all.filter(([, d]) => !d.deliveredOn && !d.xero);
   $('v-dispatch').innerHTML = `
     <div class="sec-h"><h2>Dispatch</h2><span class="sub">Send all of a job or part of it. Each dispatch gets its own note, and only what went out is invoiced.</span></div>
+    ${(() => { const r = readyToDispatch().filter(x => x.id !== S.desp); return r.length ? `<div class="panel ready"><h3>Ready to dispatch <span class="note">${r.length}</span></h3>
+      <p class="note">Every process is ticked on these jobs. Check the parts, then press Dispatch to make the delivery note.</p>
+      <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Order</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer PO</th><th>Due</th><th style="text-align:left">To send</th><th></th></tr></thead><tbody>
+      ${r.map(x => `<tr><td class="mono" style="text-align:left">${esc(x.so)}</td><td style="text-align:left"><b>${esc(x.customer)}</b></td><td style="text-align:left">${esc(x.po) || '—'}</td>
+        <td>${dueChip(nextDue(x))}${deliveryLabel(x) ? ` <span class="note">${deliveryLabel(x)}</span>` : ''}</td><td style="text-align:left">${floorParts(x)}</td>
+        <td><button class="btn sm pri" type="button" data-desp="${x.id}">Dispatch</button></td></tr>`).join('')}</tbody></table></div></div>` : ''; })()}
     <div class="panel"><h3>Dispatch goods</h3>
       <label class="fl">Job
       <select class="f" id="dsel"><option value="">Choose a job…</option>${open.map(x => `<option value="${x.id}" ${x.id === S.desp ? 'selected' : ''}>${esc(x.so)} · ${esc(x.customer)}${x.po ? ' · PO ' + esc(x.po) : ''}${allDone(x) ? ' · ready' : ''}</option>`).join('')}</select></label>

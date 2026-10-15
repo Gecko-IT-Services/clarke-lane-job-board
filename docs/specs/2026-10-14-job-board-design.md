@@ -226,3 +226,9 @@ fold into labelled buttons under each job.
   above one due sooner shows "Brought forward" on the shop floor. The Order number is the job's
   place on the shop floor, across Upcoming and Current together. A new job, even one due sooner,
   goes below the jobs given a place (that is what a running order means).
+
+## Ready to dispatch (15 Oct)
+When every process on an open job is ticked: the shop floor row and the job board row turn green with
+"Ready to dispatch"; the Dispatch tab shows a green "N ready" badge (everyone, floor included); and
+the Dispatch tab opens with a **Ready to dispatch** panel (running order: order, customer, PO, due,
+parts to send, Dispatch button that opens the dispatch form for that job). Held jobs are not listed.
