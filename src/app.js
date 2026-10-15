@@ -174,8 +174,7 @@ const onBoardStage = j => ['upcoming', 'current'].includes(stage(j));
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
 
 /* ---------- sortable column headings (office tables). Each computer remembers its own choice. ---------- */
-const SORT_DEFAULT = {
-  dn: { col: 'date', dir: -1 } };
+const SORT_DEFAULT = { dn: { col: 'date', dir: -1 } };
 let SORT = {};
 try { SORT = JSON.parse(localStorage.getItem('clj.sort') || '{}') || {}; } catch { /* date order */ }
 const sortOf = t => SORT[t] || SORT_DEFAULT[t];
@@ -491,7 +490,7 @@ async function submitOrder() {
       const who = n.customer.trim();
       S.form = null; keepInputs = false; await reload();
       showDoc('soa', j.id);
-      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Upcoming. Press Job sheet to print one for the folder.`);
+      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Not started. Press Job sheet to print one for the folder.`);
     }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
