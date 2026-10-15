@@ -257,3 +257,5 @@ board), "not needed" processes listed, and blank lines for drawing no./revision,
 No prices, so the shop floor can print it too. From the job (drawer) and from the order
 acknowledgement's toolbar; the "created" message points to it. No email option (internal only).
 Expected to fall away once the board is used on its own.
+- (15 Oct) The first tab is **Won quotes** (was "New orders"): quotes Levi has marked Ordered, waiting
+  to become sales orders (plus the one-off Xero import). Phone orders start at Sales orders › New order.

@@ -13,7 +13,7 @@ const steps = items => `<ol class="hsteps">${items.map(t => `<li>${t}</li>`).joi
 /** The whole journey of an order, left to right like the tabs. */
 function flow(office) {
   const all = [
-    ['New orders', 'Levi marks a quote Ordered', 'M4 6h16v12H4z M4 6l8 7 8-7', 'quotes'],
+    ['Won quotes', 'Quotes Levi has marked Ordered', 'M4 6h16v12H4z M4 6l8 7 8-7', 'quotes'],
     ['Sales orders', 'The order is checked and saved', 'M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4', 'form'],
     ['Jobs', 'It goes on the job board', 'M4 5h16v14H4z M4 10h16 M9 10v9', 'jobs'],
     ['Shop floor', 'Each process is ticked off', 'M5 12.5l4.5 4.5L19 7.5', 'floor'],
@@ -26,8 +26,8 @@ function flow(office) {
 }
 
 function newOrders() {
-  return `<section class="hsec" id="help-quotes"><h3>1 · New orders</h3>
-    <p>Levi prices the job in his quote calculator as normal. When the customer orders, he presses <b>Mark as Ordered</b> there. Within a minute the quote appears on <b>New orders</b>, newest first.</p>
+  return `<section class="hsec" id="help-quotes"><h3>1 · Won quotes</h3>
+    <p>Levi prices the job in his quote calculator as normal. When the customer orders, he presses <b>Mark as Ordered</b> there. Within a minute the quote appears on <b>Won quotes</b>, newest first.</p>
     ${pic(`<table class="lines inbox"><thead><tr><th>Date</th><th>Number</th><th>From</th><th style="text-align:left">Customer</th><th>Net</th><th></th></tr></thead><tbody>
       <tr><td>15 Oct 2026</td><td class="mono">Q-0312</td><td>Quote</td><td style="text-align:left"><b>Example Fabrications Ltd</b></td><td class="num">£1,240.00</td>
         <td><div class="acts"><span class="btn sm pri">Create sales order</span>${n(1)}<span class="btn sm">Not a job</span>${n(2)}</div></td></tr>
@@ -46,7 +46,7 @@ function orderForm() {
     ${pic(`<table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th>Net</th><th>Next due</th><th>Dispatched</th><th>Invoiced</th></tr></thead><tbody>
       <tr><td class="mono">SO-9790</td><td>15 Oct</td><td style="text-align:left"><b>Sample Engineering Co</b></td><td>£386.50</td><td><span class="chip soon">20 Nov</span></td><td><span class="chip">Not dispatched</span></td><td><span class="chip">Not invoiced</span></td></tr>
       <tr><td class="mono">SO-9781</td><td>14 Oct</td><td style="text-align:left"><b>Demo Metals Ltd</b></td><td>£1,068.00</td><td></td><td><span class="chip ok">Dispatched</span></td><td><span class="chip ok">Invoiced</span></td></tr></tbody></table>`)}
-    <p><b>Create sales order</b> on New orders, or <b>New order</b> at the top of this tab, opens the order form. It works like a Sage sales order. Check it, then press <b>Create order</b>.</p>
+    <p><b>Create sales order</b> on Won quotes, or <b>New order</b> at the top of this tab, opens the order form. It works like a Sage sales order. Check it, then press <b>Create order</b>.</p>
     ${pic(`<div class="hform">
       <div class="hrow"><label>Customer ${n(1)}<span class="f">Example Fabrications Ltd</span></label><label>Customer PO ${n(2)}<span class="f">PO-4471</span></label></div>
       <table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Qty</th><th>Price</th><th>Due ${n(3)}</th></tr></thead><tbody>
@@ -123,7 +123,7 @@ function xero() {
     ${steps([`${n(1)} The board matches each customer to their Xero contact. If it cannot be sure, pick the contact once and it is remembered.`,
       `${n(2)} <b>Create draft invoices</b> makes one <b>draft</b> invoice per delivery note in Xero, for exactly what was sent, with the SO, PO and DN numbers on it.`,
       'Keith checks and approves them in Xero as usual. The board never approves, sends or deletes anything in Xero.',
-      '<b>Changeover day:</b> on the Xero tab, press <b>Import open sales orders</b> once. It brings Xero\'s open sales orders onto New orders. After that, orders are only raised on the board.'])}
+      '<b>Changeover day:</b> on the Xero tab, press <b>Import open sales orders</b> once. It brings Xero\'s open sales orders onto Won quotes. After that, orders are only raised on the board.'])}
   </section>`;
 }
 
@@ -144,7 +144,7 @@ function faq(office) {
     ['It says I am not on the staff list.', 'Ask Gecko IT to add your Microsoft 365 address.'],
   ];
   if (office) q.push(
-    ['A quote I marked Ordered is not on New orders.', 'Press Refresh. If it is still missing, check the quote says Ordered in the calculator.'],
+    ['A quote I marked Ordered is not on Won quotes.', 'Press Refresh. If it is still missing, check the quote says Ordered in the calculator.'],
     ['I made an order by mistake.', 'Open it and press Delete (made by mistake). That only works while nothing has been dispatched; after that, use Cancel.'],
     ['The customer wants to change the order.', 'Open it and press Amend: change quantities, prices or dates, or add lines. Lines already dispatched cannot go below what was sent.'],
     ['Hold an order?', 'Open it and press Hold. A held order cannot be dispatched until you press Release.'],

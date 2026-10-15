@@ -252,7 +252,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['quotes', 'New orders'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
+const TABS = [['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
@@ -310,7 +310,7 @@ function jobBoard() {
   }).join('');
   const blurb = { upcoming: 'Confirmed orders nobody has started yet.', current: 'At least one process done, or part dispatched.', completed: 'Everything dispatched.' }[S.stage];
   const empty = S.jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
-    : (money ? 'No jobs yet. Make one from New orders, or press New order on Sales orders.' : 'No jobs yet. They appear here once the office creates them.');
+    : (money ? 'No jobs yet. Make one from Won quotes, or press New order on Sales orders.' : 'No jobs yet. They appear here once the office creates them.');
   return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to dispatch.` : ''}</p>
     <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
       <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
@@ -500,7 +500,7 @@ async function loadXeroStatus() {
   render();
 }
 /** The one-off changeover import: reads Xero's open sales orders and keeps them on the board
- *  (xero_orders), so New orders offers them until each becomes a sales order or is marked not a job.
+ *  (xero_orders), so Won quotes offers them until each becomes a sales order or is marked not a job.
  *  Nothing reads Xero's sales orders by itself; running it again only adds new ones. */
 const openSo = q => /^SO-?\d+$/i.test(q.number) && !['DECLINED', 'DELETED', 'INVOICED'].includes(q.status);
 let xeroReading = false;
@@ -512,7 +512,7 @@ async function importFromXero() {
     const fresh = S.xeroRead.quotes.filter(q => openSo(q) && !onBoard(q));
     const added = await data.importXeroOrders(fresh);
     await reload();
-    toast(added ? `${added} sales order${added === 1 ? '' : 's'} brought in from Xero. They are on New orders.` : 'Nothing new: every open sales order in Xero is already here.');
+    toast(added ? `${added} sales order${added === 1 ? '' : 's'} brought in from Xero. They are on Won quotes.` : 'Nothing new: every open sales order in Xero is already here.');
   } catch (e) { S.xeroErr = e.message; }
   xeroReading = false; render();
 }
@@ -531,7 +531,7 @@ async function dismissXero(id, dismiss) {
   q.dismissed = dismiss; render();
   try {
     await data.dismissXeroOrder(id, dismiss, S.me?.email);
-    toast(dismiss ? `${q.number} marked not a job. Xero is unchanged.` : `${q.number} is back on New orders.`, dismiss ? () => dismissXero(id, false) : null);
+    toast(dismiss ? `${q.number} marked not a job. Xero is unchanged.` : `${q.number} is back on Won quotes.`, dismiss ? () => dismissXero(id, false) : null);
   } catch (e) { q.dismissed = !dismiss; render(); toast(e.message, null, true); }
 }
 async function xeroAction(route) {
@@ -556,8 +556,8 @@ function renderXero() {
        <p class="note">You will be sent to Xero to sign in. Pick Clarke Lane Engineering when it asks which organisation.</p>`;
   const waiting = xeroWaiting();
   const importPanel = !x ? '' : `<div class="panel"><h3>Changeover: bring in Xero's sales orders</h3>
-      <p>Do this once, on the day the board takes over from raising sales orders in Xero. It copies every open sales order (SO-…) from Xero onto New orders, ready to become sales orders. After that the board is the only place orders are raised, and Xero is not read for orders again.</p>
-      ${last ? `<p><b>Imported ${imported.length} sales order${imported.length === 1 ? '' : 's'}</b>, last on ${fmtLong(last.importedAt)} by ${esc(last.importedBy)}. ${waiting.length} still waiting on New orders.</p>` : '<p class="note">Not imported yet.</p>'}
+      <p>Do this once, on the day the board takes over from raising sales orders in Xero. It copies every open sales order (SO-…) from Xero onto Won quotes, ready to become sales orders. After that the board is the only place orders are raised, and Xero is not read for orders again.</p>
+      ${last ? `<p><b>Imported ${imported.length} sales order${imported.length === 1 ? '' : 's'}</b>, last on ${fmtLong(last.importedAt)} by ${esc(last.importedBy)}. ${waiting.length} still waiting on Won quotes.</p>` : '<p class="note">Not imported yet.</p>'}
       <div class="actions"><button class="btn ${last ? '' : 'pri'}" type="button" data-xero="import" ${busy}>${xeroReading ? 'Reading Xero…' : last ? 'Import again (adds only new ones)' : 'Import open sales orders'}</button></div>
       ${r ? `<p class="note">The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none'}</b>, so the next order made on the board will be <b>SO-${r.counterNext ?? '…'}</b>. The board always keeps its numbers past Xero's.</p>` : ''}</div>`;
   $('v-xero').innerHTML = `<div class="sec-h"><h2>Xero</h2><span class="sub">Clarke Lane's Xero, through the board's own connection.</span></div>
@@ -657,12 +657,12 @@ function renderQuotes() {
   if (!S.quotesRaw && !S.quotesErr) reading.push('the quote calculator');
   const errs = [S.quotesErr ? `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(S.quotesErr)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>` : '',
   ].join('');
-  $('v-quotes').innerHTML = `<div class="sec-h"><h2>New orders</h2><span class="sub">Quotes Levi has marked Ordered in the quote calculator, newest first, and any sales orders brought in from Xero at changeover.</span>
+  $('v-quotes').innerHTML = `<div class="sec-h"><h2>Won quotes</h2><span class="sub">Quotes Levi has marked Ordered in the quote calculator, newest first, and any sales orders brought in from Xero at changeover.</span>
       <span class="right"><button class="btn sm" type="button" data-reloadquotes>Refresh</button></span></div>
     ${errs}${reading.length ? `<p class="note">Reading ${reading.join(' and ')}…</p>` : ''}
-    <div class="group-h">Waiting to go on the board <span class="note">${waiting.length}</span></div>
+    <div class="group-h">Waiting to become sales orders <span class="note">${waiting.length}</span></div>
     ${inboxTable(waiting, reading.length ? 'Reading…' : 'Nothing waiting. Quotes Levi marks Ordered in the quote calculator appear here.')}
-    ${made.length ? `<details class="gone"><summary class="group-h">Already on the board <span class="note">latest ${made.length}</span></summary>${inboxTable(made, '')}</details>` : ''}
+    ${made.length ? `<details class="gone"><summary class="group-h">Already sales orders <span class="note">latest ${made.length}</span></summary>${inboxTable(made, '')}</details>` : ''}
     ${gone.length ? `<details class="gone"><summary class="group-h">Marked not a job <span class="note">${gone.length}</span></summary>${inboxTable(gone, '')}</details>` : ''}`;
 }
 
