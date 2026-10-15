@@ -57,9 +57,52 @@ function orderForm() {
     ${steps([`${n(1)} The customer list comes from Xero, and picking one fills in the contact, email and delivery address.`,
       `${n(2)} Type the customer's order number. It goes on every document and on the invoice.`,
       `${n(3)} Each line has its own due date. Two lines of the same part with different dates are two deliveries.`,
-      `${n(4)} <b>Split into call-offs</b> turns one line into several deliveries (for example 4 × 25, one a week).`,
+      `${n(4)} <b>Split into call-offs</b> turns one line into several deliveries. See <a href="#help-calloffs">Call-offs</a> below.`,
       `${n(5)} Tick the processes the job needs. Only these appear as boxes on the shop floor.`,
       'After saving, the <b>order acknowledgement</b> opens. Press <b>Email to customer</b> to put it in your Outlook Drafts with the PDF attached.'])}
+  </section>`;
+}
+
+/** Call-offs: one order, delivered in parts on set dates (Sage: one order line per delivery). */
+function calloffs() {
+  const line = (qty, due, extra = '') => `<tr><td style="text-align:left">Bracket, 3mm S275</td><td>${qty}</td><td>£12.40</td><td>${due}</td>${extra}</tr>`;
+  return `<section class="hsec key" id="help-calloffs"><h3>3 · Call-offs</h3>
+    <p>A call-off is one order delivered in parts on set dates, for example 200 brackets, 50 a week for four weeks. As in Sage, each delivery is its own <b>line on the order with its own due date</b>. Everything else follows from that: the board, the shop floor, the dispatch notes and the invoices all work one delivery at a time.</p>
+
+    <h4>Setting one up</h4>
+    ${pic(`<div class="hform">
+      <table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Qty</th><th>Price</th><th>Due</th></tr></thead><tbody>${line('<b>200</b> ' + n(1), '23 Oct')}</tbody></table>
+      <div class="panel"><div class="hrow"><span class="btn sm">Split into call-offs…</span>${n(2)}</div>
+        <div class="hrow"><label>Deliveries<span class="f">4</span></label><label>How often<span class="f">Weekly ▾</span></label><label>First delivery<span class="f">23/10/2026</span></label>${n(3)}</div>
+        <div class="hrow"><span class="btn sm">Split the lines</span>${n(4)}</div></div></div>`, 'Before: one line for the whole quantity.')}
+    ${pic(`<table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Qty</th><th>Price</th><th>Due ${n(5)}</th></tr></thead><tbody>
+      ${line(50, '23 Oct')}${line(50, '30 Oct')}${line(50, '6 Nov')}${line(50, '13 Nov')}</tbody></table>`, 'After: one line per delivery. The order total is unchanged.')}
+    ${steps([`${n(1)} On the order form, enter the part with the <b>full quantity</b> and the price, as one line.`,
+      `${n(2)} Press <b>Split into call-offs…</b> under the lines.`,
+      `${n(3)} Say how many <b>deliveries</b>, <b>how often</b> (weekly, every 2 weeks or monthly) and the date of the <b>first delivery</b>.`,
+      `${n(4)} Press <b>Split the lines</b>. Every line on the order is shared out across the deliveries. If it does not divide exactly, the first deliveries take the extra (201 in 4 = 51, 50, 50, 50).`,
+      `${n(5)} Check the lines. You can change any quantity or date before saving, just like in Sage, then press <b>Create order</b>.`,
+      '<b>An uneven schedule</b> (say 80 now, 60 in a fortnight, the rest when called for): skip the split and use <b>Add a line</b> instead, typing each delivery\'s quantity and date yourself.'])}
+
+    <h4>While it runs</h4>
+    ${pic(`<table class="jobs"><thead><tr><th>Customer</th><th>Sales order</th><th>Due</th></tr></thead><tbody>
+      <tr><td class="cust"><b>Example Fabrications Ltd</b><div class="meta"><span class="chip">Delivery 2 of 4</span> ${n(6)}</div></td><td class="so">SO-9786</td><td><span class="chip soon">30 Oct</span></td></tr></tbody></table>
+      <div class="panel" style="margin-top:10px"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Due</th><th>Ordered</th><th>Outstanding</th><th>This dispatch</th></tr></thead><tbody>
+        <tr><td style="text-align:left">Bracket, 3mm S275</td><td>30 Oct</td><td>50</td><td>50</td><td><span class="f">50</span> ${n(7)}</td></tr>
+        <tr><td style="text-align:left">Bracket, 3mm S275</td><td>6 Nov</td><td>50</td><td>50</td><td><span class="f">0</span></td></tr>
+        <tr><td style="text-align:left">Bracket, 3mm S275</td><td>13 Nov</td><td>50</td><td>50</td><td><span class="f">0</span></td></tr></tbody></table></div>`)}
+    ${steps([`${n(6)} The job board and shop floor show which delivery is next (<b>Delivery 2 of 4</b>) and its due date. The shop floor shows how many are needed for the next delivery.`,
+      `${n(7)} On <b>Dispatch</b>, the quantities are already filled in for <b>the next delivery only</b>; later deliveries stay at 0 until their turn. Change them if the customer wants more now.`,
+      'Each delivery gets its own <b>dispatch note</b>, which lists what is still to come on the order, and its own <b>draft invoice</b> in Xero once delivered. So the customer is invoiced per call-off, for exactly what went.',
+      'The order stays on the board until the last delivery has gone, then moves to <b>Completed</b>.'])}
+
+    <h4>When the customer changes a call-off</h4>
+    ${steps(['Open the order on <b>Sales orders</b> and press <b>Amend</b>.',
+      '<b>Earlier or later:</b> change that line\'s due date. If it is now urgent, bring the job forward on <b>Jobs</b> with ⤒.',
+      '<b>More or fewer:</b> change that line\'s quantity. It can\'t go below what has already been dispatched on it.',
+      '<b>An extra delivery:</b> press <b>Add a line</b> with the part, quantity, price and date.',
+      '<b>A delivery no longer wanted:</b> delete its line (only possible while nothing has been sent on it).',
+      'The customer sends a <b>new PO for each call-off</b>? The board keeps one customer PO per order, so make each call-off its own sales order (<b>Repeat order</b> makes that quick).'])}
   </section>`;
 }
 
@@ -67,7 +110,7 @@ function jobsBoard() {
   const row = (o, mv, cust, so, due, ticks, ready) => `<tr class="${ready ? 'ready' : ''}"><td class="ord"><span class="n ${mv ? 'placed' : ''}">${o}</span><span class="mv"><span class="btn sm">⤒</span><span class="btn sm">▲</span><span class="btn sm">▼</span></span></td>
     <td class="cust"><b>${cust}</b>${ready ? '<div class="meta"><span class="chip ok">Ready to dispatch</span></div>' : ''}</td><td class="so">${so}</td><td>${due}</td>
     ${ticks.map(t => `<td class="p">${t === null ? '<span class="na">–</span>' : box(t)}</td>`).join('')}</tr>`;
-  return `<section class="hsec" id="help-jobs"><h3>3 · Jobs</h3>
+  return `<section class="hsec" id="help-jobs"><h3>4 · Jobs</h3>
     <p>Every open order, one row each. <b>Upcoming</b> is not started, <b>Current</b> has something ticked or sent, <b>Completed</b> is all dispatched.</p>
     ${pic(`<table class="jobs"><thead><tr><th>Order ${n(1)}</th><th>Customer</th><th>Sales order</th><th>Due ${n(2)}</th><th class="p">Laser</th><th class="p">Fold</th><th class="p">Weld</th><th class="p">P/Coat</th></tr></thead><tbody>
       ${row(1, true, 'Sample Engineering Co', 'SO-9790', '<span class="chip soon">20 Nov</span>', [false, null, false, false])}
@@ -83,7 +126,7 @@ function jobsBoard() {
 }
 
 function shopFloor(office) {
-  return `<section class="hsec" id="help-floor"><h3>${office ? '4 · ' : ''}Shop floor</h3>
+  return `<section class="hsec" id="help-floor"><h3>${office ? '5 · ' : ''}Shop floor</h3>
     <p>${office ? 'The screen the factory uses on the touch screen. ' : ''}Jobs are listed in the order the office wants them done: anything brought forward first, then soonest due.</p>
     ${pic(`<div class="stations"><span class="sbtn">All jobs <span class="c">6</span></span><span class="sbtn on">Laser <span class="c">3</span></span>${n(1)}<span class="sbtn">Fold <span class="c">2</span></span><span class="sbtn">Weld <span class="c">1</span></span></div>
       <table class="jobs floor"><thead><tr><th>Due</th><th>Sales order</th><th>Customer and parts</th><th class="p focus">Laser</th><th class="p">Fold</th><th class="p">Weld</th></tr></thead><tbody>
@@ -102,7 +145,7 @@ function shopFloor(office) {
 }
 
 function dispatch(office) {
-  return `<section class="hsec" id="help-dispatch"><h3>${office ? '5 · ' : ''}Dispatch</h3>
+  return `<section class="hsec" id="help-dispatch"><h3>${office ? '6 · ' : ''}Dispatch</h3>
     <p>The <b>Dispatch</b> tab shows <span class="badge go">2 ready</span> when jobs are finished.</p>
     ${pic(`<div class="panel ready"><h3>Ready to dispatch</h3><table class="lines"><thead><tr><th style="text-align:left">Order</th><th style="text-align:left">Customer</th><th>Due</th><th style="text-align:left">To send</th><th></th></tr></thead><tbody>
       <tr><td class="mono" style="text-align:left">SO-9781</td><td style="text-align:left"><b>Demo Metals Ltd</b></td><td><span class="chip">24 Oct</span></td><td style="text-align:left"><b>12</b> × Cabinet</td><td><span class="btn sm pri">Dispatch</span>${n(1)}</td></tr></tbody></table></div>
@@ -115,7 +158,7 @@ function dispatch(office) {
 }
 
 function xero() {
-  return `<section class="hsec" id="help-xero"><h3>6 · Invoicing in Xero</h3>
+  return `<section class="hsec" id="help-xero"><h3>7 · Invoicing in Xero</h3>
     <p>Every delivered note waits under <b>Dispatch › Waiting for Xero</b>.</p>
     ${pic(`<div class="panel"><h3>Waiting for Xero</h3><table class="lines"><thead><tr><th></th><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Xero contact</th><th>Net</th></tr></thead><tbody>
       <tr><td>${box(true)}</td><td class="mono">DN-0007</td><td style="text-align:left">Demo Metals Ltd</td><td style="text-align:left">Demo Metals Limited ${n(1)}</td><td>£1,068.00</td></tr></tbody></table>
@@ -156,8 +199,8 @@ function faq(office) {
 }
 
 export function renderHelp(office) {
-  const parts = office ? [newOrders(), orderForm(), jobsBoard(), shopFloor(true), dispatch(true), xero(), emails(true), faq(true)]
+  const parts = office ? [newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), xero(), emails(true), faq(true)]
     : [shopFloor(false), dispatch(false), faq(false)];
   return `<div class="sec-h"><h2>Help</h2><span class="sub">${office ? 'How an order goes from quote to invoice. The pictures are examples, not real orders.' : 'How to use the shop floor screen. The pictures are examples.'}</span></div>
-    ${flow(office)}<div class="help">${parts.join('')}</div>`;
+    ${flow(office)}${office ? '<p class="hkey">Most asked: <a href="#help-calloffs">how to set up and change call-offs</a>.</p>' : ''}<div class="help">${parts.join('')}</div>`;
 }
