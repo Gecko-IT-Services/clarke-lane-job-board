@@ -4,7 +4,7 @@
  */
 import * as auth from './auth.js';
 import * as data from './data.js';
-import { normName, matchContact } from './core/xero.js';
+import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
@@ -291,7 +291,7 @@ function jobBoard() {
   const q = S.search.toLowerCase();
   const by = { upcoming: [], current: [], completed: [] };
   S.jobs.forEach(j => by[stage(j)]?.push(j));
-  const list = by[S.stage].filter(j => !q || [j.so, j.customer, j.po, j.quote, ...j.lines.map(l => l.part)].some(s => (s || '').toLowerCase().includes(q)));
+  const list = by[S.stage].filter(j => !q || [j.so, j.customer, j.po, j.quote, ...j.lines.map(l => l.part), ...linePos(j)].some(s => (s || '').toLowerCase().includes(q)));
   const money = office();
   const done = S.stage === 'completed', tk = done ? 'boardDone' : 'board';
   const rank = new Map(runningOrder().map((j, i) => [j.id, i + 1]));
@@ -334,7 +334,7 @@ function salesOrders() {
   const f = S.orderFilter;
   const keep = j => f === 'all' ? true : f === 'cancelled' ? j.status === 'cancelled' : f === 'held' ? j.status === 'held'
     : f === 'complete' ? stage(j) === 'completed' : stage(j) !== 'completed' && j.status !== 'cancelled';
-  const list = sortRows('orders', S.jobs.filter(keep).filter(j => !q || [j.so, j.customer, j.po, j.quote].some(s => (s || '').toLowerCase().includes(q)))
+  const list = sortRows('orders', S.jobs.filter(keep).filter(j => !q || [j.so, j.customer, j.po, j.quote, ...linePos(j)].some(s => (s || '').toLowerCase().includes(q)))
     .sort((a, b) => compareValues(b.so, a.so)), { so: j => j.so, date: j => j.ordered, customer: j => j.customer, po: j => j.po, net: j => value(j),
     due: j => (stage(j) === 'completed' || j.status === 'cancelled' ? '' : nextDue(j)), dispatched: j => (j.status === 'cancelled' ? 'Cancelled' : despatchStatus(j)), invoiced: j => invoiceStatus(j) });
   const rows = list.map(j => `<tr data-open="${j.id}"><td class="mono">${esc(j.so)}</td><td>${fmt(j.ordered)}</td><td style="text-align:left"><b>${esc(j.customer)}</b></td>
@@ -358,6 +358,9 @@ function openOrderForm(prefill = {}, amendId = null) {
   S.open = null; S.tab = 'orders'; history.replaceState(null, '', '#orders'); keepInputs = false; render(); window.scrollTo(0, 0);
   if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
 }
+/** PO(s) for one dispatch note: its lines' own call-off POs, else the order's PO. */
+const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
+const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
 /** Sage-style "copy order": a new order from an old one. New number, new PO, dates moved forward. */
 function openRepeat(id) {
   const j = job(id);
@@ -370,14 +373,14 @@ function openAmend(id) {
   const j = job(id);
   openOrderForm({ so: j.so, customer: j.customer, po: j.po, contact: j.contactName, contactEmail: j.contactEmail || '', address: j.address, notes: j.notes,
     due: nextDue(j), procs: needed(j),
-    lines: j.lines.map(l => ({ id: l.id, part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, sent: sent(j, l) })) }, id);
+    lines: j.lines.map(l => ({ id: l.id, part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, po: l.po || '', sent: sent(j, l) })) }, id);
 }
 /** Copy what is typed into S.form, so adding, removing or splitting lines keeps everything else. */
 function collectForm() {
   const n = S.form, v = id => $(id)?.value ?? '';
   Object.assign(n, { so: v('of-so'), customer: v('of-cust') || n.customer, po: v('of-po'), contact: v('of-contact'), contactEmail: v('of-email'), address: v('of-addr'),
     due: v('of-due') || n.due, notes: v('of-notes') });
-  n.lines = n.lines.map((l, i) => ({ ...l, part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i) }));
+  n.lines = n.lines.map((l, i) => ({ ...l, part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i), po: v('of-lpo' + i) }));
   n.procs = [...document.querySelectorAll('input[name=of-p]:checked')].map(i => i.value);
   n.splitN = v('of-sn'); n.splitEvery = v('of-se'); n.splitFrom = v('of-sf');
 }
@@ -392,6 +395,7 @@ function orderForm() {
     <td><input type="number" id="of-qty${i}" value="${esc(l.qty)}" min="${l.sent || 1}" step="1" aria-label="Quantity, line ${i + 1}"></td>
     <td><input type="number" id="of-price${i}" value="${esc(l.price)}" min="0" step="any" aria-label="Unit price, line ${i + 1}"></td>
     <td><input type="date" id="of-ldue${i}" value="${esc(l.due)}" aria-label="Due date, line ${i + 1}"></td>
+    <td><input type="text" id="of-lpo${i}" value="${esc(l.po || '')}" placeholder="${esc(n.po) || 'as order'}" style="width:110px" aria-label="Call-off PO, line ${i + 1} (blank = the order's PO)"></td>
     <td class="num" id="of-net${i}">${gbp(lineNet(l), 2)}</td>
     ${amend ? `<td class="num">${l.sent || 0}</td>` : ''}
     <td>${n.lines.length > 1 && !l.sent ? `<button class="btn sm" type="button" data-oldel="${i}" aria-label="Remove line ${i + 1}">Remove</button>` : ''}</td></tr>`).join('');
@@ -407,13 +411,13 @@ function orderForm() {
       <label class="fl">Contact email<input type="email" id="of-email" value="${esc(n.contactEmail)}"></label></div>
     <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
       <label class="fl">Promised delivery (default for new lines)<input type="date" id="of-due" value="${esc(n.due)}"></label></div>
-    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th>Net</th>${amend ? '<th>Dispatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th title="Only if the customer sent a separate PO for this delivery. Blank = the order's PO.">Call-off PO</th><th>Net</th>${amend ? '<th>Dispatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="actions"><button class="btn sm" type="button" data-oladd>Add a line</button>
       <details class="splitter"><summary class="btn sm">Split into call-offs…</summary>
         <div class="row3"><label class="fl">Deliveries<input type="number" id="of-sn" min="2" max="24" value="${esc(n.splitN || 4)}"></label>
           <label class="fl">How often<select class="f" id="of-se">${[['7', 'Weekly'], ['14', 'Every 2 weeks'], ['m', 'Monthly']].map(([v, t]) => `<option value="${v}" ${n.splitEvery === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
           <label class="fl">First delivery<input type="date" id="of-sf" value="${esc(n.splitFrom || n.due)}"></label></div>
-        <p class="note">Each line becomes one line per delivery, with the quantity shared out. Adjust any quantity or date afterwards, as you would in Sage.</p>
+        <p class="note">Each line becomes one line per delivery, with the quantity shared out. Adjust any quantity or date afterwards, as you would in Sage. If the customer sends a PO for each call-off, type it in that line's Call-off PO when it arrives (Amend).</p>
         <button class="btn sm" type="button" data-olsplit>Split the lines</button></details></div>
     <p class="note" id="of-tot">${formTotals(n.lines)}</p>
     <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap or C/Sink if needed.' : ''}</div>
@@ -477,7 +481,7 @@ async function submitOrder() {
   if (under) return msg(`"${under.part}" has ${under.sent} dispatched already, so its quantity cannot go below that.`);
   if (!n.procs.length) return msg('Tick at least one process so the shop floor knows what the order needs.');
   if (n.mode === 'new' && n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
-  const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due }));
+  const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due, customer_po: (l.po || '').trim() }));
   S.busy = true; render();
   try {
     if (n.mode === 'amend') {
@@ -689,7 +693,7 @@ function waitingForXero(pend) {
       <td><button class="btn link mono" type="button" data-dn="${d.id}" data-job="${x.id}">${esc(d.dn)}</button></td>
       <td style="text-align:left">${esc(x.customer)}${S.sendErr[d.id] ? `<div class="note bad">${esc(S.sendErr[d.id])}</div>` : ''}</td>
       ${connected ? `<td style="text-align:left">${contactCell}</td>` : ''}
-      <td style="text-align:left" class="mono">${esc([x.so, x.po, d.dn].filter(Boolean).join(' / '))}</td><td>${fmt(d.date)}</td><td>${gbp(despatchValue(x, d), 2)}</td>
+      <td style="text-align:left" class="mono">${esc([x.so, dnPo(x, d), d.dn].filter(Boolean).join(' / '))}</td><td>${fmt(d.date)}</td><td>${gbp(despatchValue(x, d), 2)}</td>
       <td><form class="inv" data-inv="${d.id}"><input type="text" id="inv-${d.id}" placeholder="INV-" aria-label="Xero invoice number for ${esc(d.dn)} if raised by hand"><button class="btn sm" type="submit">Save</button></form></td></tr>`;
   }).join('');
   const ready = pend.filter(([x, d]) => contactFor(x.customer) && (S.sendPick[d.id] ?? true));
@@ -777,7 +781,7 @@ function renderDespatch() {
     form = `${missing.length ? `<div class="warn">Not ticked yet: ${esc(missing.join(', '))}. Check the parts are finished before they go.</div>` : ''}
       ${deliveryRow(j)}
       <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Dispatched</th><th>Outstanding</th><th>This dispatch</th></tr></thead><tbody>
-      ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this dispatch">` : '—'}</td></tr>`).join('')}
+      ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this dispatch">` : '—'}</td></tr>`).join('')}
       </tbody></table></div>
       <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create dispatch note${del ? ` (${del.toLowerCase()})` : ''}</button></div>
       <p class="note" id="dn-msg">The quantities default to everything due by ${fmt(nextDue(j))}. Anything not sent stays outstanding on the order, as in Sage.</p>`;
@@ -841,7 +845,7 @@ function renderDrawer() {
     </div>
     ${j.notes ? `<div class="panel"><div class="note">Notes</div>${esc(j.notes)}</div>` : ''}
     <div class="panel"><h3>Lines</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Desp.</th><th>Outst.</th>${money ? '<th>Unit</th><th>Net</th>' : ''}</tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div></div>
@@ -875,8 +879,8 @@ function docHtml(kind, jobId, despId) {
         <span class="k">Ordered</span><span>${fmtLong(j.ordered)}</span>
         <span class="k">Due</span><span><b>${dates.length > 1 ? `${dates.length} deliveries, first ${fmtLong(dates[0])}` : fmtLong(nextDue(j))}</b></span></div></div>
       ${j.notes ? `<div class="jnote"><div class="k">Notes</div><div style="white-space:pre-line">${esc(j.notes)}</div></div>` : ''}
-      <table><thead><tr><th>Part</th><th>Qty</th><th>Due</th><th>Sent</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td><b>${l.qty}</b></td><td>${fmtLong(l.due)}</td><td>${sent(j, l) || ''}</td></tr>`).join('')}</tbody></table>
+      <table><thead><tr><th>Part</th><th>Qty</th><th>Due</th>${linePos(j).length ? '<th>Call-off PO</th>' : ''}<th>Sent</th></tr></thead><tbody>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td><b>${l.qty}</b></td><td>${fmtLong(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${sent(j, l) || ''}</td></tr>`).join('')}</tbody></table>
       <table class="jprocs"><thead><tr><th>Process</th><th>Done</th><th>By</th><th>Date</th></tr></thead><tbody>
       ${need.map(p => { const st = j.procs[p]; return `<tr><td><b>${esc(p)}</b></td><td><span class="jbox">${st.done ? '✓' : ''}</span></td><td>${st.done ? esc(st.by) : ''}</td><td>${st.done ? fmt(st.at.slice(0, 10)) : ''}</td></tr>`; }).join('')
         || '<tr><td colspan="4">No processes ticked on this order.</td></tr>'}</tbody></table>
@@ -893,7 +897,7 @@ function docHtml(kind, jobId, despId) {
       ${j.address ? `<div><div class="k">Deliver to</div><div style="white-space:pre-line">${esc(j.address)}</div></div>` : ''}
       <p>Thank you for your order. We confirm the following.</p>
       <table><thead><tr><th>Description</th><th>Due</th><th>Qty</th><th>Unit price</th><th>Net</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}</td><td>${fmtLong(l.due)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
+      ${j.lines.map(l => `<tr><td>${esc(l.part)}${l.po && l.po !== j.po ? ` <span style="color:var(--paper-mute)">(your PO ${esc(l.po)})</span>` : ''}</td><td>${fmtLong(l.due)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
       <div class="tot"><span>Net</span><span>${gbp(net, 2)}</span><span>VAT 20%</span><span>${gbp(vat, 2)}</span><span class="g">Total</span><span class="g">${gbp(net + vat, 2)}</span></div>
       <div class="foot">Clarke Lane Engineering Ltd. Please quote ${esc(j.so)} on any correspondence about this order.</div>`;
   } else {
@@ -901,7 +905,7 @@ function docHtml(kind, jobId, despId) {
     const before = l => j.despatches.slice(0, di).reduce((a, x) => a + (x.lines[l.id] || 0), 0);
     body = head('Delivery note', esc(d.dn)) + `
       <div class="two"><div><div class="k">Deliver to</div><b>${esc(j.customer)}</b>${j.address ? `<div style="white-space:pre-line">${esc(j.address)}</div>` : ''}${j.contactName ? `<div>FAO ${esc(j.contactName)}</div>` : ''}</div>
-        <div class="kv"><span class="k">Date</span><span>${fmtLong(d.date)}</span><span class="k">Your order</span><span>${esc(j.po) || '—'}</span>
+        <div class="kv"><span class="k">Date</span><span>${fmtLong(d.date)}</span><span class="k">Your order</span><span>${esc(dnPo(j, d)) || '—'}</span>
         <span class="k">Our order</span><span>${esc(j.so)}</span></div></div>
       <table><thead><tr><th>Description</th><th>Ordered</th><th>Previously sent</th><th>This delivery</th><th>Outstanding</th></tr></thead><tbody>
       ${j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => `<tr><td>${esc(l.part)}${deliveryDates(j).length > 1 ? ` <span style="color:var(--paper-mute)">(due ${fmt(l.due)})</span>` : ''}</td><td>${l.qty}</td><td>${before(l)}</td><td><b>${d.lines[l.id]}</b></td><td>${l.qty - before(l) - d.lines[l.id]}</td></tr>`).join('')}</tbody></table>
@@ -965,11 +969,12 @@ async function emailDoc(kind, jobId, despId) {
     const no = kind === 'soa' ? j.so : d.dn;
     const pdf = await pdfBase64(docHtml(kind, jobId, despId));
     const hello = j.contactName ? `Dear ${esc(j.contactName.split(' ')[0])},` : 'Hello,';
-    const ref = j.po ? ` (your order ${esc(j.po)})` : '';
+    const po = kind === 'dn' ? dnPo(j, d) : j.po;
+    const ref = po ? ` (your order ${esc(po)})` : '';
     const html = kind === 'soa'
       ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached our sales order acknowledgement ${esc(j.so)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
       : `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} have been dispatched. Please find attached delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
-    const subject = kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${j.po ? ' / ' + j.po : ''}`;
+    const subject = kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${po ? ' / ' + po : ''}`;
     const link = await data.draftEmail({ to: j.contactEmail, subject, html, fileName: `${no}.pdf`, pdfBase64: pdf });
     if (kind === 'soa') await data.markAckEmailed(jobId); else await data.markDespatch(despId, 'emailed');
     await reload(); showDoc(kind, jobId, despId);

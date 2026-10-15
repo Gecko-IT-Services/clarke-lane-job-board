@@ -267,3 +267,17 @@ Office only, before it is invoiced in Xero (`cancel_despatch`): the note stays, 
 those functions changing. A cancelled note can't be emailed, delivered or invoiced (`mark_despatch`,
 `xero_mark_sent`, the edge function all refuse). Dispatch › Cancel → confirm row → Yes. No hard delete
 (it would leave unexplained gaps in DN numbers); test data is cleaned up by Gecko directly.
+
+## Call-off PO per line (15 Oct)
+`job_lines.customer_po` (blank = the order's PO). Order form has a Call-off PO column; Amend fills it
+when the customer's call-off PO arrives. `dispatchPo(orderPo, linePos)` (src/core/xero.js, tested)
+gives a dispatch its lines' own POs, else the order's: used on the delivery note, its email subject
+and text, Waiting for Xero, and the Xero invoice Reference (edge function). The acknowledgement shows a
+line's PO when it differs; the job sheet adds a Call-off PO column when any line has one. Search
+finds line POs. Repeat order does not copy line POs.
+
+## Stale modules after a deploy (15 Oct)
+GitHub Pages lets browsers cache each file ~10 minutes, so after a deploy a new app.js can meet an old
+module and fail to load. index.html has a small guard: on a module load error it refetches every
+module with cache: 'reload' and reloads once (sessionStorage guard). `tests/site.mjs` keeps its
+MODULES list in step with src/.

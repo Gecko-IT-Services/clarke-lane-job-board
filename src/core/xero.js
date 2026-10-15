@@ -72,3 +72,12 @@ export function salesDefaults(invoices) {
   const [accountCode, taxType] = best[0].split('|');
   return { accountCode, taxType: taxType || null, seen: best[1] };
 }
+
+/**
+ * The customer PO(s) for one dispatch: the POs on the delivery lines it sends (call-offs can each
+ * have their own), else the order's PO. linePos: the customer_po of each line on the dispatch.
+ */
+export function dispatchPo(orderPo, linePos) {
+  const own = [...new Set((linePos || []).map(p => String(p || '').trim()).filter(Boolean))];
+  return own.length ? own.join(', ') : String(orderPo || '').trim();
+}

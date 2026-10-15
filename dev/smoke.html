@@ -379,6 +379,22 @@ form.inv input{width:110px}
 <aside class="drawer" id="drawer" hidden aria-label="Job details"></aside>
 <div class="docwrap" id="doc" hidden></div>
 <div class="toast" id="toast" hidden role="status"></div>
+<script>
+/* After an update, GitHub Pages lets a browser keep each file for up to 10 minutes, so a new
+   app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
+   reload once. Keep MODULES in step with the files in src/. */
+(function () {
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/core/jobs.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  window.addEventListener('error', function (e) {
+    var m = String(e.message || '');
+    if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;
+    try { if (sessionStorage.getItem('clj.refetched')) return; sessionStorage.setItem('clj.refetched', '1'); } catch (_) { return; }
+    Promise.all(MODULES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }))
+      .then(function () { location.reload(); });
+  });
+  window.addEventListener('load', function () { setTimeout(function () { try { sessionStorage.removeItem('clj.refetched'); } catch (_) {} }, 15000); });
+})();
+</script>
 <script type="importmap">{"imports":{"/src/auth.js":"/dev/fake-auth.js","/src/data.js":"/dev/fake-data.js"}}</script>
 <script type="module" src="/src/app.js"></script>
 </body>

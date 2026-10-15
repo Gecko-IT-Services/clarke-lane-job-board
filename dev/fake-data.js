@@ -25,14 +25,14 @@ export const createJob = async p => {
   const id = jobs.length + 1, so = p.so_number || 'SO-97' + (82 + id);
   jobs.push({ id, so, quote: p.quote_no, spQuoteId: p.sp_quote_id, xeroQuoteId: p.xero_quote_id, customer: p.customer, contactName: p.contact_name, contactEmail: '',
     po: p.customer_po, ordered: '2026-10-15', due: p.due_date, notes: p.notes, address: p.delivery_address, status: 'open',
-    lines: p.lines.map((l, i) => ({ id: nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date })),
+    lines: p.lines.map((l, i) => ({ id: nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' })),
     procs: Object.fromEntries(p.processes.map(x => [x, { done: false }])), despatches: [] });
   return { id, so_number: so };
 };
 export const amendJob = async (id, p) => {
   const j = find(id);
   Object.assign(j, { po: p.customer_po, contactName: p.contact_name, address: p.delivery_address, notes: p.notes });
-  j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date }));
+  j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' }));
 };
 export const setJobStatus = async (id, status) => { find(id).status = status; };
 let dn = 2;

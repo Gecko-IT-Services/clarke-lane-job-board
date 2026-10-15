@@ -102,7 +102,7 @@ function calloffs() {
       '<b>More or fewer:</b> change that line\'s quantity. It can\'t go below what has already been dispatched on it.',
       '<b>An extra delivery:</b> press <b>Add a line</b> with the part, quantity, price and date.',
       '<b>A delivery no longer wanted:</b> delete its line (only possible while nothing has been sent on it).',
-      'The customer sends a <b>new PO for each call-off</b>? The board keeps one customer PO per order, so make each call-off its own sales order (<b>Repeat order</b> makes that quick).'])}
+      '<b>A new PO for each call-off:</b> when the customer\'s call-off PO arrives, press <b>Amend</b> and type it in that line\'s <b>Call-off PO</b> box. Leave the box blank to use the order\'s own PO. The delivery note, its email and the Xero invoice for that delivery then quote the call-off PO.'])}
   </section>`;
 }
 

@@ -46,3 +46,13 @@ assert.equal(readFileSync(new URL('../supabase/functions/xero/xero-core.js', imp
   'supabase/functions/xero/xero-core.js differs from src/core/xero.js: copy it across');
 
 console.log('xero: ok');
+
+// — PO per call-off: a dispatch uses its lines' own POs, else the order's. —
+{
+  const { dispatchPo } = await import('../src/core/xero.js');
+  assert.equal(dispatchPo('PO-1', ['', '']), 'PO-1');
+  assert.equal(dispatchPo('PO-1', ['CO-7', 'CO-7']), 'CO-7');
+  assert.equal(dispatchPo('', ['CO-7', ' CO-8 ', '']), 'CO-7, CO-8');
+  assert.equal(dispatchPo('', []), '');
+  console.log('xero dispatch PO: ok');
+}

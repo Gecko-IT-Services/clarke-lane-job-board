@@ -14,7 +14,7 @@
 // Supabase token; every other route checks the caller itself (office()).
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 // A copy of src/core/xero.js (tests/xero.mjs checks they are identical).
-import { buildInvoice, invoiceNet, salesDefaults } from './xero-core.js';
+import { buildInvoice, invoiceNet, salesDefaults, dispatchPo } from './xero-core.js';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const admin = createClient(SB_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -199,7 +199,7 @@ async function send(items: { despatchId: number; contactId: string }[]) {
       // Amounts come from the database, never from the browser.
       const { data: row, error } = await admin.from('despatches')
         .select('id, dn_number, despatched_on, delivered_on, cancelled_at, xero_invoice_id, xero_invoice_no, job_id, ' +
-          'jobs(so_number, customer_po), despatch_lines(qty, job_lines(part, line_no, job_line_prices(unit_price)))')
+          'jobs(so_number, customer_po), despatch_lines(qty, job_lines(part, line_no, customer_po, job_line_prices(unit_price)))')
         .eq('id', it.despatchId).single();
       if (error || !row) throw new Error('Dispatch not found.');
       if (row.xero_invoice_id || row.xero_invoice_no) { out.push({ despatchId: it.despatchId, ok: true, invoiceNo: row.xero_invoice_no, already: true }); continue; }
@@ -211,7 +211,8 @@ async function send(items: { despatchId: number; contactId: string }[]) {
         .sort((a, b) => a.job_lines.line_no - b.job_lines.line_no)
         .map(l => ({ part: l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
       if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this dispatch has no price.');
-      const inv = buildInvoice({ dn: row.dn_number, date: row.despatched_on, so: job.so_number, po: job.customer_po, calloff: '', lines },
+      const inv = buildInvoice({ dn: row.dn_number, date: row.despatched_on, so: job.so_number,
+        po: dispatchPo(job.customer_po, (row.despatch_lines as any[]).map(l => l.job_lines.customer_po)), calloff: '', lines },
         it.contactId, d.accountCode, d.taxType);
       const r = await xeroPost(s, 'Invoices', { Invoices: [inv] }, `clj-despatch-${row.id}`);
       const made = r.Invoices?.[0];

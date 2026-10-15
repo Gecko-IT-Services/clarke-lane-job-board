@@ -38,7 +38,7 @@ export async function loadJobs({ office }) {
     lines: [], procs: {}, despatches: [], cancelledDespatches: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
-    { id: l.id, lineNo: l.line_no, part: l.part, qty: l.qty, due: l.due_date, price: office ? (price.get(l.id) ?? null) : null });
+    { id: l.id, lineNo: l.line_no, part: l.part, qty: l.qty, due: l.due_date, po: l.customer_po || '', price: office ? (price.get(l.id) ?? null) : null });
   for (const p of procs.data) { const j = byJob.get(p.job_id); if (j) j.procs[p.process] = { done: !!p.done_at, by: p.done_by, at: p.done_at }; }
   const dById = new Map();
   for (const d of desps.data) {
