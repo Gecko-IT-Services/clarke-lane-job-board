@@ -16,7 +16,7 @@ import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -41,7 +41,7 @@ function previewData() {
       j.procs[p] = done ? { done: true, by, at: new Date().toISOString() } : { done: false };
     },
     setRunningOrder: async ids => { PREVIEW.prio = new Map(ids.map((id, i) => [id, i + 1])); },
-    xero: (route, body) => (['read', 'contacts', 'contact'].includes(route) ? realData.xero(route, body) : no()),
+    xero: (route, body) => (['read', 'contacts', 'contact', 'items'].includes(route) ? realData.xero(route, body) : no()),
   };
 }
 async function enterPreview() {
@@ -318,7 +318,16 @@ function openOrderForm(prefill = {}, amendId = null) {
     address: '', notes: '', due, lines: [blankLine(due)], procs: [], xeroQuoteId: null, spQuoteId: null, quoteNo: '', from: '', ...prefill };
   S.open = null; S.tab = 'orders'; history.replaceState(null, '', '#orders'); keepInputs = false; render(); window.scrollTo(0, 0);
   if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
+  if (S.xero && !S.xitems && !S.xitemsErr) loadXeroItems();
 }
+/** Xero's Products and services, read once per visit for the Part box. Not fatal: the board's own parts still show. */
+async function loadXeroItems() {
+  S.xitemsErr = null;
+  try { S.xitems = (await data.xero('items')).items || []; }
+  catch (e) { S.xitems = []; S.xitemsErr = e.message; }
+  if (S.form) { collectForm(); keepInputs = false; render(); }
+}
+const formParts = n => partSuggestions(S.jobs.filter(j => !j.preview), S.xitems || [], n.customer);
 /** PO(s) for one dispatch note: its lines' own call-off POs, else the order's PO. */
 const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
 const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
@@ -354,7 +363,7 @@ function formTotals(lines) {
 }
 function orderForm() {
   const n = S.form, amend = n.mode === 'amend';
-  const rows = n.lines.map((l, i) => `<tr><td><input type="text" id="of-part${i}" value="${esc(l.part)}" placeholder="Part and spec" aria-label="Part, line ${i + 1}"></td>
+  const rows = n.lines.map((l, i) => `<tr><td><input type="text" id="of-part${i}" value="${esc(l.part)}" placeholder="Part and spec: type to pick from the list" list="of-parts" autocomplete="off" aria-label="Part, line ${i + 1}"></td>
     <td><input type="number" id="of-qty${i}" value="${esc(l.qty)}" min="${l.sent || 1}" step="1" aria-label="Quantity, line ${i + 1}"></td>
     <td><input type="number" id="of-price${i}" value="${esc(l.price)}" min="0" step="any" aria-label="Unit price, line ${i + 1}"></td>
     <td><input type="date" id="of-ldue${i}" value="${esc(l.due)}" aria-label="Due date, line ${i + 1}"></td>
@@ -385,6 +394,9 @@ function orderForm() {
         <p class="note">Each line becomes one line per delivery, with the quantity shared out. Adjust any quantity or date afterwards, as you would in Sage. If the customer sends a PO for each call-off, type it in that line's Call-off PO when it arrives (Amend).</p>
         <button class="btn sm" type="button" data-olsplit>Split the lines</button></details></div>
     <p class="note" id="of-tot">${formTotals(n.lines)}</p>
+    ${(() => { const ps = formParts(n), c = k => ps.filter(x => x.from === k).length;
+      return `<datalist id="of-parts">${ps.map(x => `<option value="${esc(x.part)}">${x.from === 'xero' ? `Xero${x.code ? ' ' + esc(x.code) : ''}` : x.from === 'customer' ? `${esc(x.so)}, ${fmt(x.date)}` : `ordered by others, ${esc(x.so)}`}${x.price != null ? ' · ' + gbp(x.price, 2) : ''}</option>`).join('')}</datalist>
+      <p class="note">Parts list: ${c('customer')} from this customer's orders, ${c('board')} from other orders${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Picking one fills in its price; change it if needed.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
     <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap or C/Sink if needed.' : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
@@ -409,7 +421,7 @@ async function customerPicked(name) {
   const c = S.xc?.contacts.find(x => x.name === name);
   if (!c) {
     collectForm();
-    if (applyBook(n)) { keepInputs = false; render(); }
+    applyBook(n); keepInputs = false; render();   // also brings this customer's parts to the top of the list
     if ($('of-custnote')) $('of-custnote').textContent = customerNote({ ...n, customer: name });
     return;
   }
@@ -1250,6 +1262,16 @@ document.addEventListener('input', e => {
     const el = $(id); el.focus(); el.setSelectionRange(pos, pos);
   }
   const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);
+  const pm = /^of-part(\d+)$/.exec(e.target.id);
+  if (pm && S.form) {   // a part picked from the list brings its price, unless a price is already typed
+    const hit = formParts(S.form).find(x => x.part === e.target.value);
+    const price = $('of-price' + pm[1]);
+    if (hit && hit.price != null && price && !price.value) {
+      price.value = String(hit.price); collectForm();
+      if ($('of-net' + pm[1])) $('of-net' + pm[1]).textContent = gbp(lineNet(S.form.lines[+pm[1]]), 2);
+      $('of-tot').innerHTML = formTotals(S.form.lines);
+    }
+  }
   if (m && S.form) {   // keep line nets and the order total current while typing
     collectForm();
     const i = +m[2]; if ($('of-net' + i)) $('of-net' + i).textContent = gbp(lineNet(S.form.lines[i]), 2);

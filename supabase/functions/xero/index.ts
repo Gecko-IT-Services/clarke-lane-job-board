@@ -6,6 +6,7 @@
 //   POST read      office only → sales orders (Xero quotes) and sales invoices since go-live
 //   POST contacts  office only → Xero contacts + the sales account/VAT Clarke Lane's invoices use
 //   POST contact   office only → one contact's details (contact person, email, delivery address)
+//   POST items     office only → Products and services that are sold (description, code, sales price)
 //   POST send      office only → one DRAFT sales invoice per despatch (never approved or sent)
 //   POST disconnect office only
 //
@@ -192,6 +193,16 @@ async function contact(id: string) {
   return { id: c.ContactID, name: c.Name, email, person, address };
 }
 
+/** Xero's Products and services that are sold: what the order form offers as parts. Read only. */
+async function items() {
+  const s = await session();
+  const r = await xero(s, 'Items');
+  return { items: (r.Items || []).filter((i: any) => i.IsSold !== false).map((i: any) => ({
+    code: i.Code || '', name: i.Name || '', description: (i.Description || i.Name || '').trim(),
+    price: i.SalesDetails?.UnitPrice ?? null })).filter((i: any) => i.description)
+    .sort((a: any, b: any) => a.description.localeCompare(b.description)) };
+}
+
 /** items: [{ despatchId, contactId }] → one draft invoice each, recorded on the despatch. */
 async function send(items: { despatchId: number; contactId: string }[]) {
   if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Nothing chosen to send.');
@@ -272,6 +283,7 @@ Deno.serve(async req => {
     if (route === 'read') return cors(req, json(await read()));
     if (route === 'contacts') return cors(req, json(await contacts()));
     if (route === 'contact') return cors(req, json(await contact((await req.json().catch(() => ({}))).id)));
+    if (route === 'items') return cors(req, json(await items()));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }
     throw new HttpError(404, 'Not found');

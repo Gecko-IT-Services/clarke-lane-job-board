@@ -382,3 +382,26 @@ export function attention(d, { office = false, wonQuotes = 0 } = {}) {
   if (office) d.toXero.forEach(x => rows.push({ kind: 'invoice', job: x.job, despatch: x.d }));
   return rows;
 }
+
+/**
+ * What the order form's Part box offers: parts this customer has ordered on the board (latest price
+ * first), then parts other customers have ordered, then Xero's Products and services not already
+ * listed. Text matching ignores case and spacing. jobs: the app's jobs (with prices for the office);
+ * items: [{ code, description, price }] from Xero (may be empty).
+ */
+export function partSuggestions(jobs, items, customer) {
+  const key = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const cust = key(customer), seen = new Map();
+  const lines = jobs.flatMap(j => j.lines.map(l => ({ part: l.part, price: l.price, so: j.so, date: j.ordered || '', mine: key(j.customer) === cust })))
+    .filter(l => l.part && l.part.trim())
+    .sort((a, b) => (b.mine - a.mine) || (b.date < a.date ? -1 : b.date > a.date ? 1 : 0));
+  for (const l of lines) {
+    const k = key(l.part); if (seen.has(k)) continue;
+    seen.set(k, { part: l.part.trim(), price: l.price, from: l.mine ? 'customer' : 'board', so: l.so, date: l.date });
+  }
+  for (const i of items || []) {
+    const k = key(i.description); if (!k || seen.has(k)) continue;
+    seen.set(k, { part: i.description.trim(), price: i.price, from: 'xero', code: i.code || '' });
+  }
+  return [...seen.values()];
+}

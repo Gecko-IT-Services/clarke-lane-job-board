@@ -312,3 +312,19 @@ console.log('jobs: ok');
   assert.equal(dispatchLists([hidden(a), hidden(b)], '2026-10-15').toXeroValue, null, 'no £ without prices');
   console.log('jobs dispatchLists: ok');
 }
+
+// — Part suggestions: this customer's parts first (latest price), then the board's, then Xero items. —
+{
+  const { partSuggestions } = await import('../src/core/jobs.js');
+  const jobs = [
+    { so: 'SO-1', customer: 'VFS Ltd', ordered: '2026-10-01', lines: [{ part: 'Bracket 3mm', price: 12 }] },
+    { so: 'SO-2', customer: 'VFS Ltd', ordered: '2026-10-10', lines: [{ part: 'bracket  3mm', price: 12.4 }, { part: 'Cover', price: 5 }] },
+    { so: 'SO-3', customer: 'Wessex', ordered: '2026-10-12', lines: [{ part: 'Guard', price: 8 }, { part: '', price: 1 }] },
+  ];
+  const items = [{ code: 'BR3', description: 'Bracket 3mm', price: 11 }, { code: 'PL', description: 'Plate 6mm', price: 30 }];
+  const s = partSuggestions(jobs, items, 'vfs ltd');
+  assert.deepEqual(s.map(x => [x.part, x.price, x.from]), [['bracket  3mm', 12.4, 'customer'], ['Cover', 5, 'customer'], ['Guard', 8, 'board'], ['Plate 6mm', 30, 'xero']],
+    'latest price for the customer wins; a Xero item already ordered is not repeated; blank parts ignored');
+  assert.deepEqual(partSuggestions([], items, 'x').map(x => x.from), ['xero', 'xero']);
+  console.log('jobs part suggestions: ok');
+}

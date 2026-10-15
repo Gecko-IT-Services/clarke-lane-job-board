@@ -79,6 +79,7 @@ function orderForm() {
     ${steps([`${n(1)} The customer list comes from Xero, and picking one fills in the contact, email and delivery address.`,
       `${n(2)} Type the customer's order number. It goes on every document and on the invoice.`,
       `${n(3)} Each line has its own due date. Two lines of the same part with different dates are two deliveries.`,
+      '<b>Part:</b> start typing and pick from the list: this customer\'s parts from earlier orders first (with the last price charged), then other customers\' parts, then Xero\'s Products and services. Picking one fills in the price; change it if needed, or just type a new part.',
       `${n(4)} <b>Split into call-offs</b> turns one line into several deliveries. See <a href="#help-calloffs">Call-offs</a> below.`,
       `${n(5)} Tick the processes the job needs. Only these appear as boxes on the shop floor.`,
       'After saving, the <b>order acknowledgement</b> opens. Press <b>Email to customer</b> to put it in your Outlook Drafts with the PDF attached.'])}
