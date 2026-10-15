@@ -96,6 +96,7 @@ async function boot() {
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.orderview'); if (['dispatched', 'held', 'cancelled'].includes(v)) S.orderView = v; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
+  try { S.kiosk = localStorage.getItem('clj.kiosk') === '1'; } catch { /* none kept */ }
   fromHash();
   if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
   await reload();
@@ -744,7 +745,7 @@ function procButtons(j, focus) {
 }
 function renderFloor() {
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
-    canFull: !!document.fullscreenEnabled, isFull: !!document.fullscreenElement }, { esc, fmt, fmtTime, TICK });
+    kiosk: !!S.kiosk }, { esc, fmt, fmtTime, TICK });
 }
 
 /* ---------- new orders: Levi's ordered quotes and Xero sales orders, as Sage-style rows ---------- */
@@ -1147,6 +1148,8 @@ function render() {
   if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
   if (!office() && ['quotes', 'orders', 'customers', 'xero'].includes(S.tab)) S.tab = 'floor';
+  if (S.kiosk) { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
+  document.body.classList.toggle('kiosk-mode', !!S.kiosk);
   renderTabs();
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
@@ -1159,7 +1162,17 @@ function render() {
   restoreInputs(kept);
 }
 function fromHash() { const h = location.hash.slice(1) === 'despatch' ? 'dispatch' : location.hash.slice(1); if (TABS.some(([k]) => k === h)) S.tab = h; }
-document.addEventListener('fullscreenchange', () => { if (S.tab === 'floor') renderFloor(); });
+/* Kiosk mode: the shared shop floor screen stays on the Shop floor, full screen, with no header or tabs. Kept on this device. */
+const fullscreen = on => { if (!document.fullscreenEnabled || on === !!document.fullscreenElement) return; (on ? document.documentElement.requestFullscreen() : document.exitFullscreen()).catch(() => {}); };
+function setKiosk(on) {
+  if (!on && !confirm('Leave kiosk mode? The header and tabs come back on this screen.')) return;
+  S.kiosk = on; S.station = null; S.open = null; closeDoc();
+  try { if (on) localStorage.setItem('clj.kiosk', '1'); else localStorage.removeItem('clj.kiosk'); } catch { /* this visit only */ }
+  if (on) history.replaceState(null, '', '#floor');
+  fullscreen(on); render(); window.scrollTo(0, 0);
+}
+// After a reload or Esc, the next tap puts the kiosk back to full screen (browsers only allow it from a tap).
+document.addEventListener('click', e => { if (S.kiosk && !e.target.closest('[data-kiosk]')) fullscreen(true); }, true);
 setInterval(() => { const c = $('fclock'); if (c) c.innerHTML = clockHtml(new Date()); }, 15000);
 window.addEventListener('hashchange', () => { fromHash(); render(); nudge(); });
 
@@ -1202,7 +1215,7 @@ document.addEventListener('click', e => {
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; render(); window.scrollTo(0, 0); return; }
   if (d.stations) { S.station = null; render(); window.scrollTo(0, 0); return; }
-  if (d.fullscreen) { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); return; }
+  if (d.kiosk) return setKiosk(d.kiosk === 'on');
   if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; return render(); }
   if ('neworder' in d) return openOrderForm();
   if (d.amend) return openAmend(+d.amend);

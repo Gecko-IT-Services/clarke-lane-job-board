@@ -16,9 +16,12 @@ process is done the job is ready to dispatch and goes back to the office. Agreed
   waiting for it ("3 jobs waiting"), and either "N late" (red) or "On time" (green); a station with
   nothing waiting says "Nothing waiting" and is faded. A tile with late work has a red border.
   Tapping a tile opens that station (screen 2).
-- Under the tiles: **All jobs (n)** (opens screen 3), **Full screen** (hidden where the browser
-  cannot do it; reads "Exit full screen" while full screen), and the note "Updates by itself.
-  Goes back to this screen after 2 minutes untouched."
+- Under the tiles: **All jobs (n)** (opens screen 3), **Kiosk mode** / **Leave kiosk mode**, and the
+  note "Updates by itself. Goes back to this screen after 2 minutes untouched."
+- **Kiosk mode** (added 15 Oct, replaces the Full screen button): for the shared screen. Turning it on
+  goes full screen (where the browser allows), hides the header and tabs and keeps the screen on the
+  Shop floor; it is remembered on that device (`clj.kiosk`). After a reload or Esc the next tap goes
+  full screen again (browsers only allow full screen from a tap). Leaving asks to confirm.
 
 "Waiting for a station" = an open job (not started or in progress, held included, not cancelled)
 that needs that process and has not had it ticked. Late = its next due date is before today.
