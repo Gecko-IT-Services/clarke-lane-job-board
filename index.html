@@ -348,6 +348,19 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 #v-help .hmail-r{padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px}
 #v-help .hmail-r span:not(.chip){color:var(--muted);grid-column:1}
 #v-help .hmail-r .chip{grid-column:2;grid-row:1/3;align-self:center}
+#v-help .hfilters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+#v-help .hpill{display:inline-flex;gap:6px;align-items:center;border:2px solid var(--k);color:var(--k);background:var(--surface);border-radius:999px;padding:4px 12px 4px 7px;font-weight:600;font-size:13.5px}
+#v-help .hpill.on{background:var(--k);color:#fff}
+#v-help .hpill .hbox{width:15px;height:15px;border-radius:3px;border:2px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:11px;line-height:1}
+#v-help .hpill.on .hbox{background:#fff;color:var(--k);border-color:#fff}
+#v-help .hpill small{font-family:var(--mono);opacity:.85}
+#v-help .hmap{position:relative;height:200px;border-radius:10px;background:linear-gradient(135deg,#dfe9d6,#e8efe0 40%,#d5e3ee);overflow:hidden}
+#v-help .hpin{position:absolute;width:18px;height:18px;border-radius:50%;background:var(--k);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transform:translate(-50%,-50%)}
+#v-help .hpop{position:absolute;left:50%;top:58%;background:#fff;color:#111;border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 3px 12px rgba(0,0,0,.25);max-width:280px}
+#v-help .htabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:6px 14px;margin:0 0 14px;max-width:980px}
+#v-help .htabs div{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+#v-help .htabs b{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-size:16px}
+#v-help .htabs span{font-size:12.5px;color:var(--muted)}
 #v-help .hq{border-top:1px solid var(--line);padding:10px 0}
 #v-help .hq summary{font-weight:700;cursor:pointer}
 #v-help .hq p{margin:6px 0 0;color:var(--muted)}
