@@ -318,3 +318,9 @@ board orders (latest price), then other customers' parts, then Xero's Products a
 (new edge-function route `items`, office only, read only; same `accounting.invoices` scope per Xero's
 granular-scope notes; if Xero refuses, the form says so and the board's own parts still show). Picking a
 part fills an empty price. Typing a new part is always allowed. Preview mode may read `items`.
+
+## Fewer tabs (Philip, 15 Oct)
+The top bar has eight tabs: Home, Won quotes, Sales orders, Jobs, Shop floor, Dispatch, Xero, Help.
+**Delivery map** opens from a button on Dispatch, **Customers** from a button on Sales orders; each has a
+"← Dispatch" / "← Sales orders" link back and keeps its parent tab lit. Their #map / #customers links
+still work. Purchase orders stay in Xero for now (Philip).

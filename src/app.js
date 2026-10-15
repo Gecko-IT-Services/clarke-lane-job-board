@@ -291,10 +291,12 @@ const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status ===
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
-  $('tabs').innerHTML = TABS.filter(([k]) => office() || !['quotes', 'orders', 'customers', 'xero'].includes(k)).map(([k, t]) => {
+  // Map lives under Dispatch and Customers under Sales orders (Philip: fewer tabs); their parent tab stays lit.
+  const lit = { map: 'dispatch', customers: 'orders' }[S.tab] || S.tab;
+  $('tabs').innerHTML = TABS.filter(([k]) => !['map', 'customers'].includes(k) && (office() || !['quotes', 'orders', 'xero'].includes(k))).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
-    return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
+    return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
   }).join('');
 }
 
@@ -401,7 +403,7 @@ function orderForm() {
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
     <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button>
-      <button class="btn link sm" type="button" data-booksave title="Save the contact, email and delivery address above to this customer's contact book (Customers tab)">Save contact and address to the contact book</button></div>
+      <button class="btn link sm" type="button" data-booksave title="Save the contact, email and delivery address above to this customer's contact book (Sales orders › Customers)">Save contact and address to the contact book</button></div>
     <p class="note" id="of-msg"></p></form>`;
 }
 /** Under the customer box: whether the order is on a Xero contact, as Sage insists on an account. */
@@ -573,7 +575,7 @@ function renderCustomers() {
         ${sform || '<div class="actions"><button class="btn sm" type="button" data-addsite>Add a delivery address</button></div>'}</div>
       ${orders.length ? `<div class="panel"><h3>Open orders <span class="note">${orders.length}</span></h3><div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${orders.map(j => `<button class="btn sm" type="button" data-open="${j.id}">${esc(j.so)} · due ${fmt(nextDue(j))}</button>`).join('')}</div></div>` : ''}`;
   }
-  $('v-customers').innerHTML = `<div class="sec-h"><h2>Customers</h2><span class="sub">The board's own contact book: who to deal with and where to deliver. Xero is not changed.</span></div>
+  $('v-customers').innerHTML = `<p class="crumb"><a href="#orders" data-tab="orders">← Sales orders</a></p><div class="sec-h"><h2>Customers</h2><span class="sub">The board's own contact book: who to deal with and where to deliver. Xero is not changed.</span></div>
     <div class="cbook"><div class="clist"><input type="search" id="csearch" placeholder="Find a customer" value="${esc(S.csearch || '')}">
         <div class="citems">${items || '<div class="note">No customers yet.</div>'}</div>
         <form class="addcust" data-addcust><input type="text" id="newcust" list="xero-customers2" placeholder="Add a customer (from Xero or new)" autocomplete="off">
@@ -610,7 +612,7 @@ function jobPostcode(j) {
 function renderMapTab() {
   const el = $('v-map');
   if (!el.dataset.ready) {
-    el.innerHTML = `<div class="sec-h"><h2>Map</h2><span class="sub">Where the open orders are going. Pick a stop to see the jobs there and what else is nearby, so a second delivery can go on the same run.</span></div>
+    el.innerHTML = `<p class="crumb"><a href="#dispatch" data-tab="dispatch">← Dispatch</a></p><div class="sec-h"><h2>Map</h2><span class="sub">Where the open orders are going. Pick a stop to see the jobs there and what else is nearby, so a second delivery can go on the same run.</span></div>
       <div class="mapctl" id="mapctl"></div><div class="mapgrid"><div class="mapframe"><div id="mapbox"></div></div><aside class="stops" id="mapstops"><p class="note">Placing the postcodes…</p></aside></div><div id="mapnote"></div>`;
     el.dataset.ready = '1';
   }
