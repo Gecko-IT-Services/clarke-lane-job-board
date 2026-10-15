@@ -40,7 +40,7 @@ export function renderDispatch({ lists: s, office, view, chosen, search, desp, f
     : [emailed(d),
       d.deliveredOn ? chip(`Delivered ${fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : ''}`, 'ok') + (d.xero ? '' : ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>`) : chip('Out for delivery'),
       office ? (d.xero ? chip(esc(d.xero.no), 'ok') : d.deliveredOn ? chip('Waiting for Xero', 'soon') : '') : ''].join(' ');
-  const confirm = (j, d) => cancelDn !== d.id ? '' : `<tr class="confirmrow"><td colspan="5"><div class="warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  const cancelRow = (j, d) => cancelDn !== d.id ? '' : `<tr class="confirmrow"><td colspan="5"><div class="warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <span><b>Cancel ${esc(d.dn)}?</b> It stays on the list marked cancelled, its number is not reused, and everything on it goes back to outstanding on ${esc(j.so)}. Use this when the goods did not go, or came back.</span>
     <button class="btn sm pri" type="button" data-cancdnyes="${d.id}">Yes, cancel ${esc(d.dn)}</button><button class="btn sm" type="button" data-cancdnno>Keep it</button></div></td></tr>`;
 
@@ -57,7 +57,7 @@ export function renderDispatch({ lists: s, office, view, chosen, search, desp, f
     all: ({ job: j, d }) => d.cancelled
       ? `<tr class="muted"><td class="mono"><s>${esc(d.dn)}</s></td><td>${who(j)}</td><td class="wide">${fmt(d.date)}</td><td>${progress(d)}</td><td class="act"></td></tr>`
       : `<tr><td class="mono">${esc(d.dn)}</td><td>${who(j)}</td><td class="wide">${fmt(d.date)}</td><td>${progress(d)}</td>
-        <td class="act">${viewBtn(j, d)}${office && !d.xero ? ` <button class="btn link sm" type="button" data-cancdn="${d.id}">Cancel</button>` : ''}</td></tr>${confirm(j, d)}`,
+        <td class="act">${viewBtn(j, d)}${office && !d.xero ? ` <button class="btn link sm" type="button" data-cancdn="${d.id}">Cancel</button>` : ''}</td></tr>${cancelRow(j, d)}`,
   };
   const table = !list.length ? `<div class="tbl-wrap"><p class="allclear${!q && V.ok ? ' ok' : ''}">${q ? 'No notes match that search.' : V.empty}</p></div>`
     : v === 'xero' ? `<div class="tbl-wrap">${xero.table}</div>${xero.how}`

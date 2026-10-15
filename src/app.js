@@ -795,7 +795,7 @@ async function pickContact(key, id) {
 }
 async function sendToXero() {
   const pend = []; S.jobs.forEach(x => x.despatches.forEach(d => { if (!d.xero && d.deliveredOn) pend.push([x, d]); }));
-  const items = pend.map(({ job: x, d }) => ({ x, d, m: contactFor(x.customer) }))
+  const items = pend.map(([x, d]) => ({ x, d, m: contactFor(x.customer) }))
     .filter(({ d, m }) => m && (S.sendPick[d.id] ?? true))
     .map(({ d, m }) => ({ despatchId: d.id, contactId: m.id }));
   if (!items.length) return;

@@ -85,7 +85,7 @@ opens the form as today.
 - `src/app.js`: `renderDespatch()` calls it; `data-dispview`, `data-despclose`, `#dsearch`
   wiring; remove `despatchTable`, `waitingForXero`'s panel shell, the sort machinery.
 - `index.html`: dispatch table styles under the Home block; phone (≤560px) hides Dispatched and
-  the Xero contact/Reference columns; remove unused `.sorth` / `dtable` / `.panel.ready` CSS
+  the Reference and Delivered columns (the Xero contact stays: it is picked there); remove unused `.sorth` / `dtable` / `.panel.ready` CSS
   (check Help first).
 - `src/help.js`: the Dispatch and Xero pictures use the new switch and table.
 
