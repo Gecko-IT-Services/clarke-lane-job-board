@@ -28,7 +28,8 @@ export function renderBoard({ jobs, today, office, stageKey, search, anyPlaced }
 
   const pill = (j, p) => {
     const s = j.procs[p], title = s.done ? `${p} done by ${s.by}, ${fmtTime(s.at)}` : `Mark ${p} done`;
-    return `<button type="button" class="pt${s.done ? ' done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(title)}"><span class="bx">${s.done ? TICK : ''}</span>${esc(SHORT[p])}</button>`;
+    const held = j.status === 'held' && !office;   // the floor can't tick a held job here either (same rule as Shop floor)
+    return `<button type="button" class="pt${s.done ? ' done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" title="${esc(held ? 'On hold' : title)}"${held ? ' disabled' : ''}><span class="bx">${s.done ? TICK : ''}</span>${esc(SHORT[p])}</button>`;
   };
   const mv = (j, how, sym, label, off) => `<button type="button" class="btn sm" data-move="${how}" data-job="${j.id}" title="${label}" aria-label="${label}: ${esc(j.so)}" ${off ? 'disabled' : ''}>${sym}</button>`;
   const ord = j => (done ? '' : `<td class="ord"><span class="n ${j.priority != null ? 'placed' : ''}" title="${j.priority != null ? 'Brought forward' : 'In date order'}">${rank.get(j.id) ?? ''}</span>${canMove

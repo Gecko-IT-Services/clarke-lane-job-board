@@ -61,3 +61,11 @@ folded "Already sales orders" / "Marked not a job" sections, and `inboxRow` / `i
 `tests/jobs.mjs`: working-day ages (weekend start, same day, missing date), the tone thresholds,
 and `wonQuotes` split/order/sums/this-week/this-month. Browser check of `dev/smoke.html#quotes` in
 light and dark, desktop / 768px / 375px, every switch view and empty state.
+
+## Drill-down (Philip, 15 Oct)
+Every card opens the list behind its number: **Waiting** → the Waiting view; **Oldest waiting** → the
+Waiting view with that quote's row opened on its lines; **Made into orders this week** and **Won this
+month** → their own lists (`wonQuotes().madeWeek` / `.month`, tested) under the switch, with "✕ Close
+this list" back to Waiting. Cards are buttons (`card(..., attrs)` in home.js; plain cards unchanged).
+Every row has **Lines**: a quote's lines from the quote calculator (read on demand, cached for the
+visit), a Xero import's lines, or, once made, the sales order's lines with a link to open it.

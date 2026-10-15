@@ -207,12 +207,14 @@ export function wonQuotes(rows, today) {
   const gone = rows.filter(r => r.state === 'dismissed');
   const wk = weekStart(today), monthStart = today.slice(0, 8) + '01';
   const month = rows.filter(r => r.state !== 'dismissed' && r.date && r.date.slice(0, 10) >= monthStart && r.date.slice(0, 10) <= today);
+  const madeWeek = made.filter(r => r.madeOn && r.madeOn >= wk && r.madeOn <= today);
+  const age = r => (r.state === 'waiting' ? { ...r, age: workingDaysSince(r.date, today) } : r);
   return {
     waiting, made, gone,
     waitingValue: net(waiting),
     oldest: waiting[0] && waiting[0].age != null ? waiting[0] : null,
-    madeThisWeek: made.filter(r => r.madeOn && r.madeOn >= wk && r.madeOn <= today).length,
-    wonMonth: month.length,
+    madeWeek, madeThisWeek: madeWeek.length,
+    month: month.map(age), wonMonth: month.length,
     wonMonthValue: net(month),
   };
 }
