@@ -8,25 +8,47 @@ const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const n = k => `<span class="hn">${k}</span>`;                        // numbered pointer
 const box = done => `<span class="tick ${done ? 'done' : ''}">${done ? TICK : ''}</span>`;
 const pic = (html, caption) => `<figure class="hpic"><div class="hframe" aria-hidden="true">${html}</div>${caption ? `<figcaption>${caption}</figcaption>` : ''}</figure>`;
-const steps = items => `<ol class="hsteps">${items.map(t => `<li>${t}</li>`).join('')}</ol>`;
+const head = (k, title) => `<h3>${k ? `<span class="hno">${k}</span> ` : ''}${title}</h3>`;
+/** Items starting with a numbered pointer explain the picture above; the rest go in a "Good to know" box. */
+const steps = items => {
+  const isNum = t => t.startsWith('<span class="hn">');
+  const num = items.filter(isNum), tips = items.filter(t => !isNum(t));
+  return (num.length ? `<ol class="hsteps">${num.map(t => `<li>${t}</li>`).join('')}</ol>` : '')
+    + (tips.length ? `<div class="htips">${num.length ? '<b>Good to know</b>' : ''}<ul>${tips.map(t => `<li>${t}</li>`).join('')}</ul></div>` : '');
+};
 
 /** The whole journey of an order, left to right like the tabs. */
 function flow(office) {
   const all = [
-    ['Won quotes', 'Quotes Levi has marked Ordered', 'M4 6h16v12H4z M4 6l8 7 8-7', 'quotes'],
-    ['Sales orders', 'The order is checked and saved', 'M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4', 'form'],
-    ['Jobs', 'It goes on the job board', 'M4 5h16v14H4z M4 10h16 M9 10v9', 'jobs'],
-    ['Shop floor', 'Each process is ticked off', 'M5 12.5l4.5 4.5L19 7.5', 'floor'],
+    ['Won quotes', 'Levi\'s quotes marked Ordered, waiting to become orders', 'M4 6h16v12H4z M4 6l8 7 8-7', 'quotes'],
+    ['Sales orders', 'Checked and saved; value, dispatched, invoiced', 'M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4', 'form'],
+    ['Jobs', 'The job board in running order', 'M4 5h16v14H4z M4 10h16 M9 10v9', 'jobs'],
+    ['Shop floor', 'The factory ticks off each process', 'M5 12.5l4.5 4.5L19 7.5', 'floor'],
     ['Dispatch', 'Delivery note, emailed, delivered', 'M3 7h11v9H3z M14 10h4l3 3v3h-7z M7 19a1.5 1.5 0 1 0 0-.01 M17 19a1.5 1.5 0 1 0 0-.01', 'dispatch'],
-    ['Xero', 'Draft invoice for Keith', 'M6 3h9l3 3v15H6z M9 10h6 M9 14h6 M9 18h3', 'xero'],
+    ['Xero', 'Draft invoice for Keith to approve', 'M6 3h9l3 3v15H6z M9 10h6 M9 14h6 M9 18h3', 'xero'],
   ].filter(s => office || ['floor', 'dispatch'].includes(s[3]));
-  return `<div class="hflow">${all.map(([t, d, path, k], i) => `${i ? '<span class="harrow" aria-hidden="true">→</span>' : ''}
-    <a class="hstep" href="#help-${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>
-      <b>${t}</b><span>${d}</span></a>`).join('')}</div>`;
+  const more = [['Home', 'Start of the day: what needs attention', 'home'], ['Map', 'Where deliveries are going, what is nearby', 'map'],
+    ...(office ? [['Customers', 'Buyers, goods in, delivery addresses', 'customers']] : [])];
+  return `<div class="hjourney"><b class="hlbl">${office ? 'From quote to invoice' : 'Where your part fits'}</b>
+    <div class="hflow" style="--n:${all.length}">${all.map(([t, d, path, k]) => `<a class="hstep" href="#help-${k}"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg></span>
+      <span><b>${t}</b><small>${d}</small></span></a>`).join('')}</div>
+    <div class="hmore"><b class="hlbl">Also on the board</b>${more.map(([t, d, k]) => `<a href="#help-${k}"><b>${t}</b><small>${d}</small></a>`).join('')}</div></div>`;
+}
+
+/** Home: the start of the day. */
+function home(office) {
+  const card = (t, d, tone) => `<div class="hcardx ${tone}"><b>${t}</b><span>${d}</span></div>`;
+  return `<section class="hsec" id="help-home">${head(0, 'Home: start here each day')}
+    <div class="hcardsx">
+      ${card('Counts at the top', `What is late, due in the next 7 days and ready to dispatch${office ? ', and the order book' : ''}.`, 't-bad')}
+      ${card('Station snapshot', 'How many jobs are waiting at each station, and how many of those are late. Tap one to open the shop floor there.', 't-info')}
+      ${card('Needs attention', `What is late, at risk (due within 3 working days with processes still to do), on hold or ready to go${office ? ', plus won quotes waiting and deliveries to invoice' : ''}. Worst first, each with one button for the next step.`, 't-warn')}
+      ${card('Going out', 'Switch to this to see everything due from today to the Friday of next week.', 't-ok')}</div>
+  </section>`;
 }
 
 function newOrders() {
-  return `<section class="hsec" id="help-quotes"><h3>1 · Won quotes</h3>
+  return `<section class="hsec" id="help-quotes">${head(1, 'Won quotes')}
     <p>Levi prices the job in his quote calculator as normal. When the customer orders, he presses <b>Mark as Ordered</b> there. Within a minute the quote appears on <b>Won quotes</b>, with the one waiting longest at the top. It turns amber after 2 working days and red after 5.</p>
     ${pic(`<table class="lines inbox"><thead><tr><th>Customer</th><th>Won</th><th>Contact</th><th>Value</th><th></th></tr></thead><tbody>
       <tr><td><b>Example Fabrications Ltd</b><div class="note mono">Q-0309 · quote</div></td><td>7 Oct <span class="chip late">6 days</span></td><td>A Buyer</td><td class="num">£386.50</td>
@@ -41,7 +63,7 @@ function newOrders() {
 }
 
 function orderForm() {
-  return `<section class="hsec" id="help-form"><h3>2 · Sales orders</h3>
+  return `<section class="hsec" id="help-form">${head(2, 'Sales orders')}
     <p>The office's list of every order, like Sage's Sales Order Processing: value, customer PO, next due date, and whether it has been dispatched and invoiced. Click an order to open it. The switch above the list shows <b>Outstanding</b> (soonest due first), <b>Dispatched</b>, <b>On hold</b> or <b>Cancelled</b>; the search looks through every order.</p>
     ${pic(`<table class="lines home orders"><thead><tr><th>Customer</th><th>Ordered</th><th>Next due</th><th>Progress</th><th class="num">Net</th></tr></thead><tbody>
       <tr><td><b>Sample Engineering Co</b><span class="ref mono">SO-9790 · no PO</span></td><td>15 Oct</td><td><span class="chip soon">20 Nov</span></td><td><span class="chip">Not dispatched</span> <span class="chip">Not invoiced</span></td><td class="num">£386.50</td></tr>
@@ -66,7 +88,7 @@ function orderForm() {
 /** Call-offs: one order, delivered in parts on set dates (Sage: one order line per delivery). */
 function calloffs() {
   const line = (qty, due, extra = '') => `<tr><td style="text-align:left">Bracket, 3mm S275</td><td>${qty}</td><td>£12.40</td><td>${due}</td>${extra}</tr>`;
-  return `<section class="hsec key" id="help-calloffs"><h3>3 · Call-offs</h3>
+  return `<section class="hsec key" id="help-calloffs">${head(3, 'Call-offs')}
     <p>A call-off is one order delivered in parts on set dates, for example 200 brackets, 50 a week for four weeks. As in Sage, each delivery is its own <b>line on the order with its own due date</b>. Everything else follows from that: the board, the shop floor, the dispatch notes and the invoices all work one delivery at a time.</p>
 
     <h4>Setting one up</h4>
@@ -110,7 +132,7 @@ function jobsBoard() {
   const pt = (name, done) => `<span class="pt ${done ? 'done' : ''}"><span class="bx">${done ? TICK : ''}</span>${name}</span>`;
   const row = (o, mv, cust, ref, due, pills, ready) => `<tr class="${ready ? 'ready' : ''}"><td class="ord"><span class="n ${mv ? 'placed' : ''}">${o}</span><span class="mv"><span class="btn sm">⤒</span><span class="btn sm">▲</span><span class="btn sm">▼</span></span></td>
     <td><b>${cust}</b><span class="ref mono">${ref}</span>${ready ? '<div class="chips"><span class="chip ok">Ready to dispatch</span></div>' : ''}</td><td>${due}</td><td>${pills}</td></tr>`;
-  return `<section class="hsec" id="help-jobs"><h3>4 · Jobs</h3>
+  return `<section class="hsec" id="help-jobs">${head(4, 'Jobs')}
     <p>Every open order, one row each. <b>Not started</b> has nothing ticked or sent, <b>In progress</b> has something ticked or sent, <b>Finished</b> is all dispatched.</p>
     ${pic(`<table class="lines home board"><thead><tr><th>Order ${n(1)}</th><th>Customer</th><th>Due</th><th>Processes ${n(2)}</th></tr></thead><tbody>
       ${row(1, true, 'Sample Engineering Co', 'SO-9790 · PO-114', '<span class="chip soon">20 Nov</span>', pt('Laser') + pt('Weld') + pt('P/Coat'))}
@@ -127,7 +149,7 @@ function jobsBoard() {
 
 function shopFloor(office) {
   const step = (p, done, here) => `<span class="step${done ? ' done' : ''}${here ? ' here' : ''}"><span class="bx">${done ? TICK : ''}</span><span><b>${p}</b><small>${done ? 'Done 09:42' : here ? 'Tap when done' : 'To do'}</small></span></span>`;
-  return `<section class="hsec" id="help-floor"><h3>${office ? '5 · ' : ''}Shop floor</h3>
+  return `<section class="hsec" id="help-floor">${head(office && 5, 'Shop floor')}
     <p>${office ? 'The screen the factory uses on the touch screen. ' : ''}Jobs are listed in the order the office wants them done: anything brought forward first, then soonest due.</p>
     ${pic(`<div class="kiosk"><div class="tiles">
         <span class="tile hot"><span class="nm">Laser ${n(1)}</span><span><span class="ct"><b>3</b>jobs waiting</span><span class="tag late">1 late</span></span></span>
@@ -151,7 +173,7 @@ function shopFloor(office) {
 function dispatch(office) {
   const seg = on => `<div class="seg">${[['Ready', 2], ['Out for delivery', 1], ...(office ? [['Waiting for Xero', 1]] : []), ['All notes', 6]]
     .map(([t, k]) => `<button type="button" aria-pressed="${t === on}">${t} <em>${k}</em></button>`).join('')}</div>`;
-  return `<section class="hsec" id="help-dispatch"><h3>${office ? '6 · ' : ''}Dispatch</h3>
+  return `<section class="hsec" id="help-dispatch">${head(office && 6, 'Dispatch')}
     <p>The <b>Dispatch</b> tab shows <span class="badge go">2 ready</span> when jobs are finished. The cards count what is ready, not emailed, out for delivery and${office ? ' waiting for Xero' : ' sent this week'}. The switch shows <b>Ready</b>, <b>Out for delivery</b>, ${office ? '<b>Waiting for Xero</b> and ' : 'and '}<b>All notes</b>; it opens on the first with something in it.</p>
     ${pic(`<div class="hrow">${seg('Ready')}</div>
       <table class="lines home dispatch"><thead><tr><th>Customer</th><th>Due</th><th>To send</th><th class="act">Next step</th></tr></thead><tbody>
@@ -168,7 +190,7 @@ function dispatch(office) {
 }
 
 function xero() {
-  return `<section class="hsec" id="help-xero"><h3>7 · Invoicing in Xero</h3>
+  return `<section class="hsec" id="help-xero">${head(7, 'Invoicing in Xero')}
     <p>Every delivered note waits under <b>Dispatch › Waiting for Xero</b>.</p>
     ${pic(`<div class="hrow"><div class="seg">${[['Ready', 2], ['Out for delivery', 1], ['Waiting for Xero', 1], ['All notes', 6]].map(([t, k]) => `<button type="button" aria-pressed="${t === 'Waiting for Xero'}">${t} <em>${k}</em></button>`).join('')}</div><span class="btn pri">Create 1 draft invoice in Xero</span>${n(2)}</div>
       <table class="lines home xero"><thead><tr><th></th><th>Note</th><th>Customer</th><th>Xero contact</th><th class="num">Net</th></tr></thead><tbody>
@@ -182,7 +204,7 @@ function xero() {
 }
 
 function mapAndCustomers(office) {
-  return `<section class="hsec" id="help-map"><h3>Map</h3>
+  return `<section class="hsec" id="help-map">${head(0, 'Map')}
     <p>Where the open orders are going, one pin per postcode, so Levi can see when a second delivery fits the same run.</p>
     ${pic(`<div class="hfilters">${[['Running late', '#B4321F', 1, true], ['Out for delivery', '#2557A7', 1, true], ['Ready to dispatch', '#25744A', 2, true], ['Due in the next 7 days', '#B45309', 3, true], ['Later', '#64646A', 6, false]]
         .map(([t, c, k, on]) => `<span class="hpill ${on ? 'on' : ''}" style="--k:${c}"><span class="hbox">${on ? '✓' : ''}</span>${t} <small>${k}</small></span>`).join('')} ${n(1)}</div>
@@ -194,7 +216,7 @@ function mapAndCustomers(office) {
       'The postcode comes from the order\'s delivery address, else the customer\'s usual delivery address in Customers' + (office ? ', else their address in Xero' : '') + '. Orders with no postcode are listed under the map in <b>Not on the map</b>; give them an address and they appear.',
       'The van\'s live position is not shown yet; it can be added later if the van gets a tracker or the driver shares his phone\'s location.'])}
   </section>
-  ${office ? `<section class="hsec" id="help-customers"><h3>Customers (contact book)</h3>
+  ${office ? `<section class="hsec" id="help-customers">${head(0, 'Customers (contact book)')}
     <p>Xero's contacts are often the customer's accounts people. The <b>Customers</b> tab keeps the people operations actually deal with, and where goods go. Xero is not changed.</p>
     ${steps(['Pick a customer on the left (or type one under the list and press <b>Open</b>).',
       '<b>Add a person</b> with a role: Orders / buyer, Goods in / deliveries, Accounts or Other. Tick <b>Main contact</b> for the one to use first.',
@@ -206,7 +228,7 @@ function mapAndCustomers(office) {
 }
 
 function emails(office) {
-  return `<section class="hsec" id="help-email"><h3>Emails</h3>
+  return `<section class="hsec" id="help-email">${head(0, 'Emails')}
     ${pic(`<div class="hmail"><div class="hmail-h"><b>Drafts</b> · Outlook</div><div class="hmail-r"><b>Demo Metals Ltd</b><span>Delivery note DN-0007 for order SO-9781</span><span class="chip">PDF</span></div></div>`)}
     ${steps(['The board never sends an email itself. <b>Email to customer</b> puts a ready-made email, with the PDF attached, in <b>your own Outlook Drafts</b> and opens it.',
       'Check it, then press <b>Send</b> in Outlook. If you do not send it, nothing reaches the customer.',
@@ -229,19 +251,17 @@ function faq(office) {
     ['Hold an order?', 'Open it and press Hold. A held order cannot be dispatched until you press Release.'],
     ['The same order again?', 'Open the old one and press Repeat order. You get a new order with the same parts and prices, new dates and a blank PO.'],
   );
-  return `<section class="hsec" id="help-faq"><h3>Questions</h3>${q.map(([a, b]) => `<details class="hq"><summary>${a}</summary><p>${b}</p></details>`).join('')}
+  return `<section class="hsec" id="help-faq">${head(0, 'Questions')}<div class="hfaq">${q.map(([a, b]) => `<details class="hq"><summary>${a}</summary><p>${b}</p></details>`).join('')}</div>
     <p class="note">Anything else: contact Gecko IT.</p></section>`;
 }
 
 export function renderHelp(office) {
-  const parts = office ? [newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), mapAndCustomers(true), xero(), emails(true), faq(true)]
-    : [shopFloor(false), dispatch(false), mapAndCustomers(false), faq(false)];
-  return `<div class="sec-h"><h2>Help</h2><span class="sub">${office ? 'How an order goes from quote to invoice. The pictures are examples, not real orders.' : 'How to use the shop floor screen. The pictures are examples.'}</span></div>
-    <p class="hkey">The board is at <b>jobs.clarke-lane.co.uk</b>. Sign in with your Clarke Lane Microsoft account.</p>
-    ${office ? `<div class="htabs">${[['Home', 'start of the day: what needs attention, what is going out, stations'], ['Won quotes', 'Levi\'s ordered quotes, to become sales orders'], ['Sales orders', 'every order, value, dispatched, invoiced; New order'],
-      ['Jobs', 'the job board in running order; bring jobs forward'], ['Shop floor', 'the factory touch screen: tick processes'], ['Dispatch', 'ready to go, dispatch notes, delivered, Xero'],
-      ['Map', 'where deliveries are going, what is nearby'], ['Customers', 'contact book: buyers, goods in, delivery addresses'], ['Xero', 'connection, preview, changeover import']]
-      .map(([t, d]) => `<div><b>${t}</b><span>${d}</span></div>`).join('')}</div>` : ''}
-    <p class="hkey">The <b>Home</b> tab is the place to start each day. The cards at the top count what is late, due in the next 7 days and ready to dispatch${office ? ', and the order book' : ''}. <b>Station snapshot</b> shows how many jobs are waiting at each station and how many of those are late; tap one to open the shop floor there. <b>Needs attention</b> lists what is late, at risk (due within 3 working days with processes still to do), on hold or ready to go${office ? ', plus won quotes waiting and deliveries to invoice' : ''}, worst first, each with one button for the next step. Switch to <b>Going out</b> to see everything due from today to the Friday of next week.</p>
-    ${flow(office)}${office ? '<p class="hkey">Most asked: <a href="#help-calloffs">how to set up and change call-offs</a>.</p>' : ''}<div class="help">${parts.join('')}</div>`;
+  const parts = office ? [home(true), newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), mapAndCustomers(true), xero(), emails(true), faq(true)]
+    : [home(false), shopFloor(false), dispatch(false), mapAndCustomers(false), faq(false)];
+  const toc = office ? [['home', 'Home'], ['quotes', 'Won quotes', 1], ['form', 'Sales orders', 2], ['calloffs', 'Call-offs', 3], ['jobs', 'Jobs', 4], ['floor', 'Shop floor', 5],
+    ['dispatch', 'Dispatch', 6], ['xero', 'Xero', 7], ['map', 'Map'], ['customers', 'Customers'], ['email', 'Emails'], ['faq', 'Questions']]
+    : [['home', 'Home'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['faq', 'Questions']];
+  return `<div class="sec-h"><h2>Help</h2><span class="sub">${office ? 'How an order goes from quote to invoice.' : 'How to use the shop floor screen.'} The pictures are examples, not real orders. Sign in at <b>jobs.clarke-lane.co.uk</b> with your Clarke Lane Microsoft account.</span></div>
+    <div class="hlayout"><nav class="htoc" aria-label="Help sections">${toc.map(([k, t, no]) => `<a href="#help-${k}">${no ? `<small>${no}</small>` : '<small class="dot"></small>'}${t}</a>`).join('')}</nav>
+    <div class="help">${flow(office)}${office ? '<a class="hcallout" href="#help-calloffs"><b>Most asked</b> How to set up and change call-offs <span aria-hidden="true">→</span></a>' : ''}${parts.join('')}</div></div>`;
 }
