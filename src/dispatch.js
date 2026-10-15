@@ -22,12 +22,12 @@ export function renderDispatch({ lists: s, office, view, chosen, search, desp, f
 
   const ready = s.ready.filter(j => j.id !== desp);   // the job in the form is not listed twice
   const VIEWS = {
-    ready: { list: ready, tab: 'Ready', title: 'Ready to dispatch', sub: 'every process ticked · running order', empty: 'Nothing ready yet. Jobs show here once every process is ticked.' },
+    ready: { list: ready, tab: 'Ready', title: 'Ready to dispatch', sub: 'every process ticked · running order', empty: ready.length < s.ready.length ? 'Nothing else ready.' : 'Nothing ready yet. Jobs show here once every process is ticked.' },
     out: { list: s.out, tab: 'Out for delivery', title: 'Out for delivery', sub: 'email the note, then mark it delivered when it arrives · only delivered notes go to Xero', empty: 'Nothing out for delivery.', ok: true },
     ...(office ? { xero: { list: s.toXero, tab: 'Waiting for Xero', title: 'Waiting for Xero', sub: 'delivered, not invoiced yet', empty: 'Nothing waiting. Every delivered note is in Xero.', ok: true } } : {}),
     all: { list: s.notes.slice(0, 100), n: s.notes.length, tab: 'All notes', title: 'All dispatch notes', sub: 'newest first, latest 100', empty: 'No dispatch notes yet.' },
   };
-  const v = chosen && VIEWS[view] ? view : Object.keys(VIEWS).find(k => k !== 'all' && VIEWS[k].list.length) || 'all', V = VIEWS[v];
+  const v = chosen && VIEWS[view] ? view : Object.keys(VIEWS).find(k => k === 'ready' ? s.ready.length : k !== 'all' && VIEWS[k].list.length) || 'all', V = VIEWS[v];
   const q = v === 'all' ? (search || '').trim().toLowerCase() : '';
   const list = q ? s.notes.filter(x => noteMatch(x, q)) : V.list;
 
@@ -46,13 +46,13 @@ export function renderDispatch({ lists: s, office, view, chosen, search, desp, f
 
   const HEAD = {
     ready: '<th>Customer</th><th>Due</th><th>To send</th><th class="act">Next step</th>',
-    out: '<th>Note</th><th>Customer</th><th class="wide">Dispatched</th><th>Emailed</th><th class="act">Next step</th>',
+    out: '<th>Note</th><th>Customer</th><th class="wide">Dispatched</th><th class="wide">Emailed</th><th class="act">Next step</th>',
     all: '<th>Note</th><th>Customer</th><th class="wide">Dispatched</th><th>Progress</th><th class="act"></th>',
   };
   const ROW = {
     ready: j => `<tr><td>${who(j)}</td><td>${dueChip(nextDue(j))}${deliveryLabel(j) ? ` <span class="note">${deliveryLabel(j)}</span>` : ''}</td>
       <td>${parts(j)}</td><td class="act"><button class="btn sm pri" type="button" data-desp="${j.id}">Dispatch</button></td></tr>`,
-    out: ({ job: j, d }) => `<tr><td class="mono">${esc(d.dn)}</td><td>${who(j)}</td><td class="wide">${fmt(d.date)}</td><td>${emailed(d)}</td>
+    out: ({ job: j, d }) => `<tr><td class="mono">${esc(d.dn)}</td><td>${who(j)}</td><td class="wide">${fmt(d.date)}</td><td class="wide">${emailed(d)}</td>
       <td class="act"><div class="next">${d.emailedAt ? deliver(d, true) + viewBtn(j, d) : viewBtn(j, d, 'Email note…', true) + deliver(d, false)}</div></td></tr>`,
     all: ({ job: j, d }) => d.cancelled
       ? `<tr class="muted"><td class="mono"><s>${esc(d.dn)}</s></td><td>${who(j)}</td><td class="wide">${fmt(d.date)}</td><td>${progress(d)}</td><td class="act"></td></tr>`
