@@ -311,3 +311,10 @@ gecko-it-services.github.io, set in Clook DNS). The old github.io address redire
 redirect URIs: jobs.clarke-lane.co.uk, the github.io address and localhost:8080. The Xero edge function
 returns to the new address and accepts calls from both origins. Browser storage is per address, so
 everyone signs in once more after the move and the tablet's station is picked again.
+
+## Parts list on the order form (15 Oct)
+The Part box offers (`partSuggestions`, src/core/jobs.js, tested): this customer's parts from earlier
+board orders (latest price), then other customers' parts, then Xero's Products and services
+(new edge-function route `items`, office only, read only; same `accounting.invoices` scope per Xero's
+granular-scope notes; if Xero refuses, the form says so and the board's own parts still show). Picking a
+part fills an empty price. Typing a new part is always allowed. Preview mode may read `items`.

@@ -63,6 +63,7 @@ export const xero = async (route, body) => {
   if (route === 'contact') return { id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
+  if (route === 'items') return { items: fakeItems };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
 };
 let cmap = new Map();
@@ -111,3 +112,5 @@ export const deletePerson = async id => { book.people = book.people.filter(x => 
 export const saveSite = async x => { if (x.main) book.sites.forEach(y => { if (y.key === x.key) y.main = false; });
   if (x.id) Object.assign(book.sites.find(y => y.id === x.id), x); else book.sites.push({ ...x, id: bookId++ }); };
 export const deleteSite = async id => { book.sites = book.sites.filter(x => x.id !== id); };
+// Xero Products and services for the Part box (made up).
+const fakeItems = [{ code: 'BR3', description: 'Bracket — 3mm S275', price: 12.1 }, { code: 'PL6', description: 'Base plate 6mm S275, 4 holes', price: 31.5 }, { code: 'GU2', description: 'Guard 2mm Zintec, powder coat RAL 9005', price: 18 }];
