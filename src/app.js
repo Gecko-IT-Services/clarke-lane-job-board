@@ -842,7 +842,7 @@ function renderFloor() {
 /** Both inboxes as one list of rows: { kind: 'quote' | 'xero', date, ref, customer, who, net, state, ... }. */
 function inboxRows() {
   const rows = [];
-  for (const q of quotes() || []) rows.push({ kind: 'quote', key: 'q' + q.spId, date: q.quoteDate, ref: q.quoteNo, customer: q.customer,
+  for (const q of quotes() || []) rows.push({ kind: 'quote', key: 'q' + q.spId, date: q.wonDate || q.quoteDate, ref: q.quoteNo, customer: q.customer,
     who: q.contactName, net: q.sellTotal != null ? q.sellTotal + (q.carriage || 0) : null, state: q.state, so: q.so, jobId: q.jobId, spId: q.spId,
     madeOn: q.jobId ? job(q.jobId)?.ordered : null });
   for (const x of S.xeroOrders || []) {

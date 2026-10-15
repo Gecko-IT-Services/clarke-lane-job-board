@@ -143,7 +143,6 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 .readybar{background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:6px 10px;font-weight:700;font-size:14px}
 
 /* quotes */
-.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:14px;align-items:start}
 .qcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .qcard .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .qcard .h .mono{font-size:13px;color:var(--muted)}
@@ -156,8 +155,6 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 .pchecks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .pchecks label{display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;font-weight:600}
 .pchecks input{width:18px;height:18px;accent-color:var(--ink)}
-.group-h{font-family:var(--display);font-size:22px;display:flex;gap:10px;align-items:baseline}
-.group-h .note{font-family:var(--body)}
 
 /* dispatch */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -415,15 +412,9 @@ tr.muted td{color:var(--muted)}
 table.inbox td{vertical-align:middle}
 table.inbox th:nth-child(-n+3),table.inbox td:nth-child(-n+3){text-align:left}
 table.inbox .acts{white-space:nowrap;display:flex;gap:6px;justify-content:flex-end;align-items:center}
-details.gone .tbl-wrap{margin-top:10px}
 table.dtable form.inv input{width:140px}
 .paper.pdf{background:#fff;color:#111214}
 .cdates{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-details.gone>summary{cursor:pointer;list-style:none}
-details.gone>summary::-webkit-details-marker{display:none}
-details.gone>summary::before{content:'▸ ';font-size:14px}
-details.gone[open]>summary::before{content:'▾ '}
-details.gone .qgrid{margin-top:12px}
 .btn.ghost{background:transparent;border-color:#3A3A3F;color:#fff}
 .who{color:#C8C8CC;font-weight:600;gap:10px}
 .err{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}

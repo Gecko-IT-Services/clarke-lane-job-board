@@ -14,11 +14,11 @@ export function renderWon({ rows, today, view, reading, error, converting }, h) 
   const w = wonQuotes(rows, today);
   const oldTone = w.oldest ? quoteAgeTone(w.oldest.age) : '';
   const cards = [
-    card('warn', 'quote', w.waiting.length, w.waiting.length ? `Waiting · ${gbp(w.waitingValue)}` : 'Waiting', w.waiting.length > 0),
+    card('warn', 'quote', reading ? '—' : w.waiting.length, w.waiting.length ? `Waiting · ${gbp(w.waitingValue)}` : 'Waiting', !reading && w.waiting.length > 0),
     card(oldTone === 'late' ? 'bad' : 'warn', 'late', w.oldest ? days(w.oldest.age) : '—',
       w.oldest ? `Oldest waiting · ${esc(w.oldest.customer)}` : 'Oldest waiting', oldTone !== ''),
     card('ok', 'ready', w.madeThisWeek, 'Made into orders this week', w.madeThisWeek > 0),
-    card('info', 'book', gbp(w.wonMonthValue), `Won this month · ${w.wonMonth} quote${w.wonMonth === 1 ? '' : 's'}`, w.wonMonth > 0),
+    card('info', 'book', reading ? '—' : gbp(w.wonMonthValue), `Won this month · ${w.wonMonth} quote${w.wonMonth === 1 ? '' : 's'}`, !reading && w.wonMonth > 0),
   ].join('');
 
   const who = r => `<b>${esc(r.customer)}</b><span class="ref mono">${esc(r.ref)} · ${r.kind === 'xero' ? 'Xero import' : 'quote'}</span>`;
@@ -51,7 +51,7 @@ export function renderWon({ rows, today, view, reading, error, converting }, h) 
   const table = !reading && V.list.length
     ? `<div class="tbl-wrap"><table class="lines home">${head}<tbody>${V.list.map(row).join('')}</tbody></table></div>`
     : `<div class="tbl-wrap"><p class="allclear${!reading && !error && v === 'waiting' ? ' ok' : ''}">${reading ? 'Reading the quotes…' : error ? 'Could not read the quotes, so this list may be incomplete.' : V.empty}</p></div>`;
-  const seg = `<div class="seg" role="group" aria-label="Show">${Object.entries(VIEWS).map(([k, x]) =>
+  const seg = `<div class="seg" role="group" aria-label="Which won quotes to show">${Object.entries(VIEWS).map(([k, x]) =>
     `<button type="button" data-wonview="${k}" aria-pressed="${k === v}">${x.tab} <em>${x.n}</em></button>`).join('')}</div>`;
   const err = error ? `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(error)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>` : '';
 

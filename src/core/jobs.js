@@ -184,6 +184,7 @@ export function quoteStates(quotes, jobs, dismissedIds) {
 export function workingDaysSince(from, today) {
   if (!from) return null;
   let n = 0;
+  // ponytail: bank holidays and shutdowns count as working days; add a holiday list if Christmas flags annoy.
   for (let d = plusDays(from.slice(0, 10), 1); d <= today; d = plusDays(d, 1)) {
     const w = new Date(d + 'T12:00:00Z').getUTCDay();
     if (w !== 0 && w !== 6) n++;
@@ -201,7 +202,7 @@ export const quoteAgeTone = days => (days > 5 ? 'late' : days > 2 ? 'soon' : '')
 export function wonQuotes(rows, today) {
   const net = xs => round2(xs.reduce((a, r) => a + (r.net || 0), 0));
   const waiting = rows.filter(r => r.state === 'waiting').map(r => ({ ...r, age: workingDaysSince(r.date, today) }))
-    .sort((a, b) => (b.age ?? -1) - (a.age ?? -1));
+    .sort((a, b) => (!a.date) - (!b.date) || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const made = rows.filter(r => r.state === 'job');
   const gone = rows.filter(r => r.state === 'dismissed');
   const wk = weekStart(today), monthStart = today.slice(0, 8) + '01';

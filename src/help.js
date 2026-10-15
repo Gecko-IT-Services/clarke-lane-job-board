@@ -28,10 +28,10 @@ function flow(office) {
 function newOrders() {
   return `<section class="hsec" id="help-quotes"><h3>1 · Won quotes</h3>
     <p>Levi prices the job in his quote calculator as normal. When the customer orders, he presses <b>Mark as Ordered</b> there. Within a minute the quote appears on <b>Won quotes</b>, with the one waiting longest at the top. It turns amber after 2 working days and red after 5.</p>
-    ${pic(`<table class="lines inbox"><thead><tr><th>Date</th><th>Number</th><th>From</th><th style="text-align:left">Customer</th><th>Net</th><th></th></tr></thead><tbody>
-      <tr><td>15 Oct 2026</td><td class="mono">Q-0312</td><td>Quote</td><td style="text-align:left"><b>Example Fabrications Ltd</b></td><td class="num">£1,240.00</td>
+    ${pic(`<table class="lines inbox"><thead><tr><th>Customer</th><th>Won</th><th>Contact</th><th>Value</th><th></th></tr></thead><tbody>
+      <tr><td><b>Example Fabrications Ltd</b><div class="note mono">Q-0309 · quote</div></td><td>9 Oct <span class="chip late">6 days</span></td><td>A Buyer</td><td class="num">£386.50</td>
         <td><div class="acts"><span class="btn sm pri">Create sales order</span>${n(1)}<span class="btn sm">Not a job</span>${n(2)}</div></td></tr>
-      <tr><td>14 Oct 2026</td><td class="mono">Q-0309</td><td>Quote</td><td style="text-align:left"><b>Sample Engineering Co</b></td><td class="num">£386.50</td>
+      <tr><td><b>Sample Engineering Co</b><div class="note mono">Q-0312 · quote</div></td><td>14 Oct <span class="chip">1 day</span></td><td></td><td class="num">£1,240.00</td>
         <td><div class="acts"><span class="btn sm pri">Create sales order</span><span class="btn sm">Not a job</span></div></td></tr></tbody></table>`)}
     ${steps([`${n(1)} <b>Create sales order</b> opens the order form with the customer, parts, quantities and prices copied from the quote. The processes it can tell from the quote (folds, welds, inserts, paint…) are already ticked.`,
       `${n(2)} <b>Not a job</b> stops a quote being offered here, for example one already finished some other way. The quote itself is not changed, and <b>Put back</b> undoes it.`,
