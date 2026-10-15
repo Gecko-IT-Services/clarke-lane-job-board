@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs, addWorkingDays, quoteStates, PROCESSES, stage, nextDue, left, value, despatchValue, calloffDates, defaultDespatchQty,
-  suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists, nextStep, floorQueue, floorStations, partsLeft, dayNo } from '../src/core/jobs.js';
+  suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists, nextStep, floorQueue, floorStations, partsLeft, dayNo, dispatchLists } from '../src/core/jobs.js';
 
 const job = over => ({
   id: 1, so: 'SO-9729', customer: 'BSA Regal Group Ltd', po: 'M32991', due: '2026-10-30', status: 'open',
@@ -278,4 +278,35 @@ console.log('jobs: ok');
   assert.deepEqual(partsLeft(p), [{ part: 'Bracket', left: 45, next: 15 }], 'Plate fully sent drops out; next = due by the next delivery');
   assert.equal(dayNo('2026-10-02') - dayNo('2026-10-01'), 1);
   console.log('jobs partsLeft: ok');
+}
+
+// — Dispatch tab: what is ready, and where each dispatch note is. —
+{
+  const L = [{ id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 13.1, due: '2026-10-30' }];
+  const done = { 'Laser': { done: true } }, todo = { 'Laser': { done: false } };
+  const a = job({ id: 1, so: 'SO-1', lines: L, procs: done, despatches: [
+    { id: 1, dn: 'DN-1', date: '2026-10-05', lines: { 10: 2 }, deliveredOn: '2026-10-06', xero: { no: 'INV-1' } },
+    { id: 3, dn: 'DN-3', date: '2026-10-13', lines: { 10: 2 }, deliveredOn: '2026-10-14', xero: null },
+    { id: 5, dn: 'DN-5', date: '2026-10-14', lines: { 10: 2 }, emailedAt: '2026-10-14T10:00:00Z', deliveredOn: null, xero: null }],
+    cancelledDespatches: [{ id: 4, dn: 'DN-4', date: '2026-10-13', lines: { 10: 1 }, cancelled: { at: '2026-10-14T09:00:00Z', by: 'Levi' } }] });
+  const b = job({ id: 2, so: 'SO-2', lines: L, procs: todo, despatches: [
+    { id: 2, dn: 'DN-2', date: '2026-10-12', lines: { 10: 1 }, deliveredOn: '2026-10-13', xero: null },
+    { id: 6, dn: 'DN-6', date: '2026-10-15', lines: { 10: 1 }, deliveredOn: null, xero: null }] });
+  const c = job({ id: 3, so: 'SO-3', lines: L, procs: done, status: 'held' });
+  const gone = job({ id: 4, so: 'SO-4', lines: L, procs: done, despatches: [{ id: 7, dn: 'DN-7', date: '2026-10-15', lines: { 10: 20 }, deliveredOn: null, xero: null }] });
+  const off = job({ id: 5, so: 'SO-5', lines: L, procs: done, status: 'cancelled' });
+  const s = dispatchLists([b, a, c, gone, off], '2026-10-15');
+  const ids = xs => xs.map(x => (x.d || x).id);
+  assert.deepEqual(ids(s.ready), [1], 'ready: open, every process ticked; held, finished and cancelled out');
+  assert.deepEqual(ids(s.open), [1, 2], 'open: every open job, running order');
+  assert.deepEqual(ids(s.held), [3]);
+  assert.deepEqual(ids(s.out), [7, 6, 5], 'out for delivery: newest first, finished jobs included');
+  assert.deepEqual(ids(s.notEmailed), [7, 6]);
+  assert.deepEqual(ids(s.toXero), [2, 3], 'waiting for Xero: oldest first');
+  assert.equal(s.toXeroValue, 39.3);
+  assert.deepEqual(ids(s.notes), [7, 6, 5, 4, 3, 2, 1], 'all notes newest first, cancelled included');
+  assert.equal(s.thisWeek, 5, 'live notes dated Monday 12 Oct to today');
+  const hidden = j => ({ ...j, lines: j.lines.map(l => ({ ...l, price: null })) });
+  assert.equal(dispatchLists([hidden(a), hidden(b)], '2026-10-15').toXeroValue, null, 'no £ without prices');
+  console.log('jobs dispatchLists: ok');
 }
