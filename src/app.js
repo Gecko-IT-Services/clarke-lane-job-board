@@ -7,7 +7,8 @@ import * as data from './data.js';
 import { normName, matchContact } from './core/xero.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
-  addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs } from './core/jobs.js';
+  addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
+  byRunningOrder, moveInOrder, compareValues } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -125,6 +126,46 @@ function statusChips(j) {
 const onBoardStage = j => ['upcoming', 'current'].includes(stage(j));
 const byDue = (a, b) => (nextDue(a) < nextDue(b) ? -1 : 1);
 
+/* ---------- sortable column headings (office tables). Each computer remembers its own choice. ---------- */
+const SORT_DEFAULT = { board: { col: 'order', dir: 1 }, boardDone: { col: 'dispatched', dir: -1 }, orders: { col: 'date', dir: -1 },
+  inbox: { col: 'date', dir: -1 }, dn: { col: 'date', dir: -1 } };
+let SORT = {};
+try { SORT = JSON.parse(localStorage.getItem('clj.sort') || '{}') || {}; } catch { /* date order */ }
+const sortOf = t => SORT[t] || SORT_DEFAULT[t];
+function sortTh(t, col, label, style = '') {
+  const cur = sortOf(t), on = cur.col === col;
+  return `<th ${style} aria-sort="${on ? (cur.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="sorth" data-sort="${t}:${col}" title="Sort by ${esc(label)}">${esc(label)}<span class="arr">${on ? (cur.dir > 0 ? '▲' : '▼') : ''}</span></button></th>`;
+}
+/** getters: { col: row => value }. Ties keep the order the rows came in. */
+function sortRows(t, rows, getters) {
+  const cur = sortOf(t), g = getters[cur.col] || getters[SORT_DEFAULT[t].col];
+  return rows.map((r, i) => [r, i]).sort((a, b) => compareValues(g(a[0]), g(b[0]), cur.dir) || a[1] - b[1]).map(x => x[0]);
+}
+function setSort(t, col) {
+  const cur = sortOf(t);
+  SORT[t] = cur.col === col ? { col, dir: -cur.dir } : { col, dir: 1 };
+  if (SORT[t].col === SORT_DEFAULT[t].col && SORT[t].dir === SORT_DEFAULT[t].dir) delete SORT[t];
+  try { localStorage.setItem('clj.sort', JSON.stringify(SORT)); } catch { /* not kept */ }
+  render();
+}
+
+/* ---------- running order: the office brings jobs forward; the shop floor follows it ---------- */
+const boardVisible = () => S.boardList || [];
+const runningOrder = () => S.jobs.filter(j => onBoardStage(j) && j.status !== 'cancelled').sort(byRunningOrder);
+async function moveJob(id, how, visible) {
+  const all = runningOrder(), i = visible.findIndex(j => j.id === id);
+  const target = how === 'top' ? 0 : how === 'up' ? all.indexOf(visible[i - 1]) : how === 'down' ? all.indexOf(visible[i + 1]) : -1;
+  const ids = how === 'reset' ? [] : target < 0 ? null : moveInOrder(all, id, target);
+  if (!ids) return;
+  const before = new Map(S.jobs.map(j => [j.id, j.priority]));
+  S.jobs.forEach(j => { const n = ids.indexOf(j.id); j.priority = n < 0 ? null : n + 1; }); render();
+  try {
+    await data.setRunningOrder(ids);
+    if (how === 'reset') toast('Back to date order.');
+    else if (how === 'top') toast(`${job(id).so} is now first on the shop floor.`);
+  } catch (e) { S.jobs.forEach(j => { j.priority = before.get(j.id) ?? null; }); render(); toast(e.message, null, true); }
+}
+
 /* ---------- actions ---------- */
 async function toggleProc(id, p) {
   const j = job(id); const prev = j.procs[p]; if (!prev) return;
@@ -239,15 +280,24 @@ function jobBoard() {
   const by = { upcoming: [], current: [], completed: [] };
   S.jobs.forEach(j => by[stage(j)]?.push(j));
   const list = by[S.stage].filter(j => !q || [j.so, j.customer, j.po, j.quote, ...j.lines.map(l => l.part)].some(s => (s || '').toLowerCase().includes(q)));
-  list.sort(S.stage === 'completed' ? (a, b) => (lastDespatch(b) < lastDespatch(a) ? -1 : 1) : byDue);
   const money = office();
+  const done = S.stage === 'completed', tk = done ? 'boardDone' : 'board';
+  const rank = new Map(runningOrder().map((j, i) => [j.id, i + 1]));
+  const sortedList = sortRows(tk, list, { order: j => rank.get(j.id) ?? 1e9, customer: j => j.customer, so: j => j.so, po: j => j.po,
+    due: j => nextDue(j), dispatched: j => lastDespatch(j), value: j => (done ? value(j) : value(j, { remaining: true })) });
+  list.length = 0; list.push(...sortedList);
+  S.boardList = list;
+  const canMove = money && !done && sortOf(tk).col === 'order' && sortOf(tk).dir === 1 && !q;
+  const anyPlaced = S.jobs.some(j => j.priority != null && onBoardStage(j));
   const seg = [['upcoming', 'Upcoming'], ['current', 'Current'], ['completed', 'Completed']].map(([k, t]) =>
     `<button type="button" data-stage="${k}" aria-pressed="${S.stage === k}">${t}<span class="c">${by[k].length}</span></button>`).join('');
   const sum = list.reduce((a, j) => a + (value(j, { remaining: true }) || 0), 0);
   const rows = list.map(j => {
     const pin = needed(j).map(p => `<button type="button" class="tick ${j.procs[p].done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${j.procs[p].done}">${j.procs[p].done ? TICK : ''}${SHORT[p]}</button>`).join('');
     const dueCell = stage(j) === 'completed' ? `<span class="chip">sent ${fmt(lastDespatch(j))}</span>` : dueChip(nextDue(j));
-    return `<tr data-open="${j.id}">
+    const ord = done ? '' : `<td class="ord"><span class="n ${j.priority != null ? 'placed' : ''}" title="${j.priority != null ? 'Brought forward' : 'In date order'}">${rank.get(j.id) ?? ''}</span>${canMove ? `<span class="mv">
+        <button type="button" class="btn sm" data-move="top" data-job="${j.id}" title="Bring to the top" aria-label="Bring ${esc(j.so)} to the top">⤒</button><button type="button" class="btn sm" data-move="up" data-job="${j.id}" title="Up one" aria-label="Move ${esc(j.so)} up one" ${list[0] === j ? 'disabled' : ''}>▲</button><button type="button" class="btn sm" data-move="down" data-job="${j.id}" title="Down one" aria-label="Move ${esc(j.so)} down one" ${list[list.length - 1] === j ? 'disabled' : ''}>▼</button></span>` : ''}</td>`;
+    return `<tr data-open="${j.id}">${ord}
       <td class="cust"><b>${esc(j.customer)}</b><div class="meta">${statusChips(j)}</div><div class="pin">${pin}</div></td>
       <td class="so">${esc(j.so)}</td><td class="po">${esc(j.po) || '—'}</td><td class="due">${dueCell}</td>
       ${PROCESSES.map(p => `<td class="p">${procCell(j, p)}</td>`).join('')}
@@ -259,10 +309,12 @@ function jobBoard() {
   return `<p class="sub note">${blurb}${money && S.stage !== 'completed' && list.length ? ` ${gbp(sum)} still to dispatch.` : ''}</p>
     <div class="sec-h" style="gap:10px"><div class="seg" role="group" aria-label="Job stage">${seg}</div>
       <input type="search" id="search" placeholder="Search customer, SO, PO or part" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="jobs"><thead><tr><th>Customer</th><th>Sales order</th><th>Customer PO</th><th>${S.stage === 'completed' ? 'Dispatched' : 'Due'}</th>
-      ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? `<th style="text-align:right">${S.stage === 'completed' ? 'Value' : 'Outstanding'}</th>` : ''}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="15" class="empty">${empty}</td></tr>`}</tbody></table></div>
-    <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full order.</p>`;
+    <div class="tbl-wrap"><table class="jobs"><thead><tr>${done ? '' : sortTh(tk, 'order', 'Order')}${sortTh(tk, 'customer', 'Customer')}${sortTh(tk, 'so', 'Sales order')}${sortTh(tk, 'po', 'Customer PO')}${done ? sortTh(tk, 'dispatched', 'Dispatched') : sortTh(tk, 'due', 'Due')}
+      ${PROCESSES.map(p => `<th class="p">${esc(p)}</th>`).join('')}${money ? sortTh(tk, 'value', done ? 'Value' : 'Outstanding', 'style="text-align:right"') : ''}</tr></thead>
+      <tbody>${rows || `<tr><td colspan="16" class="empty">${empty}</td></tr>`}</tbody></table></div>
+    <p class="note">Tick a box when that process is finished. A dash means the job doesn't need it. Click a row for the full order.
+      ${money && !done ? (canMove ? ' Use ⤒ ▲ ▼ to bring a job forward; the shop floor follows this order.' : ' To bring a job forward, sort by Order (click the heading) and use the arrows.') : ''}
+      ${money && anyPlaced && !done ? ' <button type="button" class="btn link sm" data-move="reset">Put everything back in date order</button>' : ''}</p>`;
 }
 /** The Sage-style list of sales orders, with dispatch and invoice status. Office only. */
 function salesOrders() {
@@ -270,8 +322,9 @@ function salesOrders() {
   const f = S.orderFilter;
   const keep = j => f === 'all' ? true : f === 'cancelled' ? j.status === 'cancelled' : f === 'held' ? j.status === 'held'
     : f === 'complete' ? stage(j) === 'completed' : stage(j) !== 'completed' && j.status !== 'cancelled';
-  const list = S.jobs.filter(keep).filter(j => !q || [j.so, j.customer, j.po, j.quote].some(s => (s || '').toLowerCase().includes(q)))
-    .sort((a, b) => (a.so < b.so ? 1 : -1));
+  const list = sortRows('orders', S.jobs.filter(keep).filter(j => !q || [j.so, j.customer, j.po, j.quote].some(s => (s || '').toLowerCase().includes(q)))
+    .sort((a, b) => compareValues(b.so, a.so)), { so: j => j.so, date: j => j.ordered, customer: j => j.customer, po: j => j.po, net: j => value(j),
+    due: j => (stage(j) === 'completed' || j.status === 'cancelled' ? '' : nextDue(j)), dispatched: j => (j.status === 'cancelled' ? 'Cancelled' : despatchStatus(j)), invoiced: j => invoiceStatus(j) });
   const rows = list.map(j => `<tr data-open="${j.id}"><td class="mono">${esc(j.so)}</td><td>${fmt(j.ordered)}</td><td style="text-align:left"><b>${esc(j.customer)}</b></td>
       <td style="text-align:left">${esc(j.po) || '—'}</td><td class="num">${gbp(value(j), 2)}</td><td>${stage(j) === 'completed' || j.status === 'cancelled' ? '' : dueChip(nextDue(j))}</td>
       <td>${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Dispatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}${j.status === 'held' ? ' <span class="chip late">On hold</span>' : ''}</td>
@@ -280,7 +333,7 @@ function salesOrders() {
     .map(([k, t]) => `<option value="${k}" ${f === k ? 'selected' : ''}>${t}</option>`).join('');
   return `<div class="sec-h" style="gap:10px"><label class="fl" style="flex-direction:row;align-items:center;gap:8px">Show <select class="f" id="ofilter">${filters}</select></label>
       <input type="search" id="search" placeholder="Search order, customer or PO" value="${esc(S.search)}" style="flex:1 1 240px;max-width:360px;margin-left:auto"></div>
-    <div class="tbl-wrap"><table class="lines solist"><thead><tr><th>Order</th><th>Date</th><th style="text-align:left">Customer</th><th style="text-align:left">Customer order no.</th><th>Net</th><th>Next due</th><th>Dispatched</th><th>Invoiced</th></tr></thead>
+    <div class="tbl-wrap"><table class="lines solist"><thead><tr>${sortTh('orders', 'so', 'Order')}${sortTh('orders', 'date', 'Date')}${sortTh('orders', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('orders', 'po', 'Customer order no.', 'style="text-align:left"')}${sortTh('orders', 'net', 'Net')}${sortTh('orders', 'due', 'Next due')}${sortTh('orders', 'dispatched', 'Dispatched')}${sortTh('orders', 'invoiced', 'Invoiced')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="8" class="empty">No orders here.</td></tr>`}</tbody></table></div>`;
 }
 
@@ -533,7 +586,7 @@ function floorTick(j, p, focus) {
     ${s.done ? `<small>${esc(fmtTime(s.at))}</small>` : ''}`;
 }
 function renderFloor() {
-  const open = S.jobs.filter(onBoardStage).sort(byDue);
+  const open = S.jobs.filter(onBoardStage).sort(byRunningOrder);
   const st = S.station;
   const count = p => open.filter(j => j.procs[p] && !j.procs[p].done).length;
   const btns = [['all', 'All jobs', open.length], ...PROCESSES.map(p => [p, p, count(p)])]
@@ -541,7 +594,9 @@ function renderFloor() {
   const list = st === 'all' ? open : open.filter(j => j.procs[st] && !j.procs[st].done);
   const rows = list.map(j => {
     const pin = needed(j).map(p => `<button type="button" class="tick ${j.procs[p].done ? 'done' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${j.procs[p].done}">${j.procs[p].done ? TICK : ''}${SHORT[p]}</button>`).join('');
-    const state = j.status === 'held' ? '<span class="chip bad">On hold</span>' : allDone(j) ? '<span class="chip ok">Ready to dispatch</span>' : '';
+    const ahead = j.priority != null && open.slice(open.indexOf(j) + 1).some(o => nextDue(o) < nextDue(j));   // above a job due sooner
+    const state = [ahead ? '<span class="chip late">Brought forward</span>' : '',
+      j.status === 'held' ? '<span class="chip bad">On hold</span>' : allDone(j) ? '<span class="chip ok">Ready to dispatch</span>' : ''].join(' ').trim();
     return `<tr class="${allDone(j) ? 'ready' : ''}">
       <td class="due">${dueChip(nextDue(j))}${deliveryLabel(j) ? `<div class="note">${deliveryLabel(j)}</div>` : ''}</td>
       <td class="so"><button type="button" class="btn link" data-open="${j.id}" title="Job details">${esc(j.so)}</button></td>
@@ -554,7 +609,7 @@ function renderFloor() {
     <div class="tbl-wrap"><table class="jobs floor"><thead><tr><th>Due</th><th>Sales order</th><th>Customer and parts</th>
       ${PROCESSES.map(p => `<th class="p ${st === p ? 'focus' : ''}">${esc(p)}</th>`).join('')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="12" class="empty">${st === 'all' ? 'No open jobs.' : `Nothing waiting for ${esc(st)}.`}</td></tr>`}</tbody></table></div>
-    <p class="note">Soonest due first. A dash means the job doesn't need that process. Tap the sales order number for the full job.</p>`;
+    <p class="note">In the office's running order: jobs brought forward first, then soonest due. A dash means the job doesn't need that process. Tap the sales order number for the full job.</p>`;
 }
 
 /* ---------- new orders: Levi's ordered quotes and Xero sales orders, as Sage-style rows ---------- */
@@ -586,7 +641,8 @@ function inboxRow(r) {
     <td class="num">${r.net != null ? gbp(r.net, 2) : ''}</td><td><div class="acts">${act}</div></td></tr>`;
 }
 function inboxTable(rows, empty) {
-  return `<div class="tbl-wrap"><table class="lines inbox"><thead><tr><th>Date</th><th>Number</th><th>From</th><th style="text-align:left">Customer</th><th style="text-align:left">Contact / ref</th><th>Net</th><th></th></tr></thead>
+  rows = sortRows('inbox', rows, { date: r => r.date, ref: r => r.ref, from: r => r.kind, customer: r => r.customer, who: r => r.who, net: r => r.net });
+  return `<div class="tbl-wrap"><table class="lines inbox"><thead><tr>${sortTh('inbox', 'date', 'Date')}${sortTh('inbox', 'ref', 'Number')}${sortTh('inbox', 'from', 'From')}${sortTh('inbox', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('inbox', 'who', 'Contact / ref', 'style="text-align:left"')}${sortTh('inbox', 'net', 'Net')}<th></th></tr></thead>
     <tbody>${rows.map(inboxRow).join('') || `<tr><td colspan="7" class="empty">${empty}</td></tr>`}</tbody></table></div>`;
 }
 function renderQuotes() {
@@ -679,7 +735,9 @@ function deliveryRow(j) {
 }
 /** Dispatch notes with their email, delivery and Xero state, and the buttons to move them on. */
 function despatchTable(rows, money) {
-  return `<div style="overflow-x:auto;margin-top:8px"><table class="lines dtable"><thead><tr><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Order</th><th>Dispatched</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
+  rows = sortRows('dn', rows, { dn: ([, d]) => d.dn, customer: ([x]) => x.customer, so: ([x]) => x.so, date: ([, d]) => d.date + String(d.id).padStart(9, '0'),
+    emailed: ([, d]) => d.emailedAt || '', delivered: ([, d]) => d.deliveredOn || '' });
+  return `<div style="overflow-x:auto;margin-top:8px"><table class="lines dtable"><thead><tr>${sortTh('dn', 'dn', 'Note')}${sortTh('dn', 'customer', 'Customer', 'style="text-align:left"')}${sortTh('dn', 'so', 'Order', 'style="text-align:left"')}${sortTh('dn', 'date', 'Dispatched')}${sortTh('dn', 'emailed', 'Emailed')}${sortTh('dn', 'delivered', 'Delivered')}${money ? '<th>Xero</th>' : ''}<th></th></tr></thead><tbody>
     ${rows.map(([x, d]) => `<tr><td class="mono">${esc(d.dn)}</td><td style="text-align:left">${esc(x.customer)}</td><td style="text-align:left" class="mono">${esc(x.so)}</td><td>${fmt(d.date)}</td>
       <td>${d.emailedAt ? `<span class="chip ok">${fmt(d.emailedAt.slice(0, 10))}</span>` : `<button class="btn sm" type="button" data-dn="${d.id}" data-job="${x.id}">Email…</button>`}</td>
       <td>${d.deliveredOn ? `<span class="chip ok">${fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : ''}</span>${!d.xero ? ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>` : ''}`
@@ -689,7 +747,7 @@ function despatchTable(rows, money) {
     </tbody></table></div>`;
 }
 function renderDespatch() {
-  const open = S.jobs.filter(j => onBoardStage(j) && j.status === 'open').sort(byDue);
+  const open = S.jobs.filter(j => onBoardStage(j) && j.status === 'open').sort(byRunningOrder);
   const held = S.jobs.filter(j => onBoardStage(j) && j.status === 'held');
   if (S.desp && !open.some(j => j.id === S.desp)) S.desp = null;
   const j = S.desp ? job(S.desp) : null;
@@ -931,6 +989,8 @@ document.addEventListener('click', e => {
   if ('reload' in d) return location.reload();
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
+  if (d.sort) { const [t, col] = d.sort.split(':'); return setSort(t, col); }
+  if (d.move) { e.stopPropagation(); return moveJob(+d.job, d.move, boardVisible()); }
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; try { localStorage.setItem('clj.station', d.station); } catch { /* not kept */ } return render(); }
   if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; return render(); }

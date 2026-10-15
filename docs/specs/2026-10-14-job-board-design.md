@@ -212,3 +212,17 @@ time it was ticked underneath and an Undo toast). Station buttons along the top 
 waiting for that process and highlight its column. Rows don't open on tap (too easy to hit by
 accident on a touch screen); the SO number opens the job. Under 820px wide the process columns
 fold into labelled buttons under each job.
+
+## Sorting and the running order (15 Oct)
+- **Sortable headings** on the office tables (job board, Sales orders, New orders, dispatch notes):
+  click a heading to sort, click again to reverse (▲/▼). Each list opens in date order; each computer
+  remembers its last choice (localStorage `clj.sort`, a convenience only). Empty values sort last.
+  Waiting for Xero keeps its fixed order (it has pickers in each row). Shop floor is never sortable.
+- **Running order** (`jobs.priority`, `set_running_order(ids)`, office only): on the job board, sorted
+  by Order, each open job has ⤒ (to the top) ▲ ▼. Jobs given a place come first, in that order; every
+  other job follows by due date. Moving a job fixes the places of the jobs down to where it moved,
+  so everything below stays in date order (`moveInOrder`, tested). "Put everything back in date
+  order" clears it. Shop floor and the Dispatch job picker follow the running order; a job sitting
+  above one due sooner shows "Brought forward" on the shop floor. The Order number is the job's
+  place on the shop floor, across Upcoming and Current together. A new job, even one due sooner,
+  goes below the jobs given a place (that is what a running order means).

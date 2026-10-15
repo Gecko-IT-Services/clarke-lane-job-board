@@ -179,3 +179,30 @@ export function quoteStates(quotes, jobs, dismissedIds) {
     return { ...q, state: gone.has(q.spId) ? 'dismissed' : 'waiting', jobId: null, so: null };
   });
 }
+
+/** Running order: jobs given a place (priority 1 = top) first, in that order; the rest by due date. */
+export function byRunningOrder(a, b) {
+  const pa = a.priority ?? Infinity, pb = b.priority ?? Infinity;
+  if (pa !== pb) return pa - pb;
+  const da = nextDue(a) || '9999', db = nextDue(b) || '9999';
+  return da < db ? -1 : da > db ? 1 : (a.so < b.so ? -1 : 1);
+}
+/** Moves one job within the running order (list = jobs already in running order) to index `to`.
+ *  Returns the ids that must hold a place: everything down to the lower of where it was and where
+ *  it went, so jobs below that point stay in plain date order. */
+export function moveInOrder(list, id, to) {
+  const ids = list.map(j => j.id);
+  const from = ids.indexOf(id); if (from < 0) return null;
+  to = Math.max(0, Math.min(ids.length - 1, to));
+  ids.splice(from, 1); ids.splice(to, 0, id);
+  const lastPinned = list.reduce((m, j, i) => (j.priority != null ? i : m), -1);
+  return ids.slice(0, Math.max(from, to, lastPinned) + 1);
+}
+
+/** Column sorting for the office tables: empty values always last, numbers as numbers, text ignoring case. */
+export function compareValues(a, b, dir = 1) {
+  const ea = a == null || a === '', eb = b == null || b === '';
+  if (ea || eb) return ea === eb ? 0 : ea ? 1 : -1;
+  if (typeof a === 'number' && typeof b === 'number') return (a - b) * dir;
+  return String(a).localeCompare(String(b), 'en-GB', { numeric: true, sensitivity: 'base' }) * dir;
+}

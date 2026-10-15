@@ -76,3 +76,9 @@ let xorders = [];
 export const loadXeroOrders = async () => structuredClone(xorders);
 export const importXeroOrders = async qs => { let n = 0; for (const q of qs) if (!xorders.some(x => x.id === q.id)) { xorders.push({ ...q, importedAt: new Date().toISOString(), importedBy: 'levi@clarke-lane.co.uk', dismissed: false }); n++; } return n; };
 export const dismissXeroOrder = async (id, d) => { xorders.find(x => x.id === id).dismissed = d; };
+export const setRunningOrder = async ids => { for (const j of jobs) { const n = ids.indexOf(j.id); j.priority = n < 0 ? null : n + 1; } };
+jobs.push(
+  { id: 3, so: 'SO-9783', quote: '', spQuoteId: null, customer: 'Fourth Example Ltd', contactName: '', contactEmail: '', po: 'PO-77', ordered: '2026-10-15', due: '2026-11-12', notes: '', address: '', status: 'open',
+    lines: [{ id: 31, lineNo: 1, part: 'Guard plate', qty: 40, price: 8.5, due: '2026-11-12' }], procs: { 'Laser': { done: false }, 'Fold': { done: false } }, despatches: [] },
+  { id: 4, so: 'SO-9784', quote: '', spQuoteId: null, customer: 'Fifth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-15', due: '2026-11-20', notes: '', address: '', status: 'open',
+    lines: [{ id: 41, lineNo: 1, part: 'Frame', qty: 2, price: 140, due: '2026-11-20' }], procs: { 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [] });

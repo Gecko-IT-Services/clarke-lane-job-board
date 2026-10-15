@@ -34,7 +34,7 @@ export async function loadJobs({ office }) {
     id: j.id, so: j.so_number, quote: j.quote_no, spQuoteId: j.sp_quote_id, xeroQuoteId: j.xero_quote_id, customer: j.customer,
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
     ordered: j.ordered_on, due: j.due_date, notes: j.notes, address: j.delivery_address, status: j.status,
-    createdBy: j.created_by, ackEmailedAt: j.ack_emailed_at,
+    createdBy: j.created_by, ackEmailedAt: j.ack_emailed_at, priority: j.priority ?? null,
     lines: [], procs: {}, despatches: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
@@ -70,6 +70,13 @@ export async function updateJob(jobId, patch) {
   const sb = await getSupabase();
   const { error } = await sb.from('jobs').update(patch).eq('id', jobId);
   if (error) fail('The job was not saved', error);
+}
+
+/** The running order: these jobs hold a place, top first; every other job goes back to date order. */
+export async function setRunningOrder(ids) {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('set_running_order', { p_ids: ids });
+  if (error) fail('The running order was not saved', error);
 }
 
 export async function createJob(payload) {

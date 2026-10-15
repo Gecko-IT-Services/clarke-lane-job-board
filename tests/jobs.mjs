@@ -87,3 +87,22 @@ assert.deepEqual(rep.map(l => `${l.qty} ${l.price} ${l.due}`), ['60 76.26 2026-1
 assert.equal(repeatLines([{ part: 'x', qty: 1, price: null, due: '2026-10-16' }], '2026-10-20')[0].price, '', 'hidden price stays blank');
 
 console.log('jobs: ok');
+
+// — Running order: placed jobs first, the rest by due date; moving keeps the rest in date order. —
+{
+  const { byRunningOrder, moveInOrder, compareValues } = await import('../src/core/jobs.js');
+  const mk = (id, due, priority = null) => ({ id, so: 'SO-' + id, priority, despatches: [], lines: [{ id: id * 10, qty: 1, due }] });
+  const a = mk(1, '2026-10-20'), b = mk(2, '2026-10-22'), c = mk(3, '2026-10-25'), d = mk(4, '2026-10-30');
+  assert.deepEqual([d, c, b, a].sort(byRunningOrder).map(j => j.id), [1, 2, 3, 4], 'no places: date order');
+  assert.deepEqual(moveInOrder([a, b, c, d], 3, 0), [3, 1, 2], 'bring 3 to the top: 1 and 2 keep places above 4');
+  const placed = [{ ...c, priority: 1 }, { ...a, priority: 2 }, { ...b, priority: 3 }, d];
+  assert.deepEqual(placed.slice().reverse().sort(byRunningOrder).map(j => j.id), [3, 1, 2, 4]);
+  assert.deepEqual(moveInOrder(placed, 2, 0), [2, 3, 1], 'already-placed jobs keep their places');
+  assert.deepEqual(moveInOrder([a, b, c, d], 1, 1), [2, 1], 'down one');
+  const late = mk(5, '2026-10-01');   // a new job due sooner still sits below placed jobs
+  assert.deepEqual([...placed, late].sort(byRunningOrder).map(j => j.id), [3, 1, 2, 5, 4]);
+  assert.deepEqual(['b', '', 'A', null, 'c'].sort((x, y) => compareValues(x, y)), ['A', 'b', 'c', '', null]);
+  assert.deepEqual([3, 10, 2].sort((x, y) => compareValues(x, y, -1)), [10, 3, 2]);
+  assert.deepEqual(['SO-9790', 'SO-10001', 'SO-9781'].sort((x, y) => compareValues(x, y)), ['SO-9781', 'SO-9790', 'SO-10001']);
+  console.log('jobs running order: ok');
+}

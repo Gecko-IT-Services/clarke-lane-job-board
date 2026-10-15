@@ -92,6 +92,16 @@ td.p{text-align:center}
 .tick.done{background:var(--ok);border-color:var(--ok);color:var(--surface)}
 .tick svg{width:18px;height:18px}
 .na{color:var(--line);font-weight:700}
+.sorth{all:unset;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.sorth:hover{color:var(--ink)}
+.sorth:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:3px}
+th[aria-sort="ascending"] .sorth,th[aria-sort="descending"] .sorth{color:var(--ink)}
+.sorth .arr{font-size:9px;min-width:8px}
+td.ord{white-space:nowrap;width:1%}
+td.ord .n{display:inline-block;min-width:22px;font-family:var(--mono);font-size:13px;color:var(--muted);text-align:right;margin-right:6px}
+td.ord .n.placed{color:var(--ink);font-weight:700}
+td.ord .mv{display:inline-flex;gap:2px}
+td.ord .mv .btn{padding:4px 7px;min-width:30px;line-height:1}
 .pin{display:none}
 .empty{color:var(--muted);padding:24px 16px;text-align:center}
 
@@ -205,6 +215,7 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
   table.jobs td{border:0;padding:0}
   table.jobs td.p{display:none}
   table.jobs td.cust{grid-column:1/2}
+  table.jobs td.ord{grid-column:1/-1;width:auto}
   table.jobs td.val{grid-column:2/3;grid-row:1/2}
   table.jobs td.so,table.jobs td.po,table.jobs td.due{font-size:13px;color:var(--muted);grid-column:1/-1}
   table.jobs td.so:before{content:'SO '} table.jobs td.po:before{content:'Customer PO '} table.jobs td.due:before{content:'Due '}
