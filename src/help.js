@@ -29,7 +29,7 @@ function newOrders() {
   return `<section class="hsec" id="help-quotes"><h3>1 · Won quotes</h3>
     <p>Levi prices the job in his quote calculator as normal. When the customer orders, he presses <b>Mark as Ordered</b> there. Within a minute the quote appears on <b>Won quotes</b>, with the one waiting longest at the top. It turns amber after 2 working days and red after 5.</p>
     ${pic(`<table class="lines inbox"><thead><tr><th>Customer</th><th>Won</th><th>Contact</th><th>Value</th><th></th></tr></thead><tbody>
-      <tr><td><b>Example Fabrications Ltd</b><div class="note mono">Q-0309 · quote</div></td><td>9 Oct <span class="chip late">6 days</span></td><td>A Buyer</td><td class="num">£386.50</td>
+      <tr><td><b>Example Fabrications Ltd</b><div class="note mono">Q-0309 · quote</div></td><td>7 Oct <span class="chip late">6 days</span></td><td>A Buyer</td><td class="num">£386.50</td>
         <td><div class="acts"><span class="btn sm pri">Create sales order</span>${n(1)}<span class="btn sm">Not a job</span>${n(2)}</div></td></tr>
       <tr><td><b>Sample Engineering Co</b><div class="note mono">Q-0312 · quote</div></td><td>14 Oct <span class="chip">1 day</span></td><td></td><td class="num">£1,240.00</td>
         <td><div class="acts"><span class="btn sm pri">Create sales order</span><span class="btn sm">Not a job</span></div></td></tr></tbody></table>`)}
