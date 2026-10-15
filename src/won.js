@@ -6,6 +6,7 @@
  */
 import { wonQuotes, quoteAgeTone } from './core/jobs.js';
 import { card } from './home.js';
+import { icon } from './icons.js';
 
 const days = n => `${n} day${n === 1 ? '' : 's'}`;
 
@@ -57,7 +58,7 @@ export function renderWon({ rows, today, view, reading, error, converting }, h) 
 
   return `<div class="home">
     <div class="hhead"><div><h2>Won quotes</h2><p class="sub">Quotes Levi has marked Ordered in the quote calculator, and sales orders brought in from Xero</p></div>
-      <div class="hbtns"><button class="btn" type="button" data-reloadquotes>Refresh</button><button class="btn pri" type="button" data-neworder>New order</button></div></div>
+      <div class="hbtns"><button class="btn" type="button" data-reloadquotes>${icon('refresh')}Refresh</button><button class="btn pri" type="button" data-neworder>${icon('plus')}New order</button></div></div>
     ${err}
     <div class="hcards">${cards}</div>
     <section><div class="hsec-h"><h3>${V.title}</h3><span class="note">${V.sub}</span>${seg}</div>${table}</section>

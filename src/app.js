@@ -8,6 +8,7 @@ import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
+import { icon, XERO, MICROSOFT } from './icons.js';
 import { renderWon } from './won.js';
 import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
@@ -83,7 +84,7 @@ async function boot() {
   catch (e) { return gate(`<p>${esc(e.message)}</p><button class="btn pri" type="button" data-signin>Try signing in again</button>`); }
   if (!st.account || !st.ready) {
     return gate(`<p>Sign in with your Clarke Lane Microsoft account to open the job board.</p>
-      <button class="btn pri" type="button" data-signin>Sign in with Microsoft</button>`);
+      <button class="btn pri" type="button" data-signin>${MICROSOFT}Sign in with Microsoft</button>`);
   }
   try { S.me = await data.whoAmI(); }
   catch (e) { return gate(`<p>${esc(e.message)}</p><button class="btn" type="button" data-reload>Try again</button>`); }
@@ -93,7 +94,7 @@ async function boot() {
       <button class="btn" type="button" data-signout>Sign out</button>`);
   }
   $('gate').hidden = true; $('app').hidden = false;
-  $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>Sign out</button>`;
+  $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>${icon('signout')}Sign out</button>`;
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.orderview'); if (['dispatched', 'held', 'cancelled'].includes(v)) S.orderView = v; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
@@ -293,7 +294,7 @@ function renderTabs() {
   $('tabs').innerHTML = TABS.filter(([k]) => office() || !['quotes', 'orders', 'customers', 'xero'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
-    return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
+    return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
   }).join('');
 }
 
@@ -687,22 +688,23 @@ function renderXero() {
   const last = imported.reduce((a, q) => (q.importedAt > (a?.importedAt || '') ? q : a), null);
   const head = x
     ? `<p>Connected to <b>${esc(x.tenant_name)}</b> by ${esc(x.connected_by)} on ${fmtLong(x.connected_at)}.</p>
-       <div class="actions"><button class="btn" type="button" data-xero="connect" ${busy}>Reconnect</button></div>`
+       <div class="actions"><button class="btn" type="button" data-xero="connect" ${busy}>${icon('refresh')}Reconnect</button></div>`
     : `<p>Not connected. Connecting lets the board create draft invoices in Xero for Keith, and bring in Xero's open sales orders once at changeover. It never approves, sends or deletes anything in Xero.</p>
-       <div class="actions"><button class="btn pri" type="button" data-xero="connect" ${busy}>Connect to Xero</button></div>
+       <div class="actions"><button class="btn xero" type="button" data-xero="connect" ${busy}>Connect to ${XERO}</button></div>
        <p class="note">You will be sent to Xero to sign in. Pick Clarke Lane Engineering when it asks which organisation.</p>`;
   const waiting = xeroWaiting();
   const importPanel = !x ? '' : `<div class="panel"><h3>Changeover: bring in Xero's sales orders</h3>
       <p>Do this once, on the day the board takes over from raising sales orders in Xero. It copies every open sales order (SO-…) from Xero onto Won quotes, ready to become sales orders. After that the board is the only place orders are raised, and Xero is not read for orders again.</p>
       ${last ? `<p><b>Imported ${imported.length} sales order${imported.length === 1 ? '' : 's'}</b>, last on ${fmtLong(last.importedAt)} by ${esc(last.importedBy)}. ${waiting.length} still waiting on Won quotes.</p>` : '<p class="note">Not imported yet.</p>'}
-      <div class="actions"><button class="btn ${last ? '' : 'pri'}" type="button" data-xero="import" ${busy}>${xeroReading ? 'Reading Xero…' : last ? 'Import again (adds only new ones)' : 'Import open sales orders'}</button></div>
+      <div class="actions"><button class="btn ${last ? '' : 'pri'}" type="button" data-xero="import" ${busy}>${icon('download')}${xeroReading ? 'Reading Xero…' : last ? 'Import again (adds only new ones)' : 'Import open sales orders'}</button></div>
       ${r ? `<p class="note">The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none'}</b>, so the next order made on the board will be <b>SO-${r.counterNext ?? '…'}</b>. The board always keeps its numbers past Xero's.</p>` : ''}</div>`;
-  $('v-xero').innerHTML = `<div class="sec-h"><h2>Xero</h2><span class="sub">Clarke Lane's Xero, through the board's own connection.</span></div>
+  $('v-xero').innerHTML = `<div class="sec-h"><h2 class="xhead">${XERO}</h2><span class="sub">Clarke Lane's Xero, through the board's own connection.</span>
+      <span class="right"><span class="chip ${x ? 'ok' : ''}">${x ? icon('link') + 'Connected' : 'Not connected'}</span></span></div>
     ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
     <div class="panel"><h3>Connection</h3>${head}</div>
     ${x ? `<div class="panel"><h3>Preview with Xero's order book</h3>
       <p>Shows every open sales order in Xero as a job on every screen (Home, Sales orders, Jobs, Shop floor), so you can see the board with real orders before go-live. It is read only: <b>nothing is saved</b>, Xero is not changed, and the changeover import below is not used up. Ticks and moving jobs work, in this browser only. Leaving the preview (or closing the tab) puts everything back.</p>
-      <div class="actions"><button class="btn ${PREVIEW.on ? '' : 'pri'}" type="button" ${PREVIEW.on ? 'data-leavepreview' : 'data-preview'} ${busy}>${PREVIEW.on ? 'Leave preview' : 'Start the preview'}</button></div></div>` : ''}${importPanel}`;
+      <div class="actions"><button class="btn ${PREVIEW.on ? '' : 'pri'}" type="button" ${PREVIEW.on ? 'data-leavepreview' : 'data-preview'} ${busy}>${icon('eye')}${PREVIEW.on ? 'Leave preview' : 'Start the preview'}</button></div></div>` : ''}${importPanel}`;
 }
 function makeJobFromXero(id) {
   const q = (S.xeroOrders || []).find(x => x.id === id); if (!q) return;
@@ -773,7 +775,7 @@ function waitingForXero(pend) {
   return {
     table: `<table class="lines home xero"><thead><tr>${connected ? '<th></th>' : ''}<th>Note</th><th>Customer</th>${connected ? '<th>Xero contact</th>' : ''}<th class="wide">Reference</th><th class="wide">Delivered</th><th class="num">Net</th><th class="act">Invoiced by hand?</th></tr></thead><tbody>${rows}</tbody></table>`,
     how,
-    send: connected && S.xc ? `<div class="hbtns"><button class="btn pri" type="button" data-sendxero ${ready.length && !S.busy ? '' : 'disabled'}>${S.busy ? 'Sending…' : `Create ${ready.length} draft invoice${ready.length === 1 ? '' : 's'} in Xero`}</button>${ready.length ? `<span class="note">${gbp(total, 2)} net</span>` : ''}</div>` : '',
+    send: connected && S.xc ? `<div class="hbtns"><button class="btn xero" type="button" data-sendxero ${ready.length && !S.busy ? '' : 'disabled'}>${S.busy ? 'Sending…' : `Create ${ready.length} draft invoice${ready.length === 1 ? '' : 's'} in ${XERO}`}</button>${ready.length ? `<span class="note">${gbp(total, 2)} net</span>` : ''}</div>` : '',
   };
 }
 /** The Xero contact a customer's invoices go to, or null while Mandy has to choose. */
@@ -851,9 +853,9 @@ function renderDrawer() {
   const money = office(), st = stage(j), net = value(j);
   const ask = S.ask && S.ask.id === j.id ? S.ask.what : null;
   const actions = money && j.status !== 'cancelled' ? `<div class="actions">
-      <button class="btn" type="button" data-amend="${j.id}">Amend order</button>
-      ${j.status === 'held' ? `<button class="btn" type="button" data-status="open" data-job="${j.id}">Release from hold</button>`
-        : st !== 'completed' ? `<button class="btn" type="button" data-status="held" data-job="${j.id}">Put on hold</button>` : ''}
+      <button class="btn" type="button" data-amend="${j.id}">${icon('edit')}Amend order</button>
+      ${j.status === 'held' ? `<button class="btn" type="button" data-status="open" data-job="${j.id}">${icon('making')}Release from hold</button>`
+        : st !== 'completed' ? `<button class="btn" type="button" data-status="held" data-job="${j.id}">${icon('hold')}Put on hold</button>` : ''}
       ${st !== 'completed' ? `<button class="btn" type="button" data-ask="cancel" data-job="${j.id}">Cancel order</button>` : ''}
       ${!j.despatches.length ? `<button class="btn link" type="button" data-ask="delete" data-job="${j.id}">Delete (made by mistake)</button>` : ''}</div>` : '';
   const confirm = ask === 'cancel'
@@ -888,10 +890,10 @@ function renderDrawer() {
       <p class="note">Mark deliveries on the Dispatch tab.</p>` : '<div class="note">Nothing dispatched yet.</div>'}
       ${(j.cancelledDespatches || []).length ? `<p class="note">Cancelled dispatch notes: ${j.cancelledDespatches.map(d => esc(d.dn)).join(', ')}.</p>` : ''}</div>
     <div class="actions">
-      <button class="btn" type="button" data-jobsheet="${j.id}">Job sheet</button>
-      ${money ? `<button class="btn" type="button" data-repeat="${j.id}">Repeat order</button>` : ''}
-      ${money ? `<button class="btn" type="button" data-soa="${j.id}">Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
-      ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">Dispatch…</button>` : ''}
+      <button class="btn" type="button" data-jobsheet="${j.id}">${icon('doc')}Job sheet</button>
+      ${money ? `<button class="btn" type="button" data-repeat="${j.id}">${icon('repeat')}Repeat order</button>` : ''}
+      ${money ? `<button class="btn" type="button" data-soa="${j.id}">${icon('orders')}Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
+      ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">${icon('truck')}Dispatch…</button>` : ''}
     </div>${actions}${confirm}`;
 }
 
@@ -984,9 +986,9 @@ function showDoc(kind, jobId, despId) {
   const sentAt = kind === 'soa' ? j.ackEmailedAt : d?.emailedAt;
   const canEmail = kind !== 'job' && (kind === 'dn' || office());
   $('doc').innerHTML = `<div class="docbar"><span>${kind === 'job' ? 'Print it for the job folder.' : sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>
-      ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">Job sheet</button>` : ''}
-      ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
-      <button class="btn" type="button" data-print>Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
+      ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">${icon('doc')}Job sheet</button>` : ''}
+      ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${icon('mail')}${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
+      <button class="btn" type="button" data-print>${icon('print')}Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
     ${kind === 'job' ? sheetEditor(j) : ''}
     <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
   $('doc').hidden = false;
