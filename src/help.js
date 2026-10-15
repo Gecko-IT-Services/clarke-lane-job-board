@@ -153,7 +153,8 @@ function dispatch(office) {
       <tr><td class="mono">DN-0007</td><td style="text-align:left">Demo Metals Ltd</td><td><span class="btn sm">Email…</span>${n(2)}</td><td><span class="f sm">Signed by (optional)</span> <span class="btn sm pri">Mark delivered</span>${n(3)}</td></tr></tbody></table></div>`)}
     ${steps([`${n(1)} <b>Dispatch</b> opens the delivery note with everything due filled in. Change a quantity to send part of it: the rest stays outstanding, as in Sage. Press <b>Create dispatch note</b>, then print it to go with the goods.`,
       `${n(2)} <b>Email…</b> opens the delivery note. <b>Email to customer</b> puts it in Outlook Drafts with the PDF.`,
-      `${n(3)} When the goods have arrived, type who signed for them (if known) and press <b>Mark delivered</b>.${office ? ' Only delivered notes can be invoiced.' : ''}`])}
+      `${n(3)} When the goods have arrived, type who signed for them (if known) and press <b>Mark delivered</b>.${office ? ' Only delivered notes can be invoiced.' : ''}`,
+      ...(office ? ['<b>Made a note by mistake, or the goods came back?</b> Press <b>Cancel</b> beside it, then <b>Yes</b>. It stays on the list crossed out (its number is never reused) and the quantities go back to outstanding. A note already invoiced in Xero can only be credited in Xero.'] : [])])}
   </section>`;
 }
 
@@ -166,15 +167,22 @@ function xero() {
     ${steps([`${n(1)} The board matches each customer to their Xero contact. If it cannot be sure, pick the contact once and it is remembered.`,
       `${n(2)} <b>Create draft invoices</b> makes one <b>draft</b> invoice per delivery note in Xero, for exactly what was sent, with the SO, PO and DN numbers on it.`,
       'Keith checks and approves them in Xero as usual. The board never approves, sends or deletes anything in Xero.',
+      '<b>Preview with Xero\'s order book:</b> on the Xero tab, <b>Start the preview</b> shows every open sales order in Xero as a job on every screen, to see the board with real orders. An orange PREVIEW bar shows across the top; nothing is saved and Xero is not changed. Ticks and moving jobs work on that screen only. <b>Leave preview</b> puts everything back.',
       '<b>Changeover day:</b> on the Xero tab, press <b>Import open sales orders</b> once. It brings Xero\'s open sales orders onto Won quotes. After that, orders are only raised on the board.'])}
   </section>`;
 }
 
 function mapAndCustomers(office) {
   return `<section class="hsec" id="help-map"><h3>Map</h3>
-    <p>Where the open orders are going, one pin per postcode. Colours: <span class="chip late">running late</span> <span class="chip" style="color:#2557A7">out for delivery</span> <span class="chip ok">ready to dispatch</span> <span class="chip soon">due in the next 7 days</span>, and grey for later (tick <b>Later</b> to show them).</p>
-    ${steps(['Click a pin to see the jobs at that address and <b>what else is within 10 miles</b> (change it to 5, 15 or 25), so a second delivery can go on the same run. Click an order number to open it.',
-      'The postcode comes from the order\'s delivery address, else the customer\'s usual delivery address in Customers' + (office ? ', else their address in Xero' : '') + '. Orders with no postcode are listed under the map.',
+    <p>Where the open orders are going, one pin per postcode, so Levi can see when a second delivery fits the same run.</p>
+    ${pic(`<div class="hfilters">${[['Running late', '#B4321F', 1, true], ['Out for delivery', '#2557A7', 1, true], ['Ready to dispatch', '#25744A', 2, true], ['Due in the next 7 days', '#B45309', 3, true], ['Later', '#64646A', 6, false]]
+        .map(([t, c, k, on]) => `<span class="hpill ${on ? 'on' : ''}" style="--k:${c}"><span class="hbox">${on ? '✓' : ''}</span>${t} <small>${k}</small></span>`).join('')} ${n(1)}</div>
+      <div class="hmap"><span class="hpin" style="--k:#B4321F;left:58%;top:22%"></span><span class="hpin" style="--k:#2557A7;left:44%;top:70%"></span><span class="hpin" style="--k:#25744A;left:52%;top:52%"></span><span class="hpin" style="--k:#B45309;left:30%;top:40%"></span>
+        <div class="hpop">${n(2)} <b>SO14 3TJ</b><br>SO-9781 · out for delivery<br><small><b>Within 10 miles:</b> SO-9782 (6.1 mi), SO-9783 (6.4 mi)</small></div></div>`)}
+    ${steps([`${n(1)} The coloured boxes along the top switch each kind of job on or off. Filled in with a tick = shown on the map; outline only = hidden. The number is how many jobs of that kind there are. <b>Later</b> (grey) is off to start with.`,
+      `${n(2)} Click a pin to see the jobs at that address and <b>what else is within 10 miles</b> (change it to 5, 15 or 25 next to the boxes). Click an order number to open it.`,
+      'A pin takes the colour of the most urgent job at that address, so check the list in its popup: a delivery and a late job at the same customer share one pin.',
+      'The postcode comes from the order\'s delivery address, else the customer\'s usual delivery address in Customers' + (office ? ', else their address in Xero' : '') + '. Orders with no postcode are listed under the map in <b>Not on the map</b>; give them an address and they appear.',
       'The van\'s live position is not shown yet; it can be added later if the van gets a tracker or the driver shares his phone\'s location.'])}
   </section>
   ${office ? `<section class="hsec" id="help-customers"><h3>Customers (contact book)</h3>
@@ -220,6 +228,11 @@ export function renderHelp(office) {
   const parts = office ? [newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), mapAndCustomers(true), xero(), emails(true), faq(true)]
     : [shopFloor(false), dispatch(false), mapAndCustomers(false), faq(false)];
   return `<div class="sec-h"><h2>Help</h2><span class="sub">${office ? 'How an order goes from quote to invoice. The pictures are examples, not real orders.' : 'How to use the shop floor screen. The pictures are examples.'}</span></div>
+    <p class="hkey">The board is at <b>jobs.clarke-lane.co.uk</b>. Sign in with your Clarke Lane Microsoft account.</p>
+    ${office ? `<div class="htabs">${[['Home', 'start of the day: what needs attention, what is going out, stations'], ['Won quotes', 'Levi\'s ordered quotes, to become sales orders'], ['Sales orders', 'every order, value, dispatched, invoiced; New order'],
+      ['Jobs', 'the job board in running order; bring jobs forward'], ['Shop floor', 'the factory touch screen: tick processes'], ['Dispatch', 'ready to go, dispatch notes, delivered, Xero'],
+      ['Map', 'where deliveries are going, what is nearby'], ['Customers', 'contact book: buyers, goods in, delivery addresses'], ['Xero', 'connection, preview, changeover import']]
+      .map(([t, d]) => `<div><b>${t}</b><span>${d}</span></div>`).join('')}</div>` : ''}
     <p class="hkey">The <b>Home</b> tab is the place to start each day. The cards at the top count what is late, due in the next 7 days and ready to dispatch${office ? ', and the order book' : ''}. <b>Station snapshot</b> shows how many jobs are waiting at each station and how many of those are late; tap one to open the shop floor there. <b>Needs attention</b> lists what is late, at risk (due within 3 working days with processes still to do), on hold or ready to go${office ? ', plus won quotes waiting and deliveries to invoice' : ''}, worst first, each with one button for the next step. Switch to <b>Going out</b> to see everything due from today to the Friday of next week.</p>
     ${flow(office)}${office ? '<p class="hkey">Most asked: <a href="#help-calloffs">how to set up and change call-offs</a>.</p>' : ''}<div class="help">${parts.join('')}</div>`;
 }
