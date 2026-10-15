@@ -149,25 +149,30 @@ function shopFloor(office) {
 }
 
 function dispatch(office) {
+  const seg = on => `<div class="seg">${[['Ready', 2], ['Out for delivery', 1], ...(office ? [['Waiting for Xero', 1]] : []), ['All notes', 6]]
+    .map(([t, k]) => `<button type="button" aria-pressed="${t === on}">${t} <em>${k}</em></button>`).join('')}</div>`;
   return `<section class="hsec" id="help-dispatch"><h3>${office ? '6 · ' : ''}Dispatch</h3>
-    <p>The <b>Dispatch</b> tab shows <span class="badge go">2 ready</span> when jobs are finished.</p>
-    ${pic(`<div class="panel ready"><h3>Ready to dispatch</h3><table class="lines"><thead><tr><th style="text-align:left">Order</th><th style="text-align:left">Customer</th><th>Due</th><th style="text-align:left">To send</th><th></th></tr></thead><tbody>
-      <tr><td class="mono" style="text-align:left">SO-9781</td><td style="text-align:left"><b>Demo Metals Ltd</b></td><td><span class="chip">24 Oct</span></td><td style="text-align:left"><b>12</b> × Cabinet</td><td><span class="btn sm pri">Dispatch</span>${n(1)}</td></tr></tbody></table></div>
-      <div class="panel" style="margin-top:10px"><h3>Out for delivery</h3><table class="lines"><thead><tr><th>Note</th><th style="text-align:left">Customer</th><th>Emailed</th><th>Delivered</th></tr></thead><tbody>
-      <tr><td class="mono">DN-0007</td><td style="text-align:left">Demo Metals Ltd</td><td><span class="btn sm">Email…</span>${n(2)}</td><td><span class="f sm">Signed by (optional)</span> <span class="btn sm pri">Mark delivered</span>${n(3)}</td></tr></tbody></table></div>`)}
-    ${steps([`${n(1)} <b>Dispatch</b> opens the delivery note with everything due filled in. Change a quantity to send part of it: the rest stays outstanding, as in Sage. Press <b>Create dispatch note</b>, then print it to go with the goods.`,
-      `${n(2)} <b>Email…</b> opens the delivery note. <b>Email to customer</b> puts it in Outlook Drafts with the PDF.`,
+    <p>The <b>Dispatch</b> tab shows <span class="badge go">2 ready</span> when jobs are finished. The cards count what is ready, not emailed, out for delivery and${office ? ' waiting for Xero' : ' delivered'}. The switch shows <b>Ready</b>, <b>Out for delivery</b>, ${office ? '<b>Waiting for Xero</b> and ' : 'and '}<b>All notes</b>; it opens on the first with something in it.</p>
+    ${pic(`<div class="hrow">${seg('Ready')}</div>
+      <table class="lines home dispatch"><thead><tr><th>Customer</th><th>Due</th><th>To send</th><th class="act">Next step</th></tr></thead><tbody>
+      <tr><td><b>Demo Metals Ltd</b><span class="ref mono">SO-9781 · PO-1</span></td><td><span class="chip soon">24 Oct</span></td><td><b>12</b> × Cabinet</td><td class="act"><span class="btn sm pri">Dispatch</span>${n(1)}</td></tr></tbody></table>
+      <div class="hrow" style="margin-top:14px">${seg('Out for delivery')}</div>
+      <table class="lines home dispatch"><thead><tr><th>Note</th><th>Customer</th><th>Emailed</th><th class="act">Next step</th></tr></thead><tbody>
+      <tr><td class="mono">DN-0007</td><td><b>Demo Metals Ltd</b><span class="ref mono">SO-9781 · PO-1</span></td><td><span class="chip soon">Not emailed</span></td>
+        <td class="act"><div class="next"><span class="btn sm pri">Email note…</span>${n(2)} <form class="inv"><input type="text" placeholder="Signed by (optional)"><span class="btn sm">Mark delivered</span></form>${n(3)}</div></td></tr></tbody></table>`)}
+    ${steps([`${n(1)} <b>Dispatch</b> opens the delivery note with everything due filled in. It opens above the list; <b>Close</b> puts it away. Change a quantity to send part of it: the rest stays outstanding, as in Sage. Press <b>Create dispatch note</b>, then print it to go with the goods. To send part of a job that isn't finished, choose it under the Ready list.`,
+      `${n(2)} <b>Email note…</b> opens the delivery note. <b>Email to customer</b> puts it in Outlook Drafts with the PDF.`,
       `${n(3)} When the goods have arrived, type who signed for them (if known) and press <b>Mark delivered</b>.${office ? ' Only delivered notes can be invoiced.' : ''}`,
-      ...(office ? ['<b>Made a note by mistake, or the goods came back?</b> Press <b>Cancel</b> beside it, then <b>Yes</b>. It stays on the list crossed out (its number is never reused) and the quantities go back to outstanding. A note already invoiced in Xero can only be credited in Xero.'] : [])])}
+      ...(office ? ['<b>Made a note by mistake, or the goods came back?</b> On <b>All notes</b> press <b>Cancel</b> beside it, then <b>Yes</b>. It stays on the list crossed out (its number is never reused) and the quantities go back to outstanding. A note already invoiced in Xero can only be credited in Xero.'] : [])])}
   </section>`;
 }
 
 function xero() {
   return `<section class="hsec" id="help-xero"><h3>7 · Invoicing in Xero</h3>
     <p>Every delivered note waits under <b>Dispatch › Waiting for Xero</b>.</p>
-    ${pic(`<div class="panel"><h3>Waiting for Xero</h3><table class="lines"><thead><tr><th></th><th>Note</th><th style="text-align:left">Customer</th><th style="text-align:left">Xero contact</th><th>Net</th></tr></thead><tbody>
-      <tr><td>${box(true)}</td><td class="mono">DN-0007</td><td style="text-align:left">Demo Metals Ltd</td><td style="text-align:left">Demo Metals Limited ${n(1)}</td><td>£1,068.00</td></tr></tbody></table>
-      <div class="hrow"><span class="btn pri">Create 1 draft invoice in Xero</span>${n(2)}</div></div>`)}
+    ${pic(`<div class="hrow"><div class="seg">${[['Ready', 2], ['Out for delivery', 1], ['Waiting for Xero', 1], ['All notes', 6]].map(([t, k]) => `<button type="button" aria-pressed="${t === 'Waiting for Xero'}">${t} <em>${k}</em></button>`).join('')}</div><span class="btn pri">Create 1 draft invoice in Xero</span>${n(2)}</div>
+      <table class="lines home xero"><thead><tr><th></th><th>Note</th><th>Customer</th><th>Xero contact</th><th class="num">Net</th></tr></thead><tbody>
+      <tr><td>${box(true)}</td><td class="mono">DN-0007</td><td>Demo Metals Ltd</td><td>Demo Metals Limited ${n(1)}</td><td class="num">£1,068.00</td></tr></tbody></table>`)}
     ${steps([`${n(1)} The board matches each customer to their Xero contact. If it cannot be sure, pick the contact once and it is remembered.`,
       `${n(2)} <b>Create draft invoices</b> makes one <b>draft</b> invoice per delivery note in Xero, for exactly what was sent, with the SO, PO and DN numbers on it.`,
       'Keith checks and approves them in Xero as usual. The board never approves, sends or deletes anything in Xero.',
@@ -219,7 +224,7 @@ function faq(office) {
   if (office) q.push(
     ['A quote I marked Ordered is not on Won quotes.', 'Press Refresh. If it is still missing, check the quote says Ordered in the calculator.'],
     ['I made an order by mistake.', 'Open it and press Delete (made by mistake). That only works while nothing has been dispatched; after that, use Cancel.'],
-    ['A dispatch note was made by mistake, or the goods came back.', 'On the Dispatch tab press Cancel beside the note, then Yes. The note stays on the list marked cancelled, and its quantities go back to outstanding on the order. Once a note is invoiced in Xero it can only be credited in Xero.'],
+    ['A dispatch note was made by mistake, or the goods came back.', 'On the Dispatch tab, under All notes, press Cancel beside the note, then Yes. The note stays on the list marked cancelled, and its quantities go back to outstanding on the order. Once a note is invoiced in Xero it can only be credited in Xero.'],
     ['The customer wants to change the order.', 'Open it and press Amend: change quantities, prices or dates, or add lines. Lines already dispatched cannot go below what was sent.'],
     ['Hold an order?', 'Open it and press Hold. A held order cannot be dispatched until you press Release.'],
     ['The same order again?', 'Open the old one and press Repeat order. You get a new order with the same parts and prices, new dates and a blank PO.'],

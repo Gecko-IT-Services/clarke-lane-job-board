@@ -48,7 +48,6 @@ nav.tabs a{font-family:var(--display);font-size:19px;font-weight:700;letter-spac
 nav.tabs a[aria-current="page"]{color:#fff;border-color:#fff}
 nav.tabs .badge{font-family:var(--body);font-size:12px;background:#2A2A2F;color:#fff;border-radius:999px;padding:1px 8px}
 nav.tabs .badge.go{background:#25744A;margin-right:4px}
-.panel.ready{border-color:var(--ok);box-shadow:inset 0 4px 0 var(--ok)}
 
 .wrap{max-width:1640px;margin:0 auto;padding-inline:16px;padding-block:18px 64px;display:flex;flex-direction:column;gap:18px}
 .banner{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap}
@@ -372,11 +371,13 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-help .hframe th,#v-help .hframe td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
 #v-help .hframe th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:center}
 #v-help .hframe .panel{padding:12px}
-#v-help .hframe :is(table.board,table.orders) th,#v-help .hframe :is(table.board,table.orders) td{text-align:left;vertical-align:middle}
-#v-help .hframe :is(table.board,table.orders) th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
-#v-help .hframe :is(table.board,table.orders) .ref{display:block;font-size:12.5px;color:var(--muted)}
+#v-help .hframe :is(table.board,table.orders,table.dispatch,table.xero) th,#v-help .hframe :is(table.board,table.orders,table.dispatch,table.xero) td{text-align:left;vertical-align:middle}
+#v-help .hframe :is(table.board,table.orders,table.dispatch,table.xero) th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
+#v-help .hframe :is(table.board,table.orders,table.dispatch,table.xero) .ref{display:block;font-size:12.5px;color:var(--muted)}
 #v-help .hframe table.board .chips{margin-top:4px}
-#v-help .hframe table.orders .num{text-align:right}
+#v-help .hframe :is(table.orders,table.xero) .num,#v-help .hframe table.dispatch .act{text-align:right}
+#v-help .hframe .seg em{font-style:normal;font-weight:500}
+#v-help .hframe .hrow+table{margin-top:10px}
 #v-help .hframe table.board tr.ready td{background:var(--ok-soft)}
 #v-help .hform{display:flex;flex-direction:column;gap:10px}
 #v-help .hrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}

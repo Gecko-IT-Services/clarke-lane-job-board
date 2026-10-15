@@ -75,7 +75,7 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
       <td class="act"><button class="btn sm" type="button" data-tab="quotes">Make order</button></td></tr>`,
     invoice: r => `<tr data-open="${r.job.id}"><td>${who(r.job.customer, r.despatch.dn)}</td><td>Delivered ${fmt(r.despatch.deliveredOn)}</td>
       <td>Invoice it</td><td><span class="chip">To invoice</span></td>${money(despatchValue(r.job, r.despatch))}
-      <td class="act"><button class="btn sm" type="button" data-tab="dispatch">Send to Xero</button></td></tr>`,
+      <td class="act"><button class="btn sm" type="button" data-dispview="xero">Send to Xero</button></td></tr>`,
   };
   const outRow = j => {
     const ready = j.status === 'open' && allDone(j);
