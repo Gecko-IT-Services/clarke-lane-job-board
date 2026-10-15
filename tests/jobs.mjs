@@ -199,6 +199,8 @@ console.log('jobs: ok');
   assert.equal(w.madeThisWeek, 1, 'made Wed 14 is this week; Fri 9 is not');
   assert.equal(w.wonMonth, 3, 'October, not marked not a job');
   assert.equal(w.wonMonthValue, 350);
+  assert.deepEqual(w.madeWeek.map(r => r.ref), ['Q3'], 'the list behind "made this week"');
+  assert.deepEqual(w.month.map(r => [r.ref, r.age ?? '-']), [['Q1', 1], ['Q3', '-'], ['Q2', 6]], 'the list behind "won this month", waiting ones aged');
   const tie = wonQuotes([{ ref: 'S', date: '2026-10-10', state: 'waiting' }, { ref: 'F', date: '2026-10-09', state: 'waiting' }], today);
   assert.deepEqual(tie.waiting.map(r => [r.ref, r.age]), [['F', 4], ['S', 4]], 'same age: the earlier date first');
   const none = wonQuotes([], today);

@@ -743,7 +743,36 @@ function inboxRows() {
 }
 function renderQuotes() {
   $('v-quotes').innerHTML = renderWon({ rows: inboxRows(), today: todayIso(), view: S.wonView, reading: !S.quotesRaw && !S.quotesErr,
-    error: S.quotesErr, converting: S.conv?.spId }, { esc, fmt, gbp });
+    error: S.quotesErr, converting: S.conv?.spId, open: S.wonOpen, detail: wonDetail }, { esc, fmt, gbp });
+}
+/* What is on a won quote: its lines from the quote calculator, the Xero sales order, or the order it became. */
+S.qlines = new Map();   // spId → lines | 'loading' | Error
+function wonDetail(r) {
+  const tbl = (head, rows) => `<table class="lines wl"><thead><tr>${head.map((h, i) => `<th${i ? ' class="num"' : ''}>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  if (r.state === 'job' && job(r.jobId)) {
+    const j = job(r.jobId);
+    return `<p class="note">Now <b>${esc(j.so)}</b>${j.po ? `, customer PO ${esc(j.po)}` : ''}. <button class="btn link sm" type="button" data-open="${j.id}">Open the order</button></p>`
+      + tbl(['Part', 'Qty', 'Due', 'Net'], j.lines.map(l => `<tr><td>${esc(l.part)}</td><td class="num">${l.qty}</td><td class="num">${fmt(l.due)}</td><td class="num">${l.price != null ? gbp(round2(l.qty * l.price), 2) : ''}</td></tr>`));
+  }
+  if (r.kind === 'xero') {
+    const x = (S.xeroOrders || []).find(o => o.id === r.xeroId);
+    return x ? tbl(['Description', 'Qty', 'Unit price', 'Net'], x.lines.map(l => `<tr><td>${esc(l.description)}</td><td class="num">${l.qty}</td><td class="num">${gbp(l.unit, 2)}</td><td class="num">${gbp(l.amount, 2)}</td></tr>`))
+      : '<p class="note">The lines are not available.</p>';
+  }
+  const got = S.qlines.get(r.spId);
+  if (!got) { S.qlines.set(r.spId, 'loading'); data.quoteLines(r.spId).then(ls => { S.qlines.set(r.spId, ls); render(); }).catch(e => { S.qlines.set(r.spId, e); render(); }); }
+  if (!got || got === 'loading') return '<p class="note">Reading the lines from the quote calculator…</p>';
+  if (got instanceof Error) return `<p class="note bad">Could not read the lines: ${esc(got.message)}</p>`;
+  if (!got.length) return '<p class="note">This quote has no lines in the quote calculator.</p>';
+  return tbl(['Part', 'Qty', 'Net'], got.map(l => `<tr><td>${esc(describeLine(l))}</td><td class="num">${l.qty}</td><td class="num">${l.sellTotal != null ? gbp(l.sellTotal, 2) : ''}</td></tr>`));
+}
+function wonDrill(what, key) {
+  S.wonView = what === 'oldest' ? 'waiting' : what;
+  if (what === 'oldest') S.wonOpen = key;
+  if (what === 'waiting' || what === 'oldest') { try { localStorage.setItem('clj.wonview', 'waiting'); } catch { /* not kept */ } }
+  render();
+  const el = what === 'oldest' ? document.querySelector('#v-quotes tr.open') : $('won-list');
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 /* ---------- dispatch ---------- */
@@ -1149,6 +1178,8 @@ document.addEventListener('click', e => {
   if (d.homeview) { S.homeView = d.homeview; try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
   if (d.dispview) { S.dispView = d.dispview; S.dispChosen = true; if (S.tab !== 'dispatch') { S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); window.scrollTo(0, 0); } return render(); }
   if (d.orderview) { S.orderView = d.orderview; try { localStorage.setItem('clj.orderview', d.orderview); } catch { /* not kept */ } return render(); }
+  if (d.wondrill) return wonDrill(d.wondrill, d.key);
+  if (d.wonlines) { S.wonOpen = S.wonOpen === d.wonlines ? null : d.wonlines; return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }

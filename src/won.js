@@ -9,16 +9,20 @@ import { card } from './home.js';
 
 const days = n => `${n} day${n === 1 ? '' : 's'}`;
 
-export function renderWon({ rows, today, view, reading, error, converting }, h) {
+export function renderWon({ rows, today, view, reading, error, converting, open, detail }, h) {
   const { esc, fmt, gbp } = h;
   const w = wonQuotes(rows, today);
   const oldTone = w.oldest ? quoteAgeTone(w.oldest.age) : '';
   const cards = [
-    card('warn', 'quote', reading ? '—' : w.waiting.length, w.waiting.length ? `Waiting · ${gbp(w.waitingValue)}` : 'Waiting', !reading && w.waiting.length > 0),
+    // Each card opens the list behind its number (the oldest one opens that quote's lines).
+    card('warn', 'quote', reading ? '—' : w.waiting.length, w.waiting.length ? `Waiting · ${gbp(w.waitingValue)}` : 'Waiting', !reading && w.waiting.length > 0,
+      'data-wondrill="waiting" title="Show the quotes waiting"'),
     card(oldTone === 'late' ? 'bad' : 'warn', 'late', w.oldest ? days(w.oldest.age) : '—',
-      w.oldest ? `Oldest waiting · ${esc(w.oldest.customer)}` : 'Oldest waiting', oldTone !== ''),
-    card('ok', 'ready', w.madeThisWeek, 'Made into orders this week', w.madeThisWeek > 0),
-    card('info', 'book', reading ? '—' : gbp(w.wonMonthValue), `Won this month · ${w.wonMonth} quote${w.wonMonth === 1 ? '' : 's'}`, !reading && w.wonMonth > 0),
+      w.oldest ? `Oldest waiting · ${esc(w.oldest.customer)}` : 'Oldest waiting', oldTone !== '',
+      w.oldest ? `data-wondrill="oldest" data-key="${esc(w.oldest.key)}" title="Open the oldest quote"` : ''),
+    card('ok', 'ready', w.madeThisWeek, 'Made into orders this week', w.madeThisWeek > 0, 'data-wondrill="week" title="Show the ones made this week"'),
+    card('info', 'book', reading ? '—' : gbp(w.wonMonthValue), `Won this month · ${w.wonMonth} quote${w.wonMonth === 1 ? '' : 's'}`, !reading && w.wonMonth > 0,
+      'data-wondrill="month" title="Show everything won this month"'),
   ].join('');
 
   const who = r => `<b>${esc(r.customer)}</b><span class="ref mono">${esc(r.ref)} · ${r.kind === 'xero' ? 'Xero import' : 'quote'}</span>`;
@@ -35,8 +39,10 @@ export function renderWon({ rows, today, view, reading, error, converting }, h) 
       : `data-dismiss="${r.spId}" title="Stop offering this quote here. The quote itself is not changed."`;
     return `<button class="btn sm pri" type="button" ${make}>Create sales order</button> <button class="btn sm" type="button" ${drop}>Not a job</button>`;
   };
-  const row = r => `<tr><td>${who(r)}</td><td>${won(r)}</td><td>${esc(r.who || '')}</td>
-    <td class="num">${r.net != null ? gbp(r.net, 2) : ''}</td><td class="act">${act(r)}</td></tr>`;
+  const isOpen = r => open === r.key;
+  const row = r => `<tr class="${isOpen(r) ? 'open' : ''}"><td>${who(r)}<button type="button" class="btn link sm wlines" data-wonlines="${esc(r.key)}" aria-expanded="${isOpen(r)}">${isOpen(r) ? 'Hide lines' : 'Lines'}</button></td><td>${won(r)}</td><td>${esc(r.who || '')}</td>
+    <td class="num">${r.net != null ? gbp(r.net, 2) : ''}</td><td class="act">${act(r)}</td></tr>
+    ${isOpen(r) ? `<tr class="wdetail"><td colspan="5">${detail(r)}</td></tr>` : ''}`;
 
   const VIEWS = {
     waiting: { list: w.waiting, n: w.waiting.length, tab: 'Waiting', title: 'Waiting to become sales orders', sub: 'oldest first',
@@ -46,13 +52,19 @@ export function renderWon({ rows, today, view, reading, error, converting }, h) 
     gone: { list: w.gone, n: w.gone.length, tab: 'Not a job', title: 'Marked not a job', sub: 'the quotes themselves are unchanged',
       empty: 'Nothing marked not a job.' },
   };
-  const v = VIEWS[view] ? view : 'waiting', V = VIEWS[v];
+  // Opened from a card, not on the switch: back to the three views with the ✕.
+  const DRILL = {
+    week: { list: w.madeWeek, title: 'Made into orders this week', sub: 'since Monday', empty: 'None made into orders this week yet.' },
+    month: { list: w.month, title: 'Won this month', sub: `everything won since the 1st, not marked not a job`, empty: 'Nothing won this month yet.' },
+  };
+  const v = VIEWS[view] || DRILL[view] ? view : 'waiting', V = VIEWS[v] || DRILL[v];
   const head = '<thead><tr><th>Customer</th><th>Won</th><th>Contact</th><th class="num">Value</th><th class="act"><span class="sr">Action</span></th></tr></thead>';
   const table = !reading && V.list.length
     ? `<div class="tbl-wrap"><table class="lines home">${head}<tbody>${V.list.map(row).join('')}</tbody></table></div>`
     : `<div class="tbl-wrap"><p class="allclear${!reading && !error && v === 'waiting' ? ' ok' : ''}">${reading ? 'Reading the quotes…' : error ? 'Could not read the quotes, so this list may be incomplete.' : V.empty}</p></div>`;
   const seg = `<div class="seg" role="group" aria-label="Which won quotes to show">${Object.entries(VIEWS).map(([k, x]) =>
-    `<button type="button" data-wonview="${k}" aria-pressed="${k === v}">${x.tab} <em>${x.n}</em></button>`).join('')}</div>`;
+    `<button type="button" data-wonview="${k}" aria-pressed="${k === v}">${x.tab} <em>${x.n}</em></button>`).join('')}</div>`
+    + (DRILL[v] ? ` <button type="button" class="btn sm" data-wonview="waiting" title="Back to the quotes waiting">✕ Close this list</button>` : '');
   const err = error ? `<div class="err"><b>Could not read the quotes from SharePoint.</b> ${esc(error)} <button class="btn sm" type="button" data-reloadquotes>Try again</button></div>` : '';
 
   return `<div class="home">
@@ -60,6 +72,6 @@ export function renderWon({ rows, today, view, reading, error, converting }, h) 
       <div class="hbtns"><button class="btn" type="button" data-reloadquotes>Refresh</button><button class="btn pri" type="button" data-neworder>New order</button></div></div>
     ${err}
     <div class="hcards">${cards}</div>
-    <section><div class="hsec-h"><h3>${V.title}</h3><span class="note">${V.sub}</span>${seg}</div>${table}</section>
+    <section id="won-list"><div class="hsec-h"><h3>${V.title}</h3><span class="note">${V.sub}</span>${seg}</div>${table}</section>
   </div>`;
 }
