@@ -206,3 +206,40 @@ export function compareValues(a, b, dir = 1) {
   if (typeof a === 'number' && typeof b === 'number') return (a - b) * dir;
   return String(a).localeCompare(String(b), 'en-GB', { numeric: true, sensitivity: 'base' }) * dir;
 }
+
+const dayNo = s => Math.round(new Date(s.slice(0, 10) + 'T12:00:00Z') / 864e5);
+/** Monday of the week containing `today` (YYYY-MM-DD). */
+export function weekStart(today) {
+  const d = new Date(today + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+/**
+ * The Home screen's numbers. today: YYYY-MM-DD. Money is null when prices are hidden (shop floor).
+ * Open = not completed or cancelled. Late = open with its next delivery before today.
+ */
+export function dashboard(jobs, today) {
+  const open = jobs.filter(j => ['upcoming', 'current'].includes(stage(j)) && j.status !== 'cancelled');
+  const lateBy = j => dayNo(today) - dayNo(nextDue(j));
+  const late = open.filter(j => nextDue(j) && nextDue(j) < today).map(j => ({ job: j, days: lateBy(j) })).sort((a, b) => b.days - a.days);
+  const soonEnd = dayNo(today) + 7;
+  const soon = open.filter(j => nextDue(j) >= today && dayNo(nextDue(j)) <= soonEnd).sort((a, b) => (nextDue(a) < nextDue(b) ? -1 : 1));
+  const ready = open.filter(j => j.status === 'open' && allDone(j));
+  const held = open.filter(j => j.status === 'held');
+  const stations = Object.fromEntries(PROCESSES.map(p => [p, open.filter(j => j.procs[p] && !j.procs[p].done).length]));
+  const dn = jobs.flatMap(j => j.despatches.map(d => ({ job: j, d })));
+  const out = dn.filter(x => !x.d.deliveredOn && !x.d.xero);
+  const toXero = dn.filter(x => x.d.deliveredOn && !x.d.xero);
+  const wk = weekStart(today);
+  const thisWeek = dn.filter(x => x.d.date >= wk && x.d.date <= today);
+  const money = jobs.every(j => j.lines.every(l => l.price != null));
+  const sum = (xs, f) => (money ? round2(xs.reduce((a, x) => a + (f(x) || 0), 0)) : null);
+  const ticksToday = jobs.reduce((a, j) => a + Object.values(j.procs).filter(s => s.done && s.at && s.at.slice(0, 10) === today).length, 0);
+  return {
+    open, late, soon, ready, held, stations, out, toXero, thisWeek, ticksToday,
+    orderBook: sum(open, j => value(j, { remaining: true })),
+    lateValue: sum(late, x => value(x.job, { remaining: true })),
+    toXeroValue: sum(toXero, x => despatchValue(x.job, x.d)),
+    thisWeekValue: sum(thisWeek, x => despatchValue(x.job, x.d)),
+  };
+}

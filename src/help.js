@@ -202,5 +202,6 @@ export function renderHelp(office) {
   const parts = office ? [newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), xero(), emails(true), faq(true)]
     : [shopFloor(false), dispatch(false), faq(false)];
   return `<div class="sec-h"><h2>Help</h2><span class="sub">${office ? 'How an order goes from quote to invoice. The pictures are examples, not real orders.' : 'How to use the shop floor screen. The pictures are examples.'}</span></div>
+    <p class="hkey">The <b>Home</b> tab is the place to start each day: what is running late (worst first), what is due in the next 7 days, what is ready to dispatch, how many jobs are waiting at each station${office ? ', and the money: order book, waiting for Xero and dispatched this week' : ''}. Click any number or job to go straight to it.</p>
     ${flow(office)}${office ? '<p class="hkey">Most asked: <a href="#help-calloffs">how to set up and change call-offs</a>.</p>' : ''}<div class="help">${parts.join('')}</div>`;
 }

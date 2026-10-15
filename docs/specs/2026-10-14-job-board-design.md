@@ -286,3 +286,12 @@ MODULES list in step with src/.
   defaulting to the next delivery (`defaultDespatchQty`), with Next delivery / Everything outstanding /
   Clear. The printed sheet lists only lines with a quantity, their due dates, which call-off(s) and
   their POs. Screen-only (S.sheet); the order is never changed, and the editor doesn't print.
+
+## Home (15 Oct)
+First tab; the office opens on it (the floor tablet still opens on Shop floor but can see it).
+`src/home.js` draws `dashboard(jobs, today)` (src/core/jobs.js, tested): tiles for Running late
+(next delivery before today; with £ still to send for the office), Due in the next 7 days, Ready to
+dispatch, Out for delivery, and office-only Waiting for Xero (£), Won quotes waiting, Order book (£ still
+to send on open orders) and Dispatched this week (£ since Monday). Panels: Running late (worst first,
+days late, processes still to do), Due in the next 7 days, Waiting at each station (bars; tap opens the
+shop floor at that station), On hold. Open = upcoming or current and not cancelled; held jobs count.

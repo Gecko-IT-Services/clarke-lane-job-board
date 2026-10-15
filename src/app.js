@@ -6,6 +6,7 @@ import * as auth from './auth.js';
 import * as data from './data.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
+import { renderHome } from './home.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -24,7 +25,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'jobs', stage: 'current', search: '',
+const S = { orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'home', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -259,7 +260,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
@@ -1057,7 +1058,9 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ orders: renderOrders, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), today: todayIso(),
+      wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null }, { esc, fmt, fmtLong, gbp, dueChip }); },
+    orders: renderOrders, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   renderDrawer();
   restoreInputs(kept);
 }
@@ -1067,7 +1070,8 @@ window.addEventListener('hashchange', () => { fromHash(); render(); });
 document.addEventListener('click', e => {
   const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;
   const d = t.dataset;
-  if (t.matches('a[href^="#help-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  if (d.gostation) { S.station = d.gostation; try { localStorage.setItem('clj.station', d.gostation); } catch { /* not kept */ } S.tab = 'floor'; history.replaceState(null, '', '#floor'); render(); window.scrollTo(0, 0); return; }
+  if (t.matches('a[href^="#help-"],a[href^="#home-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ('signin' in d) return auth.signIn();
   if ('signout' in d) return auth.signOut();
   if ('reload' in d) return location.reload();

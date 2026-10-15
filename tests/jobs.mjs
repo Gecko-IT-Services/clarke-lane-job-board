@@ -106,3 +106,34 @@ console.log('jobs: ok');
   assert.deepEqual(['SO-9790', 'SO-10001', 'SO-9781'].sort((x, y) => compareValues(x, y)), ['SO-9781', 'SO-9790', 'SO-10001']);
   console.log('jobs running order: ok');
 }
+
+// — Home screen numbers. —
+{
+  const { dashboard, weekStart } = await import('../src/core/jobs.js');
+  assert.equal(weekStart('2026-10-15'), '2026-10-12', 'Thursday → Monday');
+  assert.equal(weekStart('2026-10-12'), '2026-10-12');
+  assert.equal(weekStart('2026-10-18'), '2026-10-12', 'Sunday belongs to the week before');
+  const mk = (id, due, over = {}) => ({ id, so: 'SO-' + id, status: 'open', despatches: [], procs: { Laser: { done: false } },
+    lines: [{ id: id * 10, qty: 10, price: 5, due }], ...over });
+  const jobs = [
+    mk(1, '2026-10-10'),                                                            // 5 days late
+    mk(2, '2026-10-14', { status: 'held' }),                                        // 1 day late, held
+    mk(3, '2026-10-20', { procs: { Laser: { done: true, at: '2026-10-15T09:00:00Z' } } }),   // due soon, ready
+    mk(4, '2026-11-30'),                                                            // later
+    mk(5, '2026-10-01', { despatches: [{ id: 9, date: '2026-10-13', lines: { 50: 10 }, deliveredOn: '2026-10-14', xero: null }] }),  // done, waiting for Xero
+    mk(6, '2026-10-01', { status: 'cancelled' }),
+  ];
+  const d = dashboard(jobs, '2026-10-15');
+  assert.deepEqual(d.late.map(x => [x.job.id, x.days]), [[1, 5], [2, 1]], 'late, worst first; completed and cancelled left out');
+  assert.deepEqual(d.soon.map(j => j.id), [3]);
+  assert.deepEqual(d.ready.map(j => j.id), [3]);
+  assert.deepEqual(d.held.map(j => j.id), [2]);
+  assert.equal(d.stations.Laser, 3);
+  assert.equal(d.toXero.length, 1); assert.equal(d.toXeroValue, 50);
+  assert.equal(d.thisWeekValue, 50, 'dispatched Tue 13 Oct is this week');
+  assert.equal(d.orderBook, 200); assert.equal(d.lateValue, 100);
+  assert.equal(d.ticksToday, 1);
+  const floor = dashboard(jobs.map(j => ({ ...j, lines: j.lines.map(l => ({ ...l, price: null })) })), '2026-10-15');
+  assert.equal(floor.orderBook, null, 'no money for the shop floor');
+  console.log('jobs dashboard: ok');
+}
