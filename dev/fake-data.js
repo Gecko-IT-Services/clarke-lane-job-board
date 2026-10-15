@@ -2,7 +2,7 @@
 const role = new URLSearchParams(location.search).get('role') || 'office';
 let jobs = [
   { id: 1, so: 'SO-9781', quote: 'Q-0301', spQuoteId: 301, customer: 'Example Customer Ltd', contactName: 'A Buyer', contactEmail: '', po: 'PO-1',
-    ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO1 1AA', status: 'open',
+    ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO14 3TJ', status: 'open',
     lines: [{ id: 11, lineNo: 1, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16' },
             { id: 12, lineNo: 2, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23' },
             { id: 13, lineNo: 3, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-30' }],
@@ -55,7 +55,7 @@ export const xero = async (route, body) => {
     quotes: [{ id: 'q1', number: 'SO-9776', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
       lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] }],
     invoices: [] };
-  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited' }, { id: 'c2', name: 'Second Example Ltd' }, { id: 'c3', name: 'Third Example Engineering' }],
+  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering', postcode: 'PO1 2NH' }],
     defaults: { accountCode: '200', taxType: 'OUTPUT2', from: 'your last 100 invoices' } };
   if (route === 'contact') return { id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
@@ -85,3 +85,14 @@ jobs.push(
 export const cancelDespatch = async id => { for (const j of jobs) { const d = j.despatches.find(x => x.id === id); if (d) {
   if (d.xero) throw new Error(`${d.dn} is invoiced in Xero, so it cannot be cancelled here.`);
   j.despatches = j.despatches.filter(x => x !== d); (j.cancelledDespatches ||= []).push({ ...d, cancelled: { at: new Date().toISOString(), by: 'levi@clarke-lane.co.uk' } }); } } };
+let book = { people: [{ id: 1, key: 'fourthexample', customer: 'Fourth Example Ltd', role: 'deliveries', name: 'Goods In Team', email: 'goodsin@example.com', phone: '', notes: '', main: true }],
+  sites: [{ id: 1, key: 'fourthexample', customer: 'Fourth Example Ltd', label: 'Main works', address: 'Example Road\nChandlers Ford SO53 2FE', contact: '', phone: '', main: true },
+          { id: 2, key: 'fifthexample', customer: 'Fifth Example Ltd', label: '', address: 'Example Lane\nWinchester SO23 7BW', contact: '', phone: '', main: true }] };
+let bookId = 10;
+export const loadContactBook = async () => structuredClone(book);
+export const savePerson = async p => { if (p.main) book.people.forEach(x => { if (x.key === p.key && x.role === p.role) x.main = false; });
+  if (p.id) Object.assign(book.people.find(x => x.id === p.id), p); else book.people.push({ ...p, id: bookId++ }); };
+export const deletePerson = async id => { book.people = book.people.filter(x => x.id !== id); };
+export const saveSite = async x => { if (x.main) book.sites.forEach(y => { if (y.key === x.key) y.main = false; });
+  if (x.id) Object.assign(book.sites.find(y => y.id === x.id), x); else book.sites.push({ ...x, id: bookId++ }); };
+export const deleteSite = async id => { book.sites = book.sites.filter(x => x.id !== id); };

@@ -197,6 +197,53 @@ export async function dismissXeroOrder(xeroId, dismiss, by) {
   if (error) fail('Not saved', error);
 }
 
+/** The board's own contact book: people and delivery addresses per customer. Office only. */
+export async function loadContactBook() {
+  const sb = await getSupabase();
+  const [p, s] = await Promise.all([sb.from('customer_people').select('*').order('id'), sb.from('customer_sites').select('*').order('id')]);
+  if (p.error) fail('Could not load the contact book', p.error);
+  if (s.error) fail('Could not load the contact book', s.error);
+  return {
+    people: p.data.map(r => ({ id: r.id, key: r.customer_key, customer: r.customer_name, role: r.role, name: r.name, email: r.email, phone: r.phone, notes: r.notes, main: r.main })),
+    sites: s.data.map(r => ({ id: r.id, key: r.customer_key, customer: r.customer_name, label: r.label, address: r.address, contact: r.site_contact, phone: r.phone, main: r.main })),
+  };
+}
+/** Adds (no id) or updates a person. Marking one main for a role unmarks the others for that customer and role. */
+export async function savePerson(p) {
+  const sb = await getSupabase();
+  const row = { customer_key: p.key, customer_name: p.customer, role: p.role, name: p.name || '', email: p.email || '', phone: p.phone || '',
+    notes: p.notes || '', main: !!p.main, updated_at: new Date().toISOString() };
+  if (p.main) {
+    let q = sb.from('customer_people').update({ main: false }).eq('customer_key', p.key).eq('role', p.role);
+    if (p.id) q = q.neq('id', p.id);
+    const { error } = await q; if (error) fail('Not saved', error);
+  }
+  const { error } = p.id ? await sb.from('customer_people').update(row).eq('id', p.id) : await sb.from('customer_people').insert(row);
+  if (error) fail('Not saved', error);
+}
+export async function deletePerson(id) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('customer_people').delete().eq('id', id);
+  if (error) fail('Not removed', error);
+}
+export async function saveSite(x) {
+  const sb = await getSupabase();
+  const row = { customer_key: x.key, customer_name: x.customer, label: x.label || '', address: x.address, site_contact: x.contact || '',
+    phone: x.phone || '', main: !!x.main, updated_at: new Date().toISOString() };
+  if (x.main) {
+    let q = sb.from('customer_sites').update({ main: false }).eq('customer_key', x.key);
+    if (x.id) q = q.neq('id', x.id);
+    const { error } = await q; if (error) fail('Not saved', error);
+  }
+  const { error } = x.id ? await sb.from('customer_sites').update(row).eq('id', x.id) : await sb.from('customer_sites').insert(row);
+  if (error) fail('Not saved', error);
+}
+export async function deleteSite(id) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('customer_sites').delete().eq('id', id);
+  if (error) fail('Not removed', error);
+}
+
 /** Cancel a job made by mistake. Refused once anything has been despatched. */
 export async function deleteJob(jobId) {
   const sb = await getSupabase();
@@ -212,7 +259,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

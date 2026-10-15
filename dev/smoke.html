@@ -253,6 +253,27 @@ table.floor td.p small{display:block;font-size:11px;color:var(--muted);margin-to
 .previewbar{position:sticky;top:0;z-index:40;background:var(--warn);color:#fff;padding:8px 16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:13.5px;text-align:center}
 .previewbar b{font-family:var(--display);font-size:18px;text-transform:uppercase;letter-spacing:.06em}
 .previewbar .btn{color:var(--ink)}
+/* customers */
+#v-customers .cbook{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+#v-customers .clist{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;position:sticky;top:12px;max-height:calc(100vh - 160px)}
+#v-customers .citems{overflow:auto;display:flex;flex-direction:column;gap:2px;min-height:60px}
+#v-customers .citem{all:unset;cursor:pointer;padding:8px 10px;border-radius:8px;display:flex;flex-direction:column;gap:1px}
+#v-customers .citem span{font-size:12px;color:var(--muted)}
+#v-customers .citem:hover,#v-customers .citem:focus-visible{background:var(--field)}
+#v-customers .citem.on{background:var(--ink);color:var(--bg)} #v-customers .citem.on span{color:inherit;opacity:.75}
+#v-customers .addcust{display:flex;gap:6px} #v-customers .addcust input{flex:1;min-width:0}
+#v-customers .cmain{display:flex;flex-direction:column;gap:14px;min-width:0}
+#v-customers .bookform{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+#v-customers .fl.chk{flex-direction:row;align-items:center;gap:8px;align-self:end}
+@media (max-width:820px){ #v-customers .cbook{grid-template-columns:minmax(0,1fr)} #v-customers .clist{position:static;max-height:300px} }
+/* map */
+#mapbox{height:min(62vh,600px);width:100%}
+#v-map .mapctl{display:flex;gap:8px 16px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+#v-map .mk{display:inline-flex;gap:6px;align-items:center;font-weight:600;font-size:14px}
+#v-map .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.mpop ul{margin:4px 0;padding-left:16px} .mpop li{margin:2px 0} .mpop .near{margin-top:6px;font-weight:700;font-size:12px}
+.mpop .btn.link{padding:0;font-weight:700}
+
 /* home */
 #v-home .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:10px;margin-bottom:16px}
 #v-home .tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:2px;border-top:5px solid var(--line)}
@@ -406,6 +427,8 @@ form.inv input{width:110px}
   <section class="view" id="v-floor" hidden></section>
   <section class="view" id="v-quotes" hidden></section>
   <section class="view" id="v-dispatch" hidden></section>
+  <section class="view" id="v-map" hidden></section>
+  <section class="view" id="v-customers" hidden></section>
   <section class="view" id="v-xero" hidden></section>
   <section class="view" id="v-help" hidden></section>
 </main>
@@ -419,7 +442,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/config.js', 'src/data.js', 'src/help.js', 'src/home.js', 'src/map.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

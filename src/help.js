@@ -170,6 +170,24 @@ function xero() {
   </section>`;
 }
 
+function mapAndCustomers(office) {
+  return `<section class="hsec" id="help-map"><h3>Map</h3>
+    <p>Where the open orders are going, one pin per postcode. Colours: <span class="chip late">running late</span> <span class="chip" style="color:#2557A7">out for delivery</span> <span class="chip ok">ready to dispatch</span> <span class="chip soon">due in the next 7 days</span>, and grey for later (tick <b>Later</b> to show them).</p>
+    ${steps(['Click a pin to see the jobs at that address and <b>what else is within 10 miles</b> (change it to 5, 15 or 25), so a second delivery can go on the same run. Click an order number to open it.',
+      'The postcode comes from the order\'s delivery address, else the customer\'s usual delivery address in Customers' + (office ? ', else their address in Xero' : '') + '. Orders with no postcode are listed under the map.',
+      'The van\'s live position is not shown yet; it can be added later if the van gets a tracker or the driver shares his phone\'s location.'])}
+  </section>
+  ${office ? `<section class="hsec" id="help-customers"><h3>Customers (contact book)</h3>
+    <p>Xero's contacts are often the customer's accounts people. The <b>Customers</b> tab keeps the people operations actually deal with, and where goods go. Xero is not changed.</p>
+    ${steps(['Pick a customer on the left (or type one under the list and press <b>Open</b>).',
+      '<b>Add a person</b> with a role: Orders / buyer, Goods in / deliveries, Accounts or Other. Tick <b>Main contact</b> for the one to use first.',
+      '<b>Add a delivery address</b>, with the postcode, and tick <b>Usual delivery address</b> for the normal one.',
+      'New orders then fill in the <b>main Orders / buyer</b> contact and the <b>usual address</b> instead of Xero\'s. Other saved addresses are in <b>Saved delivery addresses</b> on the order form, and saved people appear when you click in <b>Contact</b>.',
+      'Delivery notes are emailed to the <b>main Goods in / deliveries</b> contact when there is one, otherwise to the order\'s contact.',
+      'On the order form, <b>Save contact and address to the contact book</b> keeps what you typed for next time.'])}
+  </section>` : ''}`;
+}
+
 function emails(office) {
   return `<section class="hsec" id="help-email"><h3>Emails</h3>
     ${pic(`<div class="hmail"><div class="hmail-h"><b>Drafts</b> · Outlook</div><div class="hmail-r"><b>Demo Metals Ltd</b><span>Delivery note DN-0007 for order SO-9781</span><span class="chip">PDF</span></div></div>`)}
@@ -199,8 +217,8 @@ function faq(office) {
 }
 
 export function renderHelp(office) {
-  const parts = office ? [newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), xero(), emails(true), faq(true)]
-    : [shopFloor(false), dispatch(false), faq(false)];
+  const parts = office ? [newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), mapAndCustomers(true), xero(), emails(true), faq(true)]
+    : [shopFloor(false), dispatch(false), mapAndCustomers(false), faq(false)];
   return `<div class="sec-h"><h2>Help</h2><span class="sub">${office ? 'How an order goes from quote to invoice. The pictures are examples, not real orders.' : 'How to use the shop floor screen. The pictures are examples.'}</span></div>
     <p class="hkey">The <b>Home</b> tab is the place to start each day: what is running late (worst first), what is due in the next 7 days, what is ready to dispatch, how many jobs are waiting at each station${office ? ', and the money: order book, waiting for Xero and dispatched this week' : ''}. Click any number or job to go straight to it.</p>
     ${flow(office)}${office ? '<p class="hkey">Most asked: <a href="#help-calloffs">how to set up and change call-offs</a>.</p>' : ''}<div class="help">${parts.join('')}</div>`;

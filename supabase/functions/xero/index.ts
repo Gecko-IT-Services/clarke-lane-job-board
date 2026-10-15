@@ -162,9 +162,12 @@ async function defaults(s: { access_token: string; tenant_id: string }) {
 async function contacts() {
   const s = await session();
   const [list, d] = await Promise.all([
-    allPages(s, `Contacts?where=${encodeURIComponent('ContactStatus=="ACTIVE"')}&summaryOnly=true`, 'Contacts'),
+    allPages(s, `Contacts?where=${encodeURIComponent('ContactStatus=="ACTIVE"')}`, 'Contacts'),
     defaults(s)]);
-  return { contacts: list.map(c => ({ id: c.ContactID, name: c.Name })).sort((a, b) => a.name.localeCompare(b.name)), defaults: d };
+  // The postcode (delivery address first) lets the delivery map place a customer with no address on the order.
+  const pc = (c: any) => { const a = (c.Addresses || []) as any[];
+    return ((a.find(x => x.AddressType === 'DELIVERY' && x.PostalCode) || a.find(x => x.AddressType === 'STREET' && x.PostalCode) || a.find(x => x.PostalCode))?.PostalCode || '').trim(); };
+  return { contacts: list.map(c => ({ id: c.ContactID, name: c.Name, postcode: pc(c) })).sort((a, b) => a.name.localeCompare(b.name)), defaults: d };
 }
 
 /** One Xero contact, for filling in a new order the way Sage does when you pick the account. */

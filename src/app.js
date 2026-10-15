@@ -8,6 +8,9 @@ import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
+import { drawMap, KINDS } from './map.js';
+import { postcodeOf } from './core/geo.js';
+import { dashboard } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -61,7 +64,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, tab: 'home', stage: 'current', search: '',
+const S = { orderFilter: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
   station: 'all', open: null, conv: null, desp: null, error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -107,8 +110,8 @@ function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeou
 
 async function reload() {
   try {
-    [S.jobs, S.dismissed, S.xeroOrders] = await Promise.all([data.loadJobs({ office: office() }),
-      office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : []]);
+    [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() }),
+      office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
     S.error = null;
     if (!S.stageChosen) {            // open on the first list that has something in it
       const has = st => S.jobs.some(j => stage(j) === st);
@@ -296,13 +299,13 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
-  $('tabs').innerHTML = TABS.filter(([k]) => office() || !['quotes', 'orders', 'xero'].includes(k)).map(([k, t]) => {
+  $('tabs').innerHTML = TABS.filter(([k]) => office() || !['quotes', 'orders', 'customers', 'xero'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -444,8 +447,10 @@ function orderForm() {
     ${n.repeatOf ? `<div class="warn">Copied from ${esc(n.repeatOf)}. Prices are as they were on that order: check they are still right. The delivery dates have moved forward, keeping their spacing.</div>` : ''}
     ${amend ? '' : '<p class="note">Leave the order number blank for a new order. For one that already has a number, type it: SO-9726 raised in Xero, SAGE-9701 carried over from Sage.</p>'}
     <div class="row3"><label class="fl">Customer order no. (PO)<input type="text" id="of-po" value="${esc(n.po)}"></label>
-      <label class="fl">Contact<input type="text" id="of-contact" value="${esc(n.contact)}"></label>
+      <label class="fl">Contact<input type="text" id="of-contact" value="${esc(n.contact)}" list="of-people" autocomplete="off">
+        <datalist id="of-people">${bookFor(n.customer).people.map(p => `<option value="${esc(p.name)}">${esc(ROLES[p.role])}${p.email ? ' · ' + esc(p.email) : ''}</option>`).join('')}</datalist></label>
       <label class="fl">Contact email<input type="email" id="of-email" value="${esc(n.contactEmail)}"></label></div>
+    ${bookFor(n.customer).sites.length > 0 ? `<label class="fl">Saved delivery addresses<select class="f" id="of-site"><option value="">Choose one to fill in the address…</option>${bookFor(n.customer).sites.map(x => `<option value="${x.id}">${esc(x.label || x.address.split('\n')[0])}${x.main ? ' (usual)' : ''}</option>`).join('')}</select></label>` : ''}
     <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
       <label class="fl">Promised delivery (default for new lines)<input type="date" id="of-due" value="${esc(n.due)}"></label></div>
     <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th title="Only if the customer sent a separate PO for this delivery. Blank = the order's PO.">Call-off PO</th><th>Net</th>${amend ? '<th>Dispatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -460,7 +465,8 @@ function orderForm() {
     <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap or C/Sink if needed.' : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
-    <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button></div>
+    <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button>
+      <button class="btn link sm" type="button" data-booksave title="Save the contact, email and delivery address above to this customer's contact book (Customers tab)">Save contact and address to the contact book</button></div>
     <p class="note" id="of-msg"></p></form>`;
 }
 /** Under the customer box: whether the order is on a Xero contact, as Sage insists on an account. */
@@ -476,9 +482,14 @@ function customerNote(n) {
 /** Picking a Xero contact fills in the contact person and delivery address (if empty) and
  *  remembers the match, so Send to Xero never has to ask for this customer. */
 async function customerPicked(name) {
-  const n = S.form; if (!n || !S.xc) return;
-  const c = S.xc.contacts.find(x => x.name === name); 
-  if (!c) { $('of-custnote').textContent = customerNote({ ...n, customer: name }); return; }
+  const n = S.form; if (!n) return;
+  const c = S.xc?.contacts.find(x => x.name === name);
+  if (!c) {
+    collectForm();
+    if (applyBook(n)) { keepInputs = false; render(); }
+    if ($('of-custnote')) $('of-custnote').textContent = customerNote({ ...n, customer: name });
+    return;
+  }
   collectForm();
   S.xcMap.set(normName(c.name), c); S.forcePick.delete(normName(c.name));
   data.saveContact(normName(c.name), c).catch(() => {});
@@ -492,6 +503,7 @@ async function customerPicked(name) {
     if (d.email && (!n.contactEmail.trim() || n.contactEmail === n.fromXero?.email)) n.contactEmail = d.email;
     n.fromXero = { address: d.address, person: d.person, email: d.email };
   } catch { /* details are a convenience; the match itself is saved */ }
+  applyBook(n);   // the contact book beats Xero's (accounts) contact
   keepInputs = false; render();
 }
 function splitLines() {
@@ -540,6 +552,161 @@ async function submitOrder() {
     }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
+}
+
+/* ---------- contact book: operations' own people and delivery addresses per customer ---------- */
+const ROLES = { orders: 'Orders / buyer', deliveries: 'Goods in / deliveries', accounts: 'Accounts', other: 'Other' };
+const bookFor = name => { const k = normName(name); return { people: S.book.people.filter(p => p.key === k), sites: S.book.sites.filter(x => x.key === k) }; };
+function mainPerson(name, role) {
+  const ps = bookFor(name).people.filter(p => p.role === role && (p.email || p.name));
+  return ps.find(p => p.main) || ps[0] || null;
+}
+const mainSite = name => { const ss = bookFor(name).sites; return ss.find(x => x.main) || ss[0] || null; };
+/** The contact book wins over Xero for who operations deal with; never overwrites what was typed. */
+function applyBook(n) {
+  const p = mainPerson(n.customer, 'orders'), site = mainSite(n.customer);
+  const auto = (v, k) => !String(v || '').trim() || v === n.fromXero?.[k] || v === n.fromBook?.[k];
+  const was = { ...n.fromBook };
+  n.fromBook = {};
+  if (p) {
+    if (p.name && auto(n.contact, 'person')) { n.contact = p.name; n.fromBook.person = p.name; }
+    if (p.email && auto(n.contactEmail, 'email')) { n.contactEmail = p.email; n.fromBook.email = p.email; }
+  }
+  if (site && auto(n.address, 'address')) { n.address = site.address; n.fromBook.address = site.address; }
+  return Object.keys(n.fromBook).length || Object.keys(was).length;
+}
+async function saveFormToBook() {
+  collectForm();
+  const n = S.form; if (!n.customer.trim()) return toast('Enter the customer first.', null, true);
+  const key = normName(n.customer), b = bookFor(n.customer);
+  try {
+    let did = [];
+    if ((n.contact.trim() || n.contactEmail.trim()) && !b.people.some(p => p.role === 'orders' && p.name === n.contact.trim() && p.email === n.contactEmail.trim())) {
+      await data.savePerson({ key, customer: n.customer.trim(), role: 'orders', name: n.contact.trim(), email: n.contactEmail.trim(), main: !b.people.some(p => p.role === 'orders') });
+      did.push(`${n.contact.trim() || n.contactEmail.trim()} (orders)`);
+    }
+    if (n.address.trim() && !b.sites.some(x => x.address.trim() === n.address.trim())) {
+      await data.saveSite({ key, customer: n.customer.trim(), address: n.address.trim(), main: !b.sites.length });
+      did.push('the delivery address');
+    }
+    await reload();
+    toast(did.length ? `Saved to ${n.customer.trim()}'s contact book: ${did.join(' and ')}.` : 'Already in the contact book.');
+  } catch (e) { toast(e.message, null, true); }
+}
+
+function renderCustomers() {
+  const q = (S.csearch || '').toLowerCase();
+  const names = new Map();
+  for (const x of [...S.book.people, ...S.book.sites]) names.set(x.key, x.customer);
+  for (const j of S.jobs) if (!j.preview && !names.has(normName(j.customer))) names.set(normName(j.customer), j.customer);
+  if (S.cust && !names.has(S.cust) && S.custName) names.set(S.cust, S.custName);
+  const list = [...names.entries()].filter(([, n]) => !q || n.toLowerCase().includes(q)).sort((a, b) => a[1].localeCompare(b[1]));
+  const sel = S.cust && names.has(S.cust) ? S.cust : null, name = sel ? names.get(sel) : '';
+  const items = list.map(([k, n]) => { const b = { people: S.book.people.filter(p => p.key === k).length, sites: S.book.sites.filter(x => x.key === k).length };
+    return `<button type="button" class="citem ${k === sel ? 'on' : ''}" data-cust="${esc(k)}"><b>${esc(n)}</b><span>${b.people ? `${b.people} contact${b.people === 1 ? '' : 's'}` : 'no contacts yet'}${b.sites ? ` · ${b.sites} address${b.sites === 1 ? '' : 'es'}` : ''}</span></button>`; }).join('');
+  let main = '<div class="empty">Pick a customer on the left, or add one.</div>';
+  if (sel) {
+    const b = bookFor(name), ed = S.bookEdit, xc = contactFor(name);
+    const orders = S.jobs.filter(j => !j.preview && normName(j.customer) === sel && ['upcoming', 'current'].includes(stage(j)) && j.status !== 'cancelled');
+    const pform = ed?.kind === 'person' ? `<form class="bookform" data-bookform="person">
+        <div class="row3"><label class="fl">Role<select class="f" id="bk-role">${Object.entries(ROLES).map(([k, t]) => `<option value="${k}" ${ed.role === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="fl">Name<input type="text" id="bk-name" value="${esc(ed.name || '')}"></label><label class="fl">Email<input type="email" id="bk-email" value="${esc(ed.email || '')}"></label></div>
+        <div class="row3"><label class="fl">Phone<input type="text" id="bk-phone" value="${esc(ed.phone || '')}"></label><label class="fl">Notes<input type="text" id="bk-notes" value="${esc(ed.notes || '')}"></label>
+          <label class="fl chk"><input type="checkbox" id="bk-main" ${ed.main ? 'checked' : ''}> Main contact for this role</label></div>
+        <div class="actions"><button class="btn pri sm" type="submit">${ed.id ? 'Save' : 'Add'}</button><button class="btn sm" type="button" data-bookcancel>Cancel</button></div></form>` : '';
+    const sform = ed?.kind === 'site' ? `<form class="bookform" data-bookform="site">
+        <div class="row2"><label class="fl">Label (optional)<input type="text" id="bk-label" value="${esc(ed.label || '')}" placeholder="e.g. Goods in, Unit 4"></label>
+          <label class="fl">Site contact<input type="text" id="bk-contact" value="${esc(ed.contact || '')}"></label></div>
+        <div class="row2"><label class="fl">Address (with postcode)<textarea id="bk-address" rows="4">${esc(ed.address || '')}</textarea></label>
+          <div style="display:flex;flex-direction:column;gap:10px"><label class="fl">Phone<input type="text" id="bk-phone" value="${esc(ed.phone || '')}"></label>
+          <label class="fl chk"><input type="checkbox" id="bk-main" ${ed.main ? 'checked' : ''}> Usual delivery address</label></div></div>
+        <div class="actions"><button class="btn pri sm" type="submit">${ed.id ? 'Save' : 'Add'}</button><button class="btn sm" type="button" data-bookcancel>Cancel</button></div></form>` : '';
+    main = `<div class="sec-h"><h3 style="font-size:28px">${esc(name)}</h3>
+        <span class="note">${xc ? `Invoiced in Xero to <b>${esc(xc.name)}</b>.` : S.xc ? 'Not matched to a Xero contact yet.' : ''}</span></div>
+      <div class="panel"><h3>People</h3>
+        <p class="note">Who operations deal with. The <b>main Orders / buyer</b> contact fills in new orders and gets the order acknowledgement; the <b>main Goods in / deliveries</b> contact gets delivery notes. Xero's contact is only used when nobody is set here.</p>
+        ${b.people.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Role</th><th style="text-align:left">Name</th><th style="text-align:left">Email</th><th style="text-align:left">Phone</th><th style="text-align:left">Notes</th><th></th></tr></thead><tbody>
+          ${b.people.slice().sort((x, y) => Object.keys(ROLES).indexOf(x.role) - Object.keys(ROLES).indexOf(y.role) || (y.main - x.main)).map(p => `<tr><td style="text-align:left">${ROLES[p.role]}${p.main ? ' <span class="chip ok">main</span>' : ''}</td><td style="text-align:left"><b>${esc(p.name)}</b></td>
+            <td style="text-align:left">${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}</td><td style="text-align:left">${esc(p.phone)}</td><td style="text-align:left">${esc(p.notes)}</td>
+            <td style="white-space:nowrap"><button class="btn sm" type="button" data-editperson="${p.id}">Edit</button> <button class="btn link sm" type="button" data-delperson="${p.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No people yet.</div>'}
+        ${pform || '<div class="actions"><button class="btn sm" type="button" data-addperson>Add a person</button>' + (xc ? ' <button class="btn sm" type="button" data-fromxerobook>Copy in Xero\'s contact</button>' : '') + '</div>'}</div>
+      <div class="panel"><h3>Delivery addresses</h3>
+        ${b.sites.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Address</th><th style="text-align:left">Site contact</th><th style="text-align:left">Phone</th><th></th></tr></thead><tbody>
+          ${b.sites.map(x => `<tr><td style="text-align:left">${x.label ? `<b>${esc(x.label)}</b><br>` : ''}<span style="white-space:pre-line">${esc(x.address)}</span>${x.main ? ' <span class="chip ok">usual</span>' : ''}${postcodeOf(x.address) ? '' : ' <span class="chip late">no postcode</span>'}</td>
+            <td style="text-align:left">${esc(x.contact)}</td><td style="text-align:left">${esc(x.phone)}</td>
+            <td style="white-space:nowrap"><button class="btn sm" type="button" data-editsite="${x.id}">Edit</button> <button class="btn link sm" type="button" data-delsite="${x.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No delivery addresses yet.</div>'}
+        ${sform || '<div class="actions"><button class="btn sm" type="button" data-addsite>Add a delivery address</button></div>'}</div>
+      ${orders.length ? `<div class="panel"><h3>Open orders <span class="note">${orders.length}</span></h3><div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${orders.map(j => `<button class="btn sm" type="button" data-open="${j.id}">${esc(j.so)} · due ${fmt(nextDue(j))}</button>`).join('')}</div></div>` : ''}`;
+  }
+  $('v-customers').innerHTML = `<div class="sec-h"><h2>Customers</h2><span class="sub">The board's own contact book: who to deal with and where to deliver. Xero is not changed.</span></div>
+    <div class="cbook"><div class="clist"><input type="search" id="csearch" placeholder="Find a customer" value="${esc(S.csearch || '')}">
+        <div class="citems">${items || '<div class="note">No customers yet.</div>'}</div>
+        <form class="addcust" data-addcust><input type="text" id="newcust" list="xero-customers2" placeholder="Add a customer (from Xero or new)" autocomplete="off">
+          <datalist id="xero-customers2">${(S.xc?.contacts || []).map(c => `<option value="${esc(c.name)}"></option>`).join('')}</datalist><button class="btn sm" type="submit">Open</button></form></div>
+      <div class="cmain">${main}</div></div>`;
+  if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
+}
+async function saveBookForm(kind) {
+  const v = id => $(id)?.value ?? '', name = S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer || '';
+  const base = { id: S.bookEdit?.id, key: S.cust, customer: name, main: $('bk-main')?.checked };
+  const rec = kind === 'person' ? { ...base, role: v('bk-role'), name: v('bk-name').trim(), email: v('bk-email').trim(), phone: v('bk-phone').trim(), notes: v('bk-notes').trim() }
+    : { ...base, label: v('bk-label').trim(), address: v('bk-address').trim(), contact: v('bk-contact').trim(), phone: v('bk-phone').trim() };
+  if (kind === 'person' && !rec.name && !rec.email) return toast('Enter a name or an email.', null, true);
+  if (kind === 'site' && !rec.address) return toast('Enter the address.', null, true);
+  try { await (kind === 'person' ? data.savePerson(rec) : data.saveSite(rec)); S.bookEdit = null; await reload(); toast('Saved.'); }
+  catch (e) { toast(e.message, null, true); }
+}
+async function copyXeroToBook() {
+  const name = S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer;
+  const xc = contactFor(name); if (!xc) return;
+  try { const d = await data.xero('contact', { id: xc.id });
+    S.bookEdit = { kind: 'person', role: 'accounts', name: d.person || '', email: d.email || '', main: !bookFor(name).people.some(p => p.role === 'accounts') };
+    if (d.address && !bookFor(name).sites.length) toast('Xero\'s address can be added under Delivery addresses if goods go there.');
+    render();
+  } catch (e) { toast(e.message, null, true); }
+}
+
+/* ---------- map: where deliveries are going, so a second drop can join the same run ---------- */
+let mapSig = '';
+function jobPostcode(j) {
+  const xc = S.xc && contactFor(j.customer);
+  return postcodeOf(j.address) || postcodeOf(mainSite(j.customer)?.address) || postcodeOf(xc ? S.xc.contacts.find(c => c.id === xc.id)?.postcode : '');
+}
+function renderMapTab() {
+  const el = $('v-map');
+  if (!el.dataset.ready) {
+    el.innerHTML = `<div class="sec-h"><h2>Map</h2><span class="sub">Where the open orders are going. Click a pin to see the jobs there and what else is nearby, so a second delivery can go on the same run.</span></div>
+      <div class="mapctl" id="mapctl"></div><div class="panel" style="padding:0;overflow:hidden"><div id="mapbox"></div></div><div id="mapnote"></div>`;
+    el.dataset.ready = '1';
+  }
+  if (S.xero && office() && !S.xc && !S.xcErr) loadXeroContacts();
+  const d = dashboard(S.jobs, todayIso());
+  const kindOf = new Map();
+  const put = (j, k) => { const cur = kindOf.get(j.id); if (!cur || KINDS[k].rank < KINDS[cur].rank) kindOf.set(j.id, k); };
+  d.open.forEach(j => put(j, 'later')); d.soon.forEach(j => put(j, 'soon')); d.ready.forEach(j => put(j, 'ready'));
+  d.out.forEach(x => put(x.job, 'out')); d.late.forEach(x => put(x.job, 'late'));
+  const counts = {};
+  const items = [], missing = [];
+  for (const [id, k] of kindOf) {
+    counts[k] = (counts[k] || 0) + 1;
+    if (!S.mapShow[k]) continue;
+    const j = job(id), pc = jobPostcode(j);
+    const it = { postcode: pc, kind: k, short: esc(j.so),
+      html: `<button class="btn link" type="button" data-open="${j.id}">${esc(j.so)}</button> ${esc(j.customer)} · <span style="color:${KINDS[k].colour}">${KINDS[k].label.toLowerCase()}</span> · due ${fmt(nextDue(j))}` };
+    (pc ? items : missing).push({ ...it, j });
+  }
+  $('mapctl').innerHTML = Object.entries(KINDS).map(([k, x]) => `<label class="mk"><input type="checkbox" data-mapkind="${k}" ${S.mapShow[k] ? 'checked' : ''}><span class="dot" style="background:${x.colour}"></span>${x.label} <span class="note">${counts[k] || 0}</span></label>`).join('')
+    + `<label class="mk">Nearby means within <select class="f" id="mapmiles">${[5, 10, 15, 25].map(m => `<option ${S.mapMiles === m ? 'selected' : ''}>${m}</option>`).join('')}</select> miles</label>`;
+  const sig = JSON.stringify([items.map(i => [i.postcode, i.kind, i.html]), S.mapMiles]);
+  const note = list => `${list.length ? `<div class="panel"><h3>Not on the map <span class="note">${list.length}</span></h3><p class="note">No postcode found for these. Add a delivery address on the order (Amend) or in Customers.</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${list.map(i => `<button class="btn sm" type="button" data-open="${i.j.id}">${esc(i.j.so)} · ${esc(i.j.customer)}</button>`).join('')}</div></div>` : ''}
+    <p class="note">Map © OpenStreetMap contributors. Postcodes are placed using postcodes.io (only the postcode is sent). The van's live position can be added later.</p>`;
+  if (sig === mapSig) return;
+  mapSig = sig;
+  $('mapnote').innerHTML = note(missing);
+  drawMap($('mapbox'), items, S.mapMiles, esc)
+    .then(r => { if (r.missing.length) $('mapnote').innerHTML = note([...missing, ...r.missing]); })
+    .catch(e => { mapSig = ''; $('mapnote').innerHTML = `<div class="err">${esc(e.message)}</div>`; });
 }
 
 /* ---------- Xero ---------- */
@@ -1041,17 +1208,20 @@ async function emailDoc(kind, jobId, despId) {
   try {
     const no = kind === 'soa' ? j.so : d.dn;
     const pdf = await pdfBase64(docHtml(kind, jobId, despId));
-    const hello = j.contactName ? `Dear ${esc(j.contactName.split(' ')[0])},` : 'Hello,';
+    // Delivery notes go to the customer's goods-in contact when the contact book has one.
+    const goodsIn = kind === 'dn' ? mainPerson(j.customer, 'deliveries') : null;
+    const to = goodsIn?.email || j.contactEmail, who = goodsIn?.email ? goodsIn.name : j.contactName;
+    const hello = who ? `Dear ${esc(who.split(' ')[0])},` : 'Hello,';
     const po = kind === 'dn' ? dnPo(j, d) : j.po;
     const ref = po ? ` (your order ${esc(po)})` : '';
     const html = kind === 'soa'
       ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached our sales order acknowledgement ${esc(j.so)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
       : `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} have been dispatched. Please find attached delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
     const subject = kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${po ? ' / ' + po : ''}`;
-    const link = await data.draftEmail({ to: j.contactEmail, subject, html, fileName: `${no}.pdf`, pdfBase64: pdf });
+    const link = await data.draftEmail({ to, subject, html, fileName: `${no}.pdf`, pdfBase64: pdf });
     if (kind === 'soa') await data.markAckEmailed(jobId); else await data.markDespatch(despId, 'emailed');
     await reload(); showDoc(kind, jobId, despId);
-    toast(`Draft ready in your Outlook Drafts${j.contactEmail ? ` to ${j.contactEmail}` : ' (no email address on the order: add one in Outlook)'}. Check it and press Send.`);
+    toast(`Draft ready in your Outlook Drafts${to ? ` to ${to}${goodsIn?.email ? ' (goods in, from the contact book)' : ''}` : ' (no email address on the order: add one in Outlook)'}. Check it and press Send.`);
     if (link) window.open(link, '_blank', 'noopener');
   } catch (e) {
     toast(/Mail\.ReadWrite|consent|AADSTS65001/i.test(e.message) ? 'Emailing needs a one-off permission in Microsoft 365 (Mail.ReadWrite). Ask Gecko IT to grant it.' : e.message, null, true);
@@ -1094,14 +1264,14 @@ function render() {
   $('preview-bar').hidden = !PREVIEW.on;
   if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
-  if (!office() && ['quotes', 'orders', 'xero'].includes(S.tab)) S.tab = 'floor';
+  if (!office() && ['quotes', 'orders', 'customers', 'xero'].includes(S.tab)) S.tab = 'floor';
   renderTabs();
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
   ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), today: todayIso(),
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null }, { esc, fmt, fmtLong, gbp, dueChip }); },
-    orders: renderOrders, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+    orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   renderDrawer();
   restoreInputs(kept);
 }
@@ -1112,6 +1282,16 @@ document.addEventListener('click', e => {
   const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;
   const d = t.dataset;
   if ('preview' in d) return enterPreview();
+  if (d.cust) { S.cust = d.cust; S.custName = null; S.bookEdit = null; return render(); }
+  if ('addperson' in d) { S.bookEdit = { kind: 'person', role: 'orders', main: false }; return render(); }
+  if ('addsite' in d) { S.bookEdit = { kind: 'site', main: false }; return render(); }
+  if (d.editperson) { S.bookEdit = { kind: 'person', ...S.book.people.find(p => p.id === +d.editperson) }; return render(); }
+  if (d.editsite) { S.bookEdit = { kind: 'site', ...S.book.sites.find(x => x.id === +d.editsite) }; return render(); }
+  if ('bookcancel' in d) { S.bookEdit = null; return render(); }
+  if (d.delperson) return data.deletePerson(+d.delperson).then(reload).then(() => toast('Removed.')).catch(err => toast(err.message, null, true));
+  if (d.delsite) return data.deleteSite(+d.delsite).then(reload).then(() => toast('Removed.')).catch(err => toast(err.message, null, true));
+  if ('fromxerobook' in d) return copyXeroToBook();
+  if ('booksave' in d) return saveFormToBook();
   if ('leavepreview' in d) return leavePreview();
   if (d.gostation) { S.station = d.gostation; try { localStorage.setItem('clj.station', d.gostation); } catch { /* not kept */ } S.tab = 'floor'; history.replaceState(null, '', '#floor'); render(); window.scrollTo(0, 0); return; }
   if (t.matches('a[href^="#help-"],a[href^="#home-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
@@ -1171,6 +1351,7 @@ document.addEventListener('input', e => {
     document.querySelector('#doc .paper').innerHTML = docHtml('job', S.sheet.jobId);
     return;
   }
+  if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'search' || e.target.id === 'osearch') {
     const id = e.target.id; S[id] = e.target.value; const pos = e.target.selectionStart;
     if (id === 'search') renderJobs(); else renderOrders();
@@ -1189,10 +1370,16 @@ document.addEventListener('change', e => {
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); }
   if (e.target.id === 'ofilter') { S.orderFilter = e.target.value; render(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
+  if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
+  if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
+  if (e.target.dataset.mapkind) { S.mapShow[e.target.dataset.mapkind] = e.target.checked; render(); }
+  if (e.target.id === 'mapmiles') { S.mapMiles = +e.target.value; render(); }
 });
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('orderform' in f.dataset) return submitOrder();
+  if (f.dataset.bookform) return saveBookForm(f.dataset.bookform);
+  if ('addcust' in f.dataset) { const v = $('newcust').value.trim(); if (!v) return; S.cust = normName(v); S.custName = v; S.bookEdit = null; return render(); }
   if (f.dataset.deliver) return markDelivery(+f.dataset.deliver, 'delivered', f.querySelector('input').value.trim());
   if (f.dataset.inv) {
     const no = f.querySelector('input').value.trim(); if (!no) return;
