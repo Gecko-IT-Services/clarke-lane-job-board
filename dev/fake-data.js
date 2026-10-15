@@ -85,7 +85,9 @@ jobs.push(
   ,{ id: 5, so: 'SO-9785', quote: '', spQuoteId: null, customer: 'Sixth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-12', due: '2026-10-22', notes: '', address: '', status: 'held',
     lines: [{ id: 51, lineNo: 1, part: 'Bracket', qty: 12, price: 9.5, due: '2026-10-22' }], procs: { 'Laser': { done: false } }, despatches: [] },
   { id: 6, so: 'SO-9786', quote: '', spQuoteId: null, customer: 'Seventh Example Ltd', contactName: '', contactEmail: '', po: 'PO-90', ordered: '2026-10-10', due: '2026-10-20', notes: '', address: '', status: 'open',
-    lines: [{ id: 61, lineNo: 1, part: 'Cover', qty: 8, price: 22, due: '2026-10-20' }], procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T10:00:00Z' } }, despatches: [] });
+    lines: [{ id: 61, lineNo: 1, part: 'Cover', qty: 8, price: 22, due: '2026-10-20' }], procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T10:00:00Z' } }, despatches: [] }
+  ,{ id: 7, so: 'SO-9787', quote: '', spQuoteId: null, customer: 'Eighth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-13', due: '2026-10-19', notes: '', address: '', status: 'open',
+    lines: [{ id: 71, lineNo: 1, part: 'Tray', qty: 6, price: 18, due: '2026-10-19' }], procs: { 'Fold': { done: false } }, despatches: [] });
 export const cancelDespatch = async id => { for (const j of jobs) { const d = j.despatches.find(x => x.id === id); if (d) {
   if (d.xero) throw new Error(`${d.dn} is invoiced in Xero, so it cannot be cancelled here.`);
   j.despatches = j.despatches.filter(x => x !== d); (j.cancelledDespatches ||= []).push({ ...d, cancelled: { at: new Date().toISOString(), by: 'levi@clarke-lane.co.uk' } }); } } };
