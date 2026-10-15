@@ -18,7 +18,7 @@ import { dashboard } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
-  byRunningOrder, partsLeft, moveInOrder, compareValues } from './core/jobs.js';
+  byRunningOrder, partsLeft, moveInOrder, compareValues, nextStep } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 
@@ -220,7 +220,7 @@ async function toggleProc(id, p) {
   render();
   try {
     await data.setProcess(id, p, done, S.me.name);
-    toast(done ? `${p} done on ${j.so}` + (allDone(j) ? '. Ready to dispatch.' : '') : `${p} on ${j.so} set back to not done`,
+    toast(done ? `${p} done on ${j.so}` + (allDone(j) ? ' · ready to dispatch' : ` · next: ${nextStep(j)}`) : `${p} on ${j.so} set back to not done`,
       async () => { try { await data.setProcess(id, p, prev.done, prev.by || S.me.name); } catch (e) { toast(e.message, null, true); } reload(); });
   } catch (e) { j.procs[p] = prev; render(); toast(e.message, null, true); }
 }
@@ -1154,6 +1154,7 @@ function render() {
   ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+  document.body.classList.toggle('on-floor', S.tab === 'floor');
   renderDrawer();
   restoreInputs(kept);
 }
@@ -1161,6 +1162,15 @@ function fromHash() { const h = location.hash.slice(1) === 'despatch' ? 'dispatc
 document.addEventListener('fullscreenchange', () => { if (S.tab === 'floor') renderFloor(); });
 setInterval(() => { const c = $('fclock'); if (c) c.innerHTML = clockHtml(new Date()); }, 15000);
 window.addEventListener('hashchange', () => { fromHash(); render(); });
+
+/* The shop floor screen is shared: two minutes untouched, it goes back to the station tiles. */
+let idleT;
+function nudge() {
+  clearTimeout(idleT);
+  idleT = setTimeout(() => { if (S.tab !== 'floor' || (S.station == null && S.open == null)) return; S.station = null; S.open = null; render(); window.scrollTo(0, 0); }, 120000);
+}
+['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, nudge, { passive: true }));
+nudge();
 
 document.addEventListener('click', e => {
   const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;

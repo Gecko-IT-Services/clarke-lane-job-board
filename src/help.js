@@ -6,7 +6,7 @@
  */
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const n = k => `<span class="hn">${k}</span>`;                        // numbered pointer
-const box = (done, big) => `<span class="tick ${big ? 'big' : ''} ${done ? 'done' : ''}">${done ? TICK : ''}</span>`;
+const box = done => `<span class="tick ${done ? 'done' : ''}">${done ? TICK : ''}</span>`;
 const pic = (html, caption) => `<figure class="hpic"><div class="hframe" aria-hidden="true">${html}</div>${caption ? `<figcaption>${caption}</figcaption>` : ''}</figure>`;
 const steps = items => `<ol class="hsteps">${items.map(t => `<li>${t}</li>`).join('')}</ol>`;
 
@@ -126,21 +126,25 @@ function jobsBoard() {
 }
 
 function shopFloor(office) {
+  const step = (p, done, here) => `<span class="step${done ? ' done' : ''}${here ? ' here' : ''}"><span class="bx">${done ? TICK : ''}</span><span><b>${p}</b><small>${done ? 'Done 09:42' : here ? 'Tap when done' : 'To do'}</small></span></span>`;
   return `<section class="hsec" id="help-floor"><h3>${office ? '5 · ' : ''}Shop floor</h3>
     <p>${office ? 'The screen the factory uses on the touch screen. ' : ''}Jobs are listed in the order the office wants them done: anything brought forward first, then soonest due.</p>
-    ${pic(`<div class="stations"><span class="sbtn">All jobs <span class="c">6</span></span><span class="sbtn on">Laser <span class="c">3</span></span>${n(1)}<span class="sbtn">Fold <span class="c">2</span></span><span class="sbtn">Weld <span class="c">1</span></span></div>
-      <table class="jobs floor"><thead><tr><th>Due</th><th>Sales order</th><th>Customer and parts</th><th class="p focus">Laser</th><th class="p">Fold</th><th class="p">Weld</th></tr></thead><tbody>
-        <tr><td><span class="chip late">17 Oct</span></td><td class="so">SO-9786</td><td class="cust"><b>Example Fabrications Ltd</b><div class="parts"><b>50</b> × Bracket, 3mm S275</div></td>
-          <td class="p focus">${box(false, true)} ${n(2)}</td><td class="p">${box(false, true)}</td><td class="p"><span class="na">–</span></td></tr>
-        <tr class="ready"><td><span class="chip">24 Oct</span></td><td class="so">SO-9781</td><td class="cust"><b>Demo Metals Ltd</b><div class="parts"><b>12</b> × Cabinet</div><div class="meta"><span class="chip ok">Ready to dispatch</span></div></td>
-          <td class="p focus">${box(true, true)}<small>09:42</small></td><td class="p">${box(true, true)}<small>11:05</small></td><td class="p">${box(true, true)}<small>14:20</small></td></tr></tbody></table>`)}
-    ${steps([`${n(1)} Tap your <b>station</b> to see only the jobs waiting for it. The number shows how many. The screen remembers it.`,
-      `${n(2)} When your process is finished on a job, <b>tap its box</b>. It turns green with the time.`,
-      'Tapped the wrong one? Tap it again, or press <b>Undo</b> on the message at the bottom.',
-      'A dash means that job does not need that process.',
-      'When every box on a job is green, the row turns green: <b>Ready to dispatch</b>. The Dispatch tab shows it too.',
+    ${pic(`<div class="kiosk"><div class="tiles">
+        <span class="tile hot"><span class="nm">Laser ${n(1)}</span><span><span class="ct"><b>3</b>jobs waiting</span><span class="tag late">1 late</span></span></span>
+        <span class="tile"><span class="nm">Fold</span><span><span class="ct"><b>2</b>jobs waiting</span><span class="tag ok">On time</span></span></span>
+        <span class="tile idle"><span class="nm">Weld</span><span><span class="ct"><b>0</b>jobs waiting</span><span class="tag">Nothing waiting</span></span></span></div>
+      <div class="fcard late"><div class="ftop"><span class="pos">1</span><div><div class="cu">Example Fabrications Ltd<span class="so">SO-9786</span></div><div class="parts"><span><b>50</b> × Bracket, 3mm S275</span></div></div>
+        <div class="side"><span class="tag late">2 days late</span></div></div>
+        <div class="route">${step('Laser', true)}<span class="arrow">→</span>${step('Fold', false, true)} ${n(2)}<span class="arrow">→</span>${step('P/Coat')}</div>
+        <p class="fstat">1 of 3 done · next: <b>Fold</b></p></div></div>`)}
+    ${steps([`${n(1)} The screen starts on the <b>station tiles</b>. Tap your station to see only the jobs waiting for it, in the order to do them. <b>All jobs</b> shows everything.`,
+      `${n(2)} Each job shows its whole route. When your process is finished, <b>tap its step</b>. It turns green with the time, and the message at the bottom says what comes next.`,
+      'Tapped the wrong one? Tap the green step again, or press <b>Undo</b> on the message.',
+      'When every step is green the job is <b>ready to dispatch</b> and goes back to the office. The Dispatch tab shows it too.',
+      'A job <b>on hold</b> can\'t be ticked: the office has paused it, so don\'t start it.',
       '<span class="chip late">Brought forward</span> means the office has moved this job up. Do it first.',
-      'Tap the <b>sales order number</b> to see the full job.'])}
+      'Tap <b>Job details</b> to see the full job.',
+      'After <b>2 minutes</b> untouched the screen goes back to the tiles. <b>Full screen</b> hides the browser bars.'])}
   </section>`;
 }
 
