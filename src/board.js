@@ -38,7 +38,7 @@ export function renderBoard({ jobs, today, office, stageKey, search, anyPlaced }
     <td>${done ? `<span class="chip">sent ${fmt(lastDespatch(j))}</span>` : dueChip(nextDue(j))}</td>
     <td>${needed(j).map(p => pill(j, p)).join('') || '<span class="note">No processes</span>'}</td>
     ${office ? `<td class="num">${gbp(done ? value(j) : value(j, { remaining: true }), 2)}</td>` : ''}</tr>`;
-  const head = `<thead><tr>${done ? '' : '<th>Order</th>'}<th>Customer</th><th>${done ? 'Dispatched' : 'Due'}</th><th>Processes</th>${office ? `<th class="num">${done ? 'Value' : 'Outstanding'}</th>` : ''}</tr></thead>`;
+  const head = `<thead><tr>${done ? '' : '<th class="ord">Order</th>'}<th>Customer</th><th>${done ? 'Dispatched' : 'Due'}</th><th>Processes</th>${office ? `<th class="num">${done ? 'Value' : 'Outstanding'}</th>` : ''}</tr></thead>`;
   const empty = jobs.length ? (q ? 'No jobs match that search.' : 'No jobs here.')
     : (office ? 'No jobs yet. Make one from Won quotes, or press New order on Sales orders.' : 'No jobs yet. They appear here once the office creates them.');
   const table = list.length
