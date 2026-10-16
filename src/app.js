@@ -342,7 +342,7 @@ function renderTabs() {
 /* ---------- jobs ---------- */
 function renderJobs() {
   const { html, list } = renderBoard({ jobs: S.jobs, today: todayIso(), office: office(), md: md(), stageKey: S.stage, search: S.search,
-    anyPlaced: S.jobs.some(j => j.priority != null && onBoardStage(j)), target: Number(S.settings?.monthly_target) || null, editTarget: S.editTarget, byValue: S.jobSort === 'value' },
+    anyPlaced: S.jobs.some(j => j.priority != null && onBoardStage(j)), breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, editTarget: S.editTarget, byValue: S.jobSort === 'value' },
     { esc, fmt, fmtTime, gbp, dueChip, statusChips, match: jobMatch, TICK });
   S.boardList = list;
   $('v-jobs').innerHTML = html;
@@ -1226,7 +1226,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
+  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
@@ -1299,7 +1299,7 @@ document.addEventListener('click', e => {
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if ('jobsort' in d) { S.jobSort = S.jobSort === 'value' ? null : 'value'; return render(); }
-  if ('edittarget' in d) { S.editTarget = d.edittarget !== 'close'; render(); if (S.editTarget) $('target-in')?.focus(); return; }
+  if ('edittarget' in d) { S.editTarget = d.edittarget !== 'close'; render(); if (S.editTarget) $('be-in')?.focus(); return; }
   if (d.move) { e.stopPropagation(); return moveJob(+d.job, d.move, boardVisible()); }
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; render(); window.scrollTo(0, 0); return; }
@@ -1393,10 +1393,15 @@ document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('orderform' in f.dataset) return submitOrder();
   if ('targetform' in f.dataset) {
-    const v = Math.round(Number($('target-in').value));
-    if (!(v > 0)) return toast('Type the monthly target in pounds.', null, true);
-    try { await data.saveSetting('monthly_target', v); S.settings = { ...S.settings, monthly_target: v }; S.editTarget = false; toast(`Monthly target set to ${gbp(v)}.`); }
-    catch (err) { toast(err.message, null, true); }
+    const num = id => { const v = $(id).value.trim(); return v === '' ? null : Math.round(Number(v)); };
+    const be = num('be-in'), tg = num('target-in');
+    if ([be, tg].some(v => v != null && !(v > 0)) || (be == null && tg == null)) return toast('Type the figures in pounds, for example 65000.', null, true);
+    if (be && tg && tg < be) return toast('The ideal target should be above break-even.', null, true);
+    try {
+      await Promise.all([data.saveSetting('monthly_breakeven', be), data.saveSetting('monthly_target', tg)]);
+      S.settings = { ...S.settings, monthly_breakeven: be, monthly_target: tg }; S.editTarget = false;
+      toast('Saved. The same figures apply every month.');
+    } catch (err) { toast(err.message, null, true); }
     return render();
   }
   if (f.dataset.bookform) return saveBookForm(f.dataset.bookform);

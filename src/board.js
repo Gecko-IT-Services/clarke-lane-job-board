@@ -6,10 +6,10 @@
  */
 import { boardLists, dashboard, byRunningOrder, needed, allDone, nextDue, value, lastDespatch, deliveryDates, left, monthProgress, SHORT } from './core/jobs.js';
 import { card } from './home.js';
-import { monthGauge } from './gauge.js';
+import { monthPanel } from './gauge.js';
 import { icon } from './icons.js';
 
-export function renderBoard({ jobs, today, office, md = false, stageKey, search, anyPlaced, target = null, editTarget = false, byValue = false }, h) {
+export function renderBoard({ jobs, today, office, md = false, stageKey, search, anyPlaced, breakeven = null, target = null, editTarget = false, byValue = false }, h) {
   const { esc, fmt, fmtTime, gbp, dueChip, statusChips, match, TICK } = h;
   const B = boardLists(jobs), d = dashboard(jobs, today);
   const L = { ...B, open: [...B.upcoming, ...B.current].sort(byRunningOrder) };
@@ -68,24 +68,9 @@ export function renderBoard({ jobs, today, office, md = false, stageKey, search,
       : canMove ? ' Click a due date to change it. Drag ⠿, or use ⤒ ▲ ▼, to bring a job forward; the shop floor follows this order.' : ' Clear the search to move jobs.') : ''}${office && anyPlaced && !done
     ? ' <button type="button" class="btn link sm" data-move="reset">Put everything back in date order</button>' : ''}`;
 
-  // This month against Levi's target (office only). The figure is typed in on the board, never in the code.
-  let month = '';
-  if (md && !done) {
-    const mp = monthProgress(jobs, today);
-    const name = new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
-    const endDay = fmt(mp.end);
-    const togo = target ? Math.max(0, target - (mp.dispatched || 0)) : 0, short = target ? Math.max(0, togo - (mp.dueByEnd || 0)) : 0;
-    const form = `<form class="tform" data-targetform><label>Monthly target (net £) <input type="number" id="target-in" min="0" step="100" inputmode="numeric" value="${target ?? ''}" placeholder="£ per month"></label>
-      <button class="btn sm pri" type="submit">Save</button><button class="btn sm" type="button" data-edittarget="close">Cancel</button></form>`;
-    month = mp.dispatched == null ? '' : `<div class="target${target && togo === 0 ? ' met' : ''}${target ? ' has-gauge' : ''}">
-      ${target ? monthGauge({ ...mp, target, name }, { gbp, esc }) : ''}<div class="tinfo">
-      <div class="t1"><b>${esc(name)}</b><span>${gbp(mp.dispatched)} dispatched${target ? ` of ${gbp(target)} target` : ''}</span>
-        ${editTarget ? '' : `<button type="button" class="btn link sm" data-edittarget>${target ? 'Change target' : 'Set a monthly target'}</button>`}</div>
-      <div class="t2">${target ? (togo === 0 ? '<b>Target met.</b> ' : `<b>${gbp(togo)} to go.</b> `) : ''}${gbp(mp.dueByEnd)} still to send on jobs due by ${endDay}${target && togo > 0
-        ? (short > 0 ? ` · <span class="bad">${gbp(short)} short even if all of it goes</span>: bring later jobs forward` : ' · enough if it all goes out') : ''}.</div>
-      ${target ? `<ul class="tkey"><li><i class="k-done"></i>Dispatched</li><li><i class="k-could"></i>If all due by ${endDay} goes</li><li><i class="k-pace"></i>Even pace to today</li></ul>` : ''}
-      ${editTarget ? form : ''}</div></div>`;
-  }
+  // This month against break-even and the ideal target (MD only). The figures are typed in on the board, never in the code.
+  const month = md && !done ? monthPanel({ mp: monthProgress(jobs, today), breakeven, target, edit: editTarget,
+    name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   return { list, html: `<div class="home">
     <div class="hhead"><div><h2>Jobs</h2><p class="sub">What is being made, in the running order. Tick a process when it is finished.</p></div>

@@ -134,42 +134,35 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .duepick .duebtn:hover .pen{opacity:1;color:var(--ink)}
 .duepick input[type=date]{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
 .duepick + .note{display:block;font-size:12px;margin-top:2px}
-#v-jobs .target{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:flex;flex-direction:column;gap:8px}
-#v-jobs .target .t1{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap;font-size:15px}
-#v-jobs .target .t1 b{font-size:17px}
-#v-jobs .target .t1 .btn{margin-left:auto}
-#v-jobs .target .t2{font-size:14px;color:var(--muted)} #v-jobs .target .t2 b{color:var(--ink)} #v-jobs .target .bad{color:var(--bad);font-weight:600}
-#v-jobs .target .tbar{height:8px;border-radius:999px;background:var(--field);overflow:hidden}
-#v-jobs .target .tbar span{display:block;height:100%;background:var(--ink);border-radius:999px}
-#v-jobs .target.met .tbar span{background:var(--ok)}
-#v-home .hmonth{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:8px 24px;flex-wrap:wrap}
-#v-home .hmonth > div{display:flex;flex-direction:column;gap:4px;flex:1 1 220px}
-#v-home .hmonth h3{font-size:19px} #v-home .hmonth p{font-size:14.5px} #v-home .hmonth a{font-weight:600;color:var(--info);text-decoration:none;font-size:14px;margin-top:4px}
-#v-home .hmonth .gauge{width:200px}
-#v-jobs .target.has-gauge{flex-direction:row;align-items:center;gap:8px 24px;flex-wrap:wrap}
-#v-jobs .target .tinfo{flex:1 1 280px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.gauge{margin:0;width:220px;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px}
-.gauge svg{width:100%;height:auto;display:block;overflow:visible}
-.gauge path{fill:none;stroke-width:14;stroke-linecap:round}
+:is(#v-home,#v-jobs) .month{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:8px 28px;flex-wrap:wrap}
+:is(#v-home,#v-jobs) .month .minfo{flex:1 1 300px;display:flex;flex-direction:column;gap:6px;min-width:0;align-items:flex-start}
+:is(#v-home,#v-jobs) .month h3{font-size:19px;display:flex;gap:4px 12px;align-items:baseline;flex-wrap:wrap} .month h3 span{font-family:var(--body);font-size:15px;font-weight:500;color:var(--muted)}
+.month p{font-size:14.5px} .month p.note{font-size:13.5px} .month .ok{color:var(--ok)} .month p.bad{color:var(--bad);font-weight:600;font-size:14px}
+.month a{font-weight:600;color:var(--info);text-decoration:none;font-size:14px}
+.month .gwrap{margin:0;width:260px;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px}
+.month.compact .gwrap{width:230px}
+.gauge{width:100%;height:auto;display:block;overflow:visible}
+.gauge path{fill:none;stroke-width:16;stroke-linecap:butt}
 .gauge .g-track{stroke:var(--field)}
-.gauge .g-could{stroke:var(--muted);opacity:.4}
+.gauge .z-under,.gauge .z-over{stroke-width:5} .gauge .z-under{stroke:var(--warn)} .gauge .z-over{stroke:var(--ok)}
+.gauge .g-could{stroke:var(--muted);opacity:.35}
 .gauge .g-done{stroke:var(--ink)}
-.gauge.g-met .g-done{stroke:var(--ok)}
-.gauge .g-pace{stroke:var(--warn);stroke-width:3;stroke-linecap:round}
+.gauge.g-top .g-done{stroke:var(--ok)}
+.gauge .g-be{stroke:var(--ink);stroke-width:2.5}
 .gauge text{fill:var(--ink);text-anchor:middle;font-family:var(--body)}
 .gauge .g-big{font-size:30px;font-weight:600;letter-spacing:-.02em}
 .gauge .g-small,.gauge .g-end{font-size:11px;fill:var(--muted)}
-.gauge .g-state{font-size:13px;font-weight:600;border-radius:999px;padding:2px 10px;background:var(--field)}
-.gauge.g-ahead .g-state{background:var(--ok-soft);color:var(--ok)} .gauge.g-met .g-state{background:var(--ok-soft);color:var(--ok)}
-.gauge.g-behind .g-state{background:var(--warn-soft);color:var(--warn)}
-#v-jobs .tkey{list-style:none;margin:0;padding:0;display:flex;gap:4px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
-#v-jobs .tkey li{display:flex;align-items:center;gap:6px}
-#v-jobs .tkey i{display:inline-block;width:14px;height:6px;border-radius:3px}
-#v-jobs .tkey .k-done{background:var(--ink)} #v-jobs .tkey .k-could{background:var(--muted);opacity:.4} #v-jobs .tkey .k-pace{width:3px;height:12px;background:var(--warn)}
-@media (max-width:560px){#v-jobs .target.has-gauge{justify-content:center}.gauge{width:200px}}
-#v-jobs .tform{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
-#v-jobs .tform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
-#v-jobs .tform input{width:160px}
+.gauge .g-tag{font-size:11px;font-weight:600}
+.month .g-state{font-size:13px;font-weight:600;border-radius:999px;padding:3px 12px;background:var(--warn-soft);color:var(--warn)}
+.month .g-state.g-ok,.month .g-state.g-top{background:var(--ok-soft);color:var(--ok)}
+.month .tkey{list-style:none;margin:2px 0 0;padding:0;display:flex;gap:4px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.month .tkey li{display:flex;align-items:center;gap:6px}
+.month .tkey i{display:inline-block;width:14px;height:8px;border-radius:2px}
+.month .tkey .k-done{background:var(--ink)} .month .tkey .k-could{background:var(--muted);opacity:.35} .month .tkey .k-under{background:var(--warn);height:4px} .month .tkey .k-over{background:var(--ok);height:4px}
+.month .tform{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.month .tform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.month .tform input{width:170px}
+@media (max-width:560px){.month{justify-content:center}.month .gwrap{width:240px}}
 .thsort{all:unset;cursor:pointer;font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit}
 .thsort:hover,.thsort.on{color:var(--ink)} .thsort:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .empty{color:var(--muted);padding:24px 16px;text-align:center}
