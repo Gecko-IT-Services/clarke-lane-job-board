@@ -366,6 +366,27 @@ export function dashboard(jobs, today) {
   };
 }
 
+/** Xero invoice IDs the board should ask Xero about: every note sent to Xero, less those already known
+ *  to be approved, paid or voided (settled: a Set of IDs). */
+export const invoiceIdsToCheck = (jobs, settled = new Set()) =>
+  [...new Set(jobs.flatMap(j => j.despatches.map(d => d.xero?.id).filter(Boolean)))].filter(id => !settled.has(id));
+/** Xero statuses that are final: once seen, the board never asks about that invoice again. */
+export const SETTLED = ['AUTHORISED', 'PAID', 'VOIDED', 'DELETED'];
+
+/**
+ * Dispatch notes sent to Xero whose draft invoice is still waiting to be approved there (DRAFT, or
+ * SUBMITTED "awaiting approval"), oldest first. statuses: Map invoiceId → { status, number } from Xero;
+ * a note Xero has not answered for is left out rather than guessed. value is null without prices.
+ */
+export function awaitingApproval(jobs, statuses) {
+  const list = jobs.flatMap(j => j.despatches.map(d => ({ job: j, d, x: d.xero?.id && statuses.get(d.xero.id) })))
+    .filter(r => r.x && ['DRAFT', 'SUBMITTED'].includes(r.x.status))
+    .map(r => ({ job: r.job, d: r.d, status: r.x.status, number: r.x.number || r.d.xero.no || '' }))
+    .sort((a, b) => String(a.d.xero.at || '').localeCompare(String(b.d.xero.at || '')));
+  const money = list.every(r => r.job.lines.every(l => l.price != null));
+  return { list, value: money ? round2(list.reduce((a, r) => a + despatchValue(r.job, r.d), 0)) : null };
+}
+
 /**
  * Home's "Needs attention" rows from dashboard()'s result, worst first: late, at risk, on hold,
  * ready to dispatch, then (office only) won quotes waiting and deliveries to invoice.

@@ -40,7 +40,7 @@ function home(office) {
   const card = (t, d, tone) => `<div class="hcardx ${tone}"><b>${t}</b><span>${d}</span></div>`;
   return `<section class="hsec" id="help-home">${head(0, 'Home: start here each day')}
     <div class="hcardsx">
-      ${card('Counts at the top', `What is late, due in the next 7 days and ready to dispatch${office ? ', and the order book' : ''}.`, 't-bad')}
+      ${card('Counts at the top', `What is late, due in the next 7 days and ready to dispatch${office ? ', and the order book. Below them: <b>Delivered, not invoiced</b> (notes not yet sent to Xero) and <b>In Xero, not approved</b> (draft invoices the board made that nobody has approved in Xero yet; checked every 15 minutes). Click a card to see its list' : ''}.`, 't-bad')}
       ${card('Station snapshot', 'How many jobs are waiting at each station, and how many of those are late. Tap one to open the shop floor there.', 't-info')}
       ${card('Needs attention', `What is late, at risk (due within 3 working days with processes still to do), on hold or ready to go${office ? ', plus won quotes waiting and deliveries to invoice' : ''}. Worst first, each with one button for the next step.`, 't-warn')}
       ${card('Going out', 'Switch to this to see everything due from today to the Friday of next week.', 't-ok')}</div>

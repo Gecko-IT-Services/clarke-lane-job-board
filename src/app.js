@@ -17,7 +17,7 @@ import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists, partSuggestions } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -42,7 +42,7 @@ function previewData() {
       j.procs[p] = done ? { done: true, by, at: new Date().toISOString() } : { done: false };
     },
     setRunningOrder: async ids => { PREVIEW.prio = new Map(ids.map((id, i) => [id, i + 1])); },
-    xero: (route, body) => (['read', 'contacts', 'contact', 'items'].includes(route) ? realData.xero(route, body) : no()),
+    xero: (route, body) => (['read', 'contacts', 'contact', 'items', 'invoices'].includes(route) ? realData.xero(route, body) : no()),
   };
 }
 async function enterPreview() {
@@ -128,6 +128,7 @@ async function reload() {
     }
   } catch (e) { S.error = e.message; }
   render();
+  loadInvoiceStatus();
 }
 async function loadQuotes() {
   S.quotesErr = null;
@@ -657,6 +658,29 @@ function renderMapTab() {
 async function loadXeroStatus() {
   try { S.xero = await data.xeroStatus(); } catch (e) { S.xeroErr = e.message; }
   render();
+  loadInvoiceStatus();
+}
+/** Xero's status for the invoices the board made, for Home's "In Xero, not approved" card. Approved,
+ *  paid or voided ones are remembered on this computer and never asked about again; the rest are asked
+ *  about at most every 15 minutes, or straight away when a new note has been sent (Xero's daily limit). */
+let invAsking = false;
+async function loadInvoiceStatus() {
+  if (!S.xero || !office() || invAsking || PREVIEW.on) return;
+  let settled = new Set(), kept = null;
+  try { settled = new Set(JSON.parse(localStorage.getItem('clj.settled') || '[]')); kept = JSON.parse(localStorage.getItem('clj.invstatus')); } catch { /* ask again */ }
+  const ids = invoiceIdsToCheck(S.jobs, settled);
+  const fresh = kept && Date.now() - kept.at < 15 * 60e3 && ids.every(id => kept.v.some(x => x.id === id));
+  if (fresh) { S.inv = new Map(kept.v.map(x => [x.id, x])); S.invErr = null; return render(); }
+  if (!ids.length) { S.inv = new Map(); S.invErr = null; return render(); }
+  invAsking = true;
+  try {
+    const v = (await data.xero('invoices', { ids })).invoices || [];
+    for (const x of v) if (SETTLED.includes(x.status)) settled.add(x.id);
+    try { localStorage.setItem('clj.settled', JSON.stringify([...settled])); localStorage.setItem('clj.invstatus', JSON.stringify({ at: Date.now(), v })); } catch { /* asked again next time */ }
+    S.inv = new Map(v.map(x => [x.id, x])); S.invErr = null;
+  } catch (e) { S.invErr = e.message; }
+  invAsking = false;
+  render();
 }
 /** The one-off changeover import: reads Xero's open sales orders and keeps them on the board
  *  (xero_orders), so Won quotes offers them until each becomes a sales order or is marked not a job.
@@ -690,7 +714,7 @@ async function keptFor(key, ms, read) {
   try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), v })); } catch { /* read again next time */ }
   return v;
 }
-function forgetXero() { try { localStorage.removeItem('clj.socheck'); localStorage.removeItem('clj.xc'); } catch { /* nothing kept */ } }
+function forgetXero() { try { for (const k of ['clj.socheck', 'clj.xc', 'clj.invstatus', 'clj.settled']) localStorage.removeItem(k); } catch { /* nothing kept */ } }
 /** Imported Xero sales orders still waiting to go on the board. */
 function xeroWaiting() {
   return (S.xeroOrders || []).filter(q => !q.dismissed && !onBoard(q));
@@ -1164,7 +1188,8 @@ function render() {
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
   ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), today: todayIso(), view: S.homeView,
-      wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null }, { esc, fmt, gbp }); },
+      wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
+      approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor');
   renderDrawer();

@@ -328,3 +328,19 @@ console.log('jobs: ok');
   assert.deepEqual(partSuggestions([], items, 'x').map(x => x.from), ['xero', 'xero']);
   console.log('jobs part suggestions: ok');
 }
+
+// — Home invoicing: drafts in Xero waiting for approval. —
+{
+  const { awaitingApproval, invoiceIdsToCheck } = await import('../src/core/jobs.js');
+  const dn = (id, xid, at) => ({ id, dn: 'DN-' + id, date: '2026-10-14', lines: { 10: 2 }, deliveredOn: '2026-10-14', xero: xid ? { no: '', id: xid, at } : null });
+  const job = (price, ...despatches) => ({ id: 1, customer: 'Example Ltd', lines: [{ id: 10, qty: 10, price }], despatches });
+  const jobs = [job(5, dn(1, 'a', '2026-10-15T09:00:00Z'), dn(2, 'b', '2026-10-14T09:00:00Z'), dn(3, 'c', '2026-10-13T09:00:00Z'), dn(4, null))];
+  const st = new Map([['a', { status: 'DRAFT', number: 'INV-1' }], ['b', { status: 'SUBMITTED', number: 'INV-2' }], ['c', { status: 'AUTHORISED', number: 'INV-3' }]]);
+  const r = awaitingApproval(jobs, st);
+  assert.deepEqual(r.list.map(x => [x.d.id, x.status, x.number]), [[2, 'SUBMITTED', 'INV-2'], [1, 'DRAFT', 'INV-1']], 'drafts and awaiting approval, oldest sent first; approved and unsent left out');
+  assert.equal(r.value, 20);
+  assert.equal(awaitingApproval(jobs, new Map()).list.length, 0, 'nothing guessed before Xero answers');
+  assert.equal(awaitingApproval([job(null, dn(1, 'a'))], st).value, null, 'no money without prices');
+  assert.deepEqual(invoiceIdsToCheck(jobs, new Set(['c'])), ['a', 'b'], 'settled invoices are not asked about again');
+  console.log('home invoicing: ok');
+}

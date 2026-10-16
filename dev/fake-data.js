@@ -64,6 +64,7 @@ export const xero = async (route, body) => {
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
   if (route === 'items') return { items: fakeItems };
+  if (route === 'invoices') return { invoices: body.ids.map(id => ({ id, number: 'INV-0001', status: 'DRAFT' })) };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
 };
 let cmap = new Map();
@@ -95,7 +96,7 @@ jobs.push(
     lines: [{ id: 71, lineNo: 1, part: 'Tray', qty: 6, price: 18, due: '2026-10-19' }], procs: { 'Fold': { done: false } }, despatches: [] }
   ,{ id: 8, so: 'SO-9788', quote: '', spQuoteId: null, customer: 'Ninth Example Ltd', contactName: '', contactEmail: '', po: 'PO-55', ordered: '2026-10-01', due: '2026-10-12', notes: '', address: '', status: 'open',
     lines: [{ id: 81, lineNo: 1, part: 'Shelf', qty: 4, price: 30, due: '2026-10-12' }], procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-09T10:00:00Z' }, 'Fold': { done: true, by: 'Shop Floor', at: '2026-10-10T10:00:00Z' } },
-    despatches: [{ id: 2, dn: 'DN-0002', date: '2026-10-12', lines: { 81: 4 }, xero: { no: 'INV-0001', at: '2026-10-13T10:00:00Z' }, deliveredOn: '2026-10-12' }] }
+    despatches: [{ id: 2, dn: 'DN-0002', date: '2026-10-12', lines: { 81: 4 }, xero: { no: 'INV-0001', id: '00000000-0000-0000-0000-000000000001', at: '2026-10-13T10:00:00Z' }, deliveredOn: '2026-10-12' }] }
   ,{ id: 9, so: 'SO-9789', quote: '', spQuoteId: null, customer: 'Tenth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-05', due: '2026-10-25', notes: '', address: '', status: 'cancelled',
     lines: [{ id: 91, lineNo: 1, part: 'Panel', qty: 3, price: 45, due: '2026-10-25' }], procs: { 'Laser': { done: false } }, despatches: [] });
 export const cancelDespatch = async id => { for (const j of jobs) { const d = j.despatches.find(x => x.id === id); if (d) {
