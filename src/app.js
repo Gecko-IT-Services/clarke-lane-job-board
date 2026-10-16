@@ -71,7 +71,7 @@ const fmtTime = s => { if (!s) return ''; const d = new Date(s); return fmt(iso(
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'current', search: '',
+const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'open', search: '',
   station: null, open: null, conv: null, desp: null, dispView: 'ready', dispChosen: false, dsearch: '', error: null, busy: false };
 const office = () => S.me?.role === 'office';
 const job = id => S.jobs.find(j => j.id === id);
@@ -122,10 +122,6 @@ async function reload() {
     [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() }),
       office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
     S.error = null;
-    if (!S.stageChosen) {            // open on the first list that has something in it
-      const has = st => S.jobs.some(j => stage(j) === st);
-      S.stage = has('current') ? 'current' : has('upcoming') ? 'upcoming' : 'current';
-    }
   } catch (e) { S.error = e.message; }
   render();
   loadInvoiceStatus();
@@ -182,7 +178,8 @@ const boardVisible = () => S.boardList || [];
 const runningOrder = () => S.jobs.filter(j => onBoardStage(j) && j.status !== 'cancelled').sort(byRunningOrder);
 async function moveJob(id, how, visible) {
   const all = runningOrder(), i = visible.findIndex(j => j.id === id);
-  const target = how === 'top' ? 0 : how === 'up' ? all.indexOf(visible[i - 1]) : how === 'down' ? all.indexOf(visible[i + 1]) : -1;
+  const target = how === 'top' ? 0 : how === 'up' ? all.indexOf(visible[i - 1]) : how === 'down' ? all.indexOf(visible[i + 1])
+    : typeof how === 'number' ? all.indexOf(visible[how]) : -1;
   const ids = how === 'reset' ? [] : target < 0 ? null : moveInOrder(all, id, target);
   if (!ids) return;
   const before = new Map(S.jobs.map(j => [j.id, j.priority]));
@@ -190,8 +187,46 @@ async function moveJob(id, how, visible) {
   try {
     await data.setRunningOrder(ids);
     if (how === 'reset') toast('Back to date order.');
-    else if (how === 'top') toast(`${job(id).so} is now first on the shop floor.`);
+    else if (how === 'top' || how === 0) toast(`${job(id).so} is now first on the shop floor.`);
+    else if (typeof how === 'number') toast(`${job(id).so} moved to number ${ids.indexOf(id) + 1}.`);
   } catch (e) { S.jobs.forEach(j => { j.priority = before.get(j.id) ?? null; }); render(); toast(e.message, null, true); }
+}
+
+/** Drag a job by its ⠿ grip to a new place in the list (mouse or touch). */
+let drag = null;
+document.addEventListener('pointerdown', e => {
+  const g = e.target.closest('[data-grip]'); if (!g || !office()) return;
+  const tr = g.closest('tr'), body = tr?.parentElement; if (!body) return;
+  e.preventDefault(); g.setPointerCapture?.(e.pointerId);
+  drag = { id: +g.dataset.grip, tr, rows: [...body.children], to: null };
+  tr.classList.add('dragging'); document.body.classList.add('is-dragging');
+});
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const i = drag.rows.findIndex(r => { const b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
+  const to = i < 0 ? drag.rows.length : i;
+  drag.rows.forEach((r, n) => { r.classList.toggle('drop-before', n === to); r.classList.toggle('drop-after', to === drag.rows.length && n === drag.rows.length - 1); });
+  drag.to = to;
+});
+const endDrag = () => {
+  if (!drag) return;
+  const { id, rows, to, tr } = drag; drag = null;
+  rows.forEach(r => r.classList.remove('drop-before', 'drop-after')); tr.classList.remove('dragging'); document.body.classList.remove('is-dragging');
+  if (to == null) return;
+  const from = rows.indexOf(tr), dest = to > from ? to - 1 : to;
+  if (dest !== from) moveJob(id, dest, boardVisible());
+};
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
+/** Due date changed from the Jobs list. */
+async function setDue(id, from, to) {
+  const j = job(id); if (!j || !to || to === from) return;
+  try {
+    const n = await data.setJobDue(id, from || null, to);
+    toast(`${j.so} now due ${fmtLong(to)}${n > 1 ? ` (${n} lines)` : ''}.`);
+  } catch (e) { toast(e.message, null, true); }
+  reload();
 }
 
 /* ---------- actions ---------- */
@@ -1221,6 +1256,13 @@ function nudge() {
 nudge();
 
 document.addEventListener('click', e => {
+  if (e.target.closest('[data-grip]')) return;        // dragging, not opening the row
+  const pick = e.target.closest('.duepick');
+  if (pick) {                                          // the due date: open the date picker, not the row
+    const inp = pick.querySelector('input[type=date]');
+    if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
+    return;
+  }
   const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;
   const d = t.dataset;
   if ('preview' in d) return enterPreview();
@@ -1337,6 +1379,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
+  if (e.target.dataset.setdue) { setDue(+e.target.dataset.setdue, e.target.dataset.from, e.target.value); return; }
   if (e.target.dataset.mapkind) { S.mapShow[e.target.dataset.mapkind] = e.target.checked; render(); }
   if (e.target.id === 'mapmiles') { S.mapMiles = +e.target.value; render(); }
 });
