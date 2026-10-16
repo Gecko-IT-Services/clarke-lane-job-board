@@ -366,6 +366,26 @@ export function dashboard(jobs, today) {
   };
 }
 
+/**
+ * This month against Levi's target (net £): what has been dispatched since the 1st (cancelled notes
+ * left out) and what is still to send on lines due by the month end (late lines included). Values are
+ * null when prices are not loaded (the shop floor).
+ */
+export function monthProgress(jobs, today) {
+  const start = today.slice(0, 7) + '-01';
+  const [y, m] = today.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const money = jobs.every(j => j.lines.every(l => l.price != null));
+  const live = jobs.filter(j => j.status !== 'cancelled');
+  const dispatched = live.reduce((a, j) => a + j.despatches.filter(d => d.date >= start && d.date <= today).reduce((b, d) => b + despatchValue(j, d), 0), 0);
+  const dueByEnd = live.filter(j => ['upcoming', 'current'].includes(stage(j)))
+    .reduce((a, j) => a + j.lines.filter(l => l.due && l.due <= end).reduce((b, l) => b + left(j, l) * l.price, 0), 0);
+  // Pace: working days (Mon–Fri) gone, today included, out of the month's working days.
+  const wd = (from, to) => { let n = 0; for (let d = new Date(from + 'T12:00:00Z'); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) if (d.getUTCDay() % 6) n++; return n; };
+  const pace = wd(start, today) / Math.max(1, wd(start, end));
+  return { start, end, pace, dispatched: money ? round2(dispatched) : null, dueByEnd: money ? round2(dueByEnd) : null };
+}
+
 /** Xero invoice IDs the board should ask Xero about: every note sent to Xero, less those already known
  *  to be approved, paid or voided (settled: a Set of IDs). */
 export const invoiceIdsToCheck = (jobs, settled = new Set()) =>

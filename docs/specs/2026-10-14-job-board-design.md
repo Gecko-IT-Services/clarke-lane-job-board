@@ -324,3 +324,14 @@ The top bar has eight tabs: Home, Won quotes, Sales orders, Jobs, Shop floor, Di
 **Delivery map** opens from a button on Dispatch, **Customers** from a button on Sales orders; each has a
 "← Dispatch" / "← Sales orders" link back and keeps its parent tab lit. Their #map / #customers links
 still work. Purchase orders stay in Xero for now (Philip).
+
+## MD level and the monthly target (16 Oct 2026)
+- Philip: business figures are for Levi's eyes only, not Mandy's; Levi will get more MD information over time.
+- Roles are now `md` (Levi), `office` (Mandy, Gecko IT) and `floor`. `is_office()` is true for `md` and `office`;
+  `is_md()` is new. The Xero edge function accepts both. Mandy keeps prices on individual orders (order entry,
+  dispatch notes, Xero); totals (order book, late/held/outstanding/uninvoiced £, won-this-month £, still-to-dispatch,
+  invoicing £ on Home) show only to the MD, and Mandy sees counts instead.
+- Jobs › This month (MD only): dispatched since the 1st against `board_settings.monthly_target`, what is still to send
+  on lines due by month end, and the shortfall. The target is typed in on the board and readable only through
+  `is_md()` (RLS), never in this public repo.
+- Outstanding heading sorts Jobs biggest first (MD only); ⤒ still sets the running order.

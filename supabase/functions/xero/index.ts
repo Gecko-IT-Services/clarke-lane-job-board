@@ -56,7 +56,7 @@ async function office(req: Request) {
   const { data, error } = await user.rpc('me');
   if (error) throw new HttpError(401, 'Your job board sign-in has expired. Reload the page.');
   const me = data?.[0];
-  if (me?.role !== 'office') throw new HttpError(403, 'Only Levi and Mandy can use the Xero connection.');
+  if (!['md', 'office'].includes(me?.role)) throw new HttpError(403, 'Only Levi and Mandy can use the Xero connection.');
   return me as { email: string; name: string };
 }
 

@@ -1,5 +1,5 @@
 // Smoke-test stand-in for src/data.js: made-up orders held in memory. Not real customers.
-const role = new URLSearchParams(location.search).get('role') || 'office';
+const role = new URLSearchParams(location.search).get('role') || 'md';   // md = Levi, office = Mandy, floor = the shop floor
 let jobs = [
   { id: 1, so: 'SO-9781', quote: 'Q-0301', spQuoteId: 301, customer: 'Example Customer Ltd', contactName: 'A Buyer', contactEmail: '', po: 'PO-1',
     ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO14 3TJ', status: 'open',
@@ -14,9 +14,9 @@ let jobs = [
     lines: [{ id: 21, lineNo: 1, part: 'Cabinet', qty: 5, price: 310, due: '2026-11-04' }, { id: 22, lineNo: 2, part: 'Carriage', qty: 1, price: 25, due: '2026-11-04' }],
     procs: { 'Laser': { done: false }, 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [] },
 ];
-const hide = j => role === 'office' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
+const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
-export const whoAmI = async () => ({ email: 'x', name: role === 'office' ? 'Levi' : 'Shop Floor', role });
+export const whoAmI = async () => ({ email: 'x', name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : 'Shop Floor', role });
 export const loadJobs = async () => structuredClone(jobs).map(hide);
 export const setProcess = async (id, p, done, by) => { find(id).procs[p] = done ? { done, by, at: new Date().toISOString() } : { done: false }; };
 export const setJobProcesses = async (id, add, remove) => { const j = find(id); add.forEach(p => { j.procs[p] = { done: false }; }); remove.forEach(p => delete j.procs[p]); };
@@ -48,6 +48,9 @@ export const orderedQuotes = async () => [
 export const quoteLines = async () => [{ lineNo: 1, qty: 10, sellTotal: 290.25, desc: 'Valve guard', thickness: 2, material: 'Zintec', process: 'Laser', folds: 3, weld: 0, inserts: 0, paint: true, plating: 0, holes: 0 }];
 let dismissed = [];
 export const loadDismissed = async () => [...dismissed];
+const settings = {};
+export const loadSettings = async () => ({ ...settings });
+export const saveSetting = async (k, v) => { settings[k] = v; };
 export const dismissQuote = async id => { dismissed.push(id); };
 export const restoreQuote = async id => { dismissed = dismissed.filter(x => x !== id); };
 export const deleteJob = async id => { const j = find(id); if (j.despatches.length) throw new Error('This order has despatch notes, so it cannot be deleted.'); jobs = jobs.filter(x => x !== j); };

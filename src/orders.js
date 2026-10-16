@@ -10,14 +10,17 @@ import { icon } from './icons.js';
 
 const orders = n => `${n} order${n === 1 ? '' : 's'}`;
 
-export function renderSalesOrders({ jobs, today, view, search, form }, h) {
+export function renderSalesOrders({ jobs, md = false, today, view, search, form }, h) {
   const { esc, fmt, gbp, dueChip, match } = h;
   const s = salesSummary(jobs, today);
   const cards = [
-    card('bad', 'late', s.late.length, s.late.length ? `Late · ${gbp(s.lateValue)}` : 'Late', s.late.length > 0),
-    card('warn', 'hold', s.held.length, s.held.length ? `On hold · ${gbp(s.heldValue)}` : 'On hold', s.held.length > 0),
-    card('warn', 'invoice', gbp(s.uninvoicedValue), `Dispatched, not invoiced${s.uninvoiced ? ' · ' + orders(s.uninvoiced) : ''}`, s.uninvoicedValue > 0),
-    card('info', 'book', gbp(s.outstandingValue), `Outstanding · ${orders(s.outstanding.length)}`, s.outstanding.length > 0),
+    card('bad', 'late', s.late.length, md && s.late.length ? `Late · ${gbp(s.lateValue)}` : 'Late', s.late.length > 0),
+    card('warn', 'hold', s.held.length, md && s.held.length ? `On hold · ${gbp(s.heldValue)}` : 'On hold', s.held.length > 0),
+    // Totals are the MD's (Levi); the office sees counts. Each order's own value still shows in its row.
+    md ? card('warn', 'invoice', gbp(s.uninvoicedValue), `Dispatched, not invoiced${s.uninvoiced ? ' · ' + orders(s.uninvoiced) : ''}`, s.uninvoicedValue > 0)
+      : card('warn', 'invoice', s.uninvoiced || 0, 'Dispatched, not invoiced', s.uninvoicedValue > 0),
+    md ? card('info', 'book', gbp(s.outstandingValue), `Outstanding · ${orders(s.outstanding.length)}`, s.outstanding.length > 0)
+      : card('info', 'book', s.outstanding.length, 'Outstanding orders', s.outstanding.length > 0),
   ].join('');
 
   const VIEWS = {

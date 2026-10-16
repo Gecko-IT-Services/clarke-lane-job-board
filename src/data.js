@@ -163,6 +163,19 @@ export async function markInvoiced(despatchId, invoiceNo) {
 }
 
 /** sp_quote_id of every quote marked "Not a job". Office only. */
+/** Office settings as { key: value } (the monthly target). */
+export async function loadSettings() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('board_settings').select('key, value');
+  if (error) fail('Could not load the board settings', error);
+  return Object.fromEntries(data.map(r => [r.key, r.value]));
+}
+export async function saveSetting(key, value) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('board_settings').upsert({ key, value, updated_at: new Date().toISOString() });
+  if (error) fail('Not saved', error);
+}
+
 export async function loadDismissed() {
   const sb = await getSupabase();
   const { data, error } = await sb.from('quote_dismissals').select('sp_quote_id');
@@ -267,7 +280,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

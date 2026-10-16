@@ -344,3 +344,24 @@ console.log('jobs: ok');
   assert.deepEqual(invoiceIdsToCheck(jobs, new Set(['c'])), ['a', 'b'], 'settled invoices are not asked about again');
   console.log('home invoicing: ok');
 }
+
+// — Jobs: this month against the target. —
+{
+  const { monthProgress } = await import('../src/core/jobs.js');
+  const j = (id, over) => ({ id, so: 'SO-' + id, status: 'open', procs: { Laser: { done: false } }, despatches: [], ...over });
+  const jobs = [
+    j(1, { lines: [{ id: 1, qty: 10, price: 10, due: '2026-10-05' }, { id: 2, qty: 5, price: 20, due: '2026-11-03' }],
+      despatches: [{ id: 1, date: '2026-10-06', lines: { 1: 4 } }, { id: 2, date: '2026-09-30', lines: { 1: 1 } }] }),
+    j(2, { lines: [{ id: 3, qty: 2, price: 50, due: '2026-10-31' }] }),
+    j(3, { status: 'cancelled', lines: [{ id: 4, qty: 9, price: 99, due: '2026-10-20' }], despatches: [{ id: 3, date: '2026-10-02', lines: { 4: 1 } }] }),
+  ];
+  const p = monthProgress(jobs, '2026-10-16');
+  assert.equal(p.end, '2026-10-31');
+  assert.equal(p.dispatched, 40, 'only October notes, cancelled order left out');
+  assert.equal(p.dueByEnd, 150, '5 left of line 1 (late) + job 2; November line left out');
+  assert.equal(monthProgress([j(4, { lines: [{ id: 5, qty: 1, price: null, due: '2026-10-20' }] })], '2026-10-16').dispatched, null, 'no money without prices');
+  assert.equal(monthProgress([], '2026-02-10').end, '2026-02-28');
+  assert.equal(Math.round(p.pace * 100), 55, 'Fri 16 Oct: 12 of 22 working days');
+  assert.equal(monthProgress([], '2026-10-31').pace, 1, 'a weekend month end counts the whole month');
+  console.log('jobs month target: ok');
+}
