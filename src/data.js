@@ -43,7 +43,7 @@ export async function loadJobs({ office }) {
   const dById = new Map();
   for (const d of desps.data) {
     const o = { id: d.id, dn: d.dn_number, date: d.despatched_on, by: d.despatched_by, lines: {},
-      xero: d.xero_invoice_no ? { no: d.xero_invoice_no, at: d.sent_to_xero_at } : null,
+      xero: d.xero_invoice_no || d.xero_invoice_id ? { no: d.xero_invoice_no || '', id: d.xero_invoice_id || null, at: d.sent_to_xero_at } : null,
       emailedAt: d.emailed_at, deliveredOn: d.delivered_on, deliveredBy: d.delivered_by, receivedBy: d.received_by };
     if (d.cancelled_at) {   // kept for the record only: none of its quantities count as sent
       o.cancelled = { at: d.cancelled_at, by: d.cancelled_by };

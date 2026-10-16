@@ -1,5 +1,5 @@
 /**
- * Home: problems first. Four summary cards, the stations with work waiting, then one table that
+ * Home: problems first. Four summary cards (and, for the office, two invoicing cards), the stations with work waiting, then one table that
  * switches between "Needs attention" and "Going out". The numbers and the row order come from
  * dashboard() and attention() in core/jobs.js (tested); this file only draws them.
  * h: the formatting helpers from app.js.
@@ -13,7 +13,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
+export function renderHome({ jobs, me, office, today, wonQuotes, view, approval = { off: true } }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -32,6 +32,17 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
     office && d.orderBook != null ? card('info', 'book', gbp(d.orderBook), `Order book · ${d.open.length} open`, d.open.length > 0, 'data-homeview="book" title="Show every open order"')
       : card('info', 'book', d.open.length, 'Open jobs', d.open.length > 0, 'data-homeview="book" title="Show every open job"'),
   ].join('');
+
+  // Invoicing (office only): delivered but not yet in Xero, and drafts in Xero not yet approved there.
+  const ap = approval, apN = ap.list ? ap.list.length : 0;
+  const money2 = office ? [
+    card('warn', 'invoice', d.toXeroValue != null ? gbp(d.toXeroValue) : d.toXero.length, `Delivered, not invoiced · ${plural(d.toXero.length, 'note')}`, d.toXero.length > 0,
+      'data-homeview="uninv" title="Show the delivered notes not yet sent to Xero"'),
+    ap.off ? card('info', 'doc', '—', 'In Xero, not approved · Xero not connected', false)
+      : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
+      : card('info', 'doc', ap.value != null ? gbp(ap.value) : apN, `In Xero, not approved · ${plural(apN, 'draft')}`, apN > 0,
+        'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
+  ].join('') : '';
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
   const most = Math.max(1, ...busy.map(p => d.stations[p]));
@@ -78,16 +89,26 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
   const until = j => { const n = Math.round((new Date(nextDue(j) + 'T12:00:00Z') - new Date(today + 'T12:00:00Z')) / 864e5);
     return `<span class="chip soon">${n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : `Due in ${n} days`}</span>`; };
   // Lists opened from the cards (not on the switch): ✕ goes back to Needs attention.
+  const xeroLink = id => `https://go.xero.com/AccountsReceivable/View.aspx?InvoiceID=${encodeURIComponent(id)}`;
+  const draftRow = r => `<tr data-open="${r.job.id}"><td>${who(r.job.customer, r.d.dn)}</td><td>Sent ${fmt((r.d.xero.at || '').slice(0, 10))}</td>
+    <td class="mono">${esc(r.number || 'Draft')}</td><td><span class="chip soon">${r.status === 'SUBMITTED' ? 'Awaiting approval' : 'Draft'}</span></td>${money(despatchValue(r.job, r.d))}
+    <td class="act"><a class="btn sm" href="${xeroLink(r.d.xero.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a></td></tr>`;
   const DRILL = {
     late: { title: 'Running late', sub: 'worst first', list: d.late.map(r => ROW.late(r)), empty: 'Nothing is late.' },
     soon: { title: 'Due in the next 7 days', sub: 'soonest first', list: d.soon.map(j => jobRow(j, until(j) + heldChip(j), j.status === 'open' && allDone(j) ? dispatchBtn(j) : openBtn(j))), empty: 'Nothing due in the next 7 days.' },
     ready: { title: 'Ready to dispatch', sub: 'every process ticked', list: d.ready.map(j => ROW.ready({ job: j })), empty: 'Nothing ready yet.' },
     book: { title: office ? 'Order book' : 'Open jobs', sub: office && d.orderBook != null ? `${d.open.length} open · ${gbp(d.orderBook)} still to send · soonest due first` : 'soonest due first',
       list: d.open.slice().sort((a, b) => (nextDue(a) || '9') < (nextDue(b) || '9') ? -1 : 1).map(outRow), empty: 'No open orders.' },
+    uninv: { title: 'Delivered, not invoiced', sub: 'oldest delivery first · send them from Dispatch › Waiting for Xero',
+      list: d.toXero.slice().sort((a, b) => String(a.d.deliveredOn).localeCompare(String(b.d.deliveredOn))).map(x => ROW.invoice({ job: x.job, despatch: x.d })),
+      empty: 'Every delivered note is in Xero.', cols: ['Customer', 'Delivered', 'Next step', 'Status'] },
+    drafts: { title: 'In Xero, not approved', sub: 'draft invoices the board made, still waiting to be approved in Xero · oldest first',
+      list: (ap.list || []).map(draftRow), empty: 'Nothing waiting: every invoice the board made has been approved in Xero.', cols: ['Customer', 'Sent', 'Invoice', 'Status'] },
   };
   const drill = DRILL[view];
   const body = drill ? drill.list : isOut ? d.goingOut.map(outRow) : rows.map(r => ROW[r.kind](r));
-  const head = `<thead><tr><th>Customer</th><th>Due</th><th>Still to do</th><th>Status</th>${office ? '<th class="num">Value</th>' : ''}<th class="act"><span class="sr">Action</span></th></tr></thead>`;
+  const [c1, c2, c3, c4] = drill?.cols || ['Customer', 'Due', 'Still to do', 'Status'];
+  const head = `<thead><tr><th>${c1}</th><th>${c2}</th><th>${c3}</th><th>${c4}</th>${office ? '<th class="num">Value</th>' : ''}<th class="act"><span class="sr">Action</span></th></tr></thead>`;
   const table = body.length
     ? `<div class="tbl-wrap"><table class="lines home">${head}<tbody>${body.join('')}</tbody></table></div>`
     : `<div class="tbl-wrap"><p class="allclear${isOut || drill ? '' : ' ok'}">${drill ? drill.empty : isOut ? 'Nothing due out before next Friday.' : 'All clear — nothing late, at risk or waiting.'}</p></div>`;
@@ -99,6 +120,7 @@ export function renderHome({ jobs, me, office, today, wonQuotes, view }, h) {
   return `<div class="home">
     <div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>
     <div class="hcards">${cards}</div>
+    ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}
     <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>
     <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;

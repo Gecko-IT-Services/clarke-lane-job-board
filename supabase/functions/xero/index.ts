@@ -250,6 +250,21 @@ async function send(items: { despatchId: number; contactId: string }[]) {
   return { results: out, defaults: d };
 }
 
+/** ids → each invoice's status in Xero (DRAFT, SUBMITTED, AUTHORISED, PAID, VOIDED, DELETED), one call
+ *  per 40. The board asks only about invoices it made and has not yet seen approved. */
+async function invoiceStatus(ids: unknown) {
+  if (!Array.isArray(ids)) throw new HttpError(400, 'No invoices given.');
+  const want = [...new Set(ids.filter((i): i is string => typeof i === 'string' && /^[0-9a-f-]{36}$/i.test(i)))].slice(0, 400);
+  if (!want.length) return { invoices: [] };
+  const s = await session();
+  const out = [];
+  for (let i = 0; i < want.length; i += 40) {
+    const r = await xero(s, `Invoices?IDs=${want.slice(i, i + 40).join(',')}&summaryOnly=true`);
+    out.push(...(r.Invoices || []).map((v: any) => ({ id: v.InvoiceID, number: v.InvoiceNumber || '', status: v.Status })));
+  }
+  return { invoices: out };
+}
+
 async function read() {
   const s = await session();
   const [quotes, invoices] = await Promise.all([
@@ -291,6 +306,7 @@ Deno.serve(async req => {
     if (route === 'contacts') return cors(req, json(await contacts()));
     if (route === 'contact') return cors(req, json(await contact((await req.json().catch(() => ({}))).id)));
     if (route === 'items') return cors(req, json(await items()));
+    if (route === 'invoices') return cors(req, json(await invoiceStatus((await req.json().catch(() => ({}))).ids)));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }
     throw new HttpError(404, 'Not found');
