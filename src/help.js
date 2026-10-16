@@ -121,7 +121,7 @@ function calloffs() {
 
     <h4>When the customer changes a call-off</h4>
     ${steps(['Open the order on <b>Sales orders</b> and press <b>Amend</b>.',
-      '<b>Earlier or later:</b> change that line\'s due date. If it is now urgent, bring the job forward on <b>Jobs</b> with ⤒.',
+      '<b>Earlier or later:</b> on <b>Jobs</b>, click the due date and pick the new one (with more than one delivery, that moves the next one), or Amend the line\'s due date on Sales orders. If it is now urgent, bring the job forward on <b>Jobs</b> with ⤒.',
       '<b>More or fewer:</b> change that line\'s quantity. It can\'t go below what has already been dispatched on it.',
       '<b>An extra delivery:</b> press <b>Add a line</b> with the part, quantity, price and date.',
       '<b>A delivery no longer wanted:</b> delete its line (only possible while nothing has been sent on it).',
@@ -139,7 +139,7 @@ function jobsBoard() {
       ${row(1, true, 'Sample Engineering Co', 'SO-9790 · PO-114', '<span class="chip soon">20 Nov</span>', pt('Laser') + pt('Weld') + pt('P/Coat'))}
       ${row(2, false, 'Example Fabrications Ltd', 'SO-9786 · no PO', '<span class="chip late">17 Oct</span>', pt('Laser', true) + pt('Fold', true) + pt('P/Coat', true), true)}
       ${row(3, false, 'Demo Metals Ltd', 'SO-9788 · PO-92', '<span class="chip">29 Oct</span>', pt('Laser', true) + pt('Fold'))}</tbody></table>`)}
-    ${steps([`${n(1)} <b>Bring a job forward:</b> ⤒ sends it to the top, and ▲ ▼ move it one place. The shop floor follows this order straight away. <b>Put everything back in date order</b> (under the table) undoes it all.`,
+    ${steps([`${n(1)} <b>Bring a job forward:</b> drag it by ⠿ to where it should be, or use ⤒ (to the top) and ▲ ▼ (one place). <b>All open</b> lists every job not yet sent, soonest due first; jobs moved by hand stay where they were put. The shop floor follows this order straight away. <b>Put everything back in date order</b> (under the table) undoes it all.`,
       `${n(2)} <b>Tick a process</b> by clicking its pill when that step is finished. Click it again to undo.`,
       'A green row means every process is ticked: the job is ready to dispatch.',
       '<b>Job sheet</b> (open the job, or from the order acknowledgement): a printed copy for the job folder with the drawing. It has the parts, due dates and a box for each process, and no prices. Before printing, <b>What is this sheet for?</b> lets you set <b>To make</b> for each line, for example just this week\'s call-off for VFS or Wessex. It starts on the next delivery; <b>Everything outstanding</b> fills in the rest. This only changes the sheet, never the order. The board is still the live record, so tick processes there too.',

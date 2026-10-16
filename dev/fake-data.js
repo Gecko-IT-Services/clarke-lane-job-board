@@ -51,6 +51,9 @@ export const loadDismissed = async () => [...dismissed];
 export const dismissQuote = async id => { dismissed.push(id); };
 export const restoreQuote = async id => { dismissed = dismissed.filter(x => x !== id); };
 export const deleteJob = async id => { const j = find(id); if (j.despatches.length) throw new Error('This order has despatch notes, so it cannot be deleted.'); jobs = jobs.filter(x => x !== j); };
+export const setJobDue = async (jobId, from, to) => { const j = find(jobId); let n = 0;
+  for (const l of j.lines) if (l.due === from) { const sent = j.despatches.reduce((a, d) => a + (d.lines[l.id] || 0), 0); if (l.qty > sent) { l.due = to; n++; } }
+  if (!n) throw new Error('Nothing still to dispatch is due on that date. Use Amend on Sales orders instead.'); return n; };
 export const xeroStatus = async () => sessionStorage.getItem('fakeXero') ? { tenant_name: 'Clarke Lane Engineering Ltd', connected_by: 'levi@clarke-lane.co.uk', connected_at: '2026-10-15T09:00:00Z' } : null;
 export const xero = async (route, body) => {
   if (route === 'connect') { sessionStorage.setItem('fakeXero', '1'); return { url: location.pathname + '?xero=connected#xero' }; }

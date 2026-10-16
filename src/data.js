@@ -84,6 +84,14 @@ export async function setRunningOrder(ids) {
   if (error) fail('The running order was not saved', error);
 }
 
+/** Moves the job's lines due on `from` (and not yet fully sent) to `to`. Returns how many lines moved. */
+export async function setJobDue(jobId, from, to) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('set_job_due', { p_job_id: jobId, p_from: from, p_to: to });
+  if (error) fail('The due date was not changed', error);
+  return data;
+}
+
 export async function createJob(payload) {
   const sb = await getSupabase();
   const { data, error } = await sb.rpc('create_job', { payload });
