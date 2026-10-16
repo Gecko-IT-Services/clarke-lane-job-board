@@ -5,7 +5,7 @@
  * h: the formatting helpers from app.js.
  */
 import { icon, XERO } from './icons.js';
-import { monthGauge } from './gauge.js';
+import { monthPanel } from './gauge.js';
 import { monthProgress, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue } from './core/jobs.js';
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -14,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ jobs, me, office, md = false, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
+export function renderHome({ jobs, me, office, md = false, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -45,19 +45,9 @@ export function renderHome({ jobs, me, office, md = false, target = null, today,
         'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
   ].join('') : '';
 
-  // Levi's month at a glance (MD only); the detail and the target setting are on Jobs.
-  let month = '';
-  if (md) {
-    const mp = monthProgress(jobs, today);
-    const name = new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
-    if (mp.dispatched != null) month = target
-      ? `<section class="hmonth">${monthGauge({ ...mp, target, name }, { gbp, esc })}<div><h3>${esc(name)}</h3>
-          <p><b>${gbp(mp.dispatched)}</b> dispatched of ${gbp(target)} · ${gbp(Math.max(0, target - mp.dispatched))} to go</p>
-          <p class="note">${gbp(mp.dueByEnd)} still to send on jobs due by ${fmt(mp.end)}</p>
-          <a href="#jobs" data-tab="jobs">See the jobs →</a></div></section>`
-      : `<section class="hmonth"><div><h3>${esc(name)}</h3><p><b>${gbp(mp.dispatched)}</b> dispatched so far.</p>
-          <a href="#jobs" data-tab="jobs">Set a monthly target on Jobs →</a></div></section>`;
-  }
+  // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
+  const month = md ? monthPanel({ mp: monthProgress(jobs, today), breakeven, target, compact: true,
+    name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
   const most = Math.max(1, ...busy.map(p => d.stations[p]));

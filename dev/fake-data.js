@@ -50,7 +50,7 @@ let dismissed = [];
 export const loadDismissed = async () => [...dismissed];
 const settings = {};
 export const loadSettings = async () => ({ ...settings });
-export const saveSetting = async (k, v) => { settings[k] = v; };
+export const saveSetting = async (k, v) => { if (v == null) delete settings[k]; else settings[k] = v; };
 export const dismissQuote = async id => { dismissed.push(id); };
 export const restoreQuote = async id => { dismissed = dismissed.filter(x => x !== id); };
 export const deleteJob = async id => { const j = find(id); if (j.despatches.length) throw new Error('This order has despatch notes, so it cannot be deleted.'); jobs = jobs.filter(x => x !== j); };

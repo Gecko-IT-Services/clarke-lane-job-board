@@ -172,7 +172,8 @@ export async function loadSettings() {
 }
 export async function saveSetting(key, value) {
   const sb = await getSupabase();
-  const { error } = await sb.from('board_settings').upsert({ key, value, updated_at: new Date().toISOString() });
+  const { error } = value == null ? await sb.from('board_settings').delete().eq('key', key)
+    : await sb.from('board_settings').upsert({ key, value, updated_at: new Date().toISOString() });
   if (error) fail('Not saved', error);
 }
 

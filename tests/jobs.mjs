@@ -365,3 +365,14 @@ console.log('jobs: ok');
   assert.equal(monthProgress([], '2026-10-31').pace, 1, 'a weekend month end counts the whole month');
   console.log('jobs month target: ok');
 }
+
+// — Month gauge words. —
+{
+  const { monthState } = await import('../src/gauge.js');
+  assert.deepEqual(monthState({ dispatched: 300, dueByEnd: 100 }, 500, 600), { tone: 'warn', word: '£200 to break-even', short: 100 });
+  assert.equal(monthState({ dispatched: 550, dueByEnd: 0 }, 500, 600).word, 'Past break-even · £50 to target');
+  assert.equal(monthState({ dispatched: 650, dueByEnd: 0 }, 500, 600).tone, 'top');
+  assert.equal(monthState({ dispatched: 1500, dueByEnd: 0 }, 2000, null).word, '£500 to break-even');
+  assert.equal(monthState({ dispatched: 12300, dueByEnd: 0 }, 20000, null).word, '£7.7k to break-even');
+  console.log('month gauge words: ok');
+}
