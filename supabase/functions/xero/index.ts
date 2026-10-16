@@ -123,6 +123,7 @@ async function xero(s: { access_token: string; tenant_id: string }, path: string
       if (wait > 20) throw new HttpError(503, `Xero is busy (rate limit). Try again in ${wait} seconds.`);
       await new Promise(r => setTimeout(r, wait * 1000)); continue;
     }
+    if (res.status >= 500 && attempt < 2) { await new Promise(r => setTimeout(r, 1500 * (attempt + 1))); continue; }   // Xero's own hiccup: try again
     if (!res.ok) throw new HttpError(502, `Xero said ${res.status} reading ${path.split('?')[0]}.`);
     return res.json();
   }
@@ -267,10 +268,9 @@ async function invoiceStatus(ids: unknown) {
 
 async function read() {
   const s = await session();
-  const [quotes, invoices] = await Promise.all([
-    allPages(s, `Quotes?DateFrom=${GO_LIVE}`, 'Quotes'),
-    allPages(s, `Invoices?where=${encodeURIComponent(`Type=="ACCREC"&&Date>=DateTime(${GO_LIVE.replaceAll('-', ',')})`)}`, 'Invoices'),
-  ]);
+  // Sales orders only. (Invoices were read here too but nothing used them, and Xero's invoice search
+  // was failing with 500s, which stopped the preview.)
+  const quotes = await allPages(s, `Quotes?DateFrom=${GO_LIVE}`, 'Quotes');
   const so = quotes.map(q => /^SO-?(\d+)$/i.exec(q.QuoteNumber || '')).filter(Boolean).map(m => Number(m![1]));
   let counterNext = null;
   if (so.length) {
@@ -287,9 +287,6 @@ async function read() {
       subTotal: q.SubTotal, total: q.Total,
       lines: (q.LineItems || []).map((l: any) => ({ description: l.Description || '', qty: l.Quantity, unit: l.UnitAmount, amount: l.LineAmount })),
     })),
-    invoices: invoices.filter(i => i.Status !== 'DELETED' && i.Status !== 'VOIDED').map(i => ({
-      id: i.InvoiceID, number: i.InvoiceNumber, status: i.Status, customer: i.Contact?.Name || '',
-      reference: i.Reference || '', date: xDate(i.DateString || i.Date), subTotal: i.SubTotal, total: i.Total })),
   };
 }
 
