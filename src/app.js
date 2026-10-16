@@ -73,7 +73,9 @@ const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 
 const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'open', search: '',
   station: null, open: null, conv: null, desp: null, dispView: 'ready', dispChosen: false, dsearch: '', error: null, busy: false };
-const office = () => S.me?.role === 'office';
+const office = () => ['md', 'office'].includes(S.me?.role);
+/** Levi (MD): the business figures (target, order book and other totals). Mandy (office) keeps prices on orders. */
+const md = () => S.me?.role === 'md';
 const job = id => S.jobs.find(j => j.id === id);
 /** Ordered quotes with where each stands (waiting / job / dismissed), or null until read. */
 const quotes = () => S.quotesRaw ? quoteStates(S.quotesRaw, S.jobs, S.dismissed) : null;
@@ -121,6 +123,7 @@ async function reload() {
   try {
     [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() }),
       office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
+    if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     S.error = null;
   } catch (e) { S.error = e.message; }
   render();
@@ -338,14 +341,15 @@ function renderTabs() {
 
 /* ---------- jobs ---------- */
 function renderJobs() {
-  const { html, list } = renderBoard({ jobs: S.jobs, today: todayIso(), office: office(), stageKey: S.stage, search: S.search,
-    anyPlaced: S.jobs.some(j => j.priority != null && onBoardStage(j)) }, { esc, fmt, fmtTime, gbp, dueChip, statusChips, match: jobMatch, TICK });
+  const { html, list } = renderBoard({ jobs: S.jobs, today: todayIso(), office: office(), md: md(), stageKey: S.stage, search: S.search,
+    anyPlaced: S.jobs.some(j => j.priority != null && onBoardStage(j)), target: Number(S.settings?.monthly_target) || null, editTarget: S.editTarget, byValue: S.jobSort === 'value' },
+    { esc, fmt, fmtTime, gbp, dueChip, statusChips, match: jobMatch, TICK });
   S.boardList = list;
   $('v-jobs').innerHTML = html;
 }
 /** Sales orders: the office's own tab, as Sage's Sales Order Processing. New and Amend open here. */
 function renderOrders() {
-  $('v-orders').innerHTML = renderSalesOrders({ jobs: S.jobs, today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
+  $('v-orders').innerHTML = renderSalesOrders({ jobs: S.jobs, md: md(), today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
     { esc, fmt, gbp, dueChip, match: orderMatch });
 }
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
@@ -835,7 +839,7 @@ function inboxRows() {
   return rows.sort((p, q) => ((q.date || '') < (p.date || '') ? -1 : (q.date || '') > (p.date || '') ? 1 : p.ref < q.ref ? 1 : -1));
 }
 function renderQuotes() {
-  $('v-quotes').innerHTML = renderWon({ rows: inboxRows(), today: todayIso(), view: S.wonView, reading: !S.quotesRaw && !S.quotesErr,
+  $('v-quotes').innerHTML = renderWon({ rows: inboxRows(), md: md(), today: todayIso(), view: S.wonView, reading: !S.quotesRaw && !S.quotesErr,
     error: S.quotesErr, converting: S.conv?.spId, open: S.wonOpen, detail: wonDetail }, { esc, fmt, gbp });
 }
 /* What is on a won quote: its lines from the quote calculator, the Xero sales order, or the order it became. */
@@ -965,7 +969,7 @@ function renderDespatch() {
   const lists = dispatchLists(S.jobs, todayIso());
   if (S.desp && !lists.open.some(j => j.id === S.desp)) S.desp = null;
   const money = office();
-  $('v-dispatch').innerHTML = renderDispatch({ lists, office: money, view: S.dispView, chosen: S.dispChosen, search: S.dsearch, desp: S.desp,
+  $('v-dispatch').innerHTML = renderDispatch({ lists, office: money, md: md(), view: S.dispView, chosen: S.dispChosen, search: S.dsearch, desp: S.desp,
     form: S.desp ? despatchForm(job(S.desp)) : '', cancelDn: S.cancelDn, xero: money && lists.toXero.length ? waitingForXero(lists.toXero) : null },
     { esc, fmt, gbp, dueChip, parts: dispatchParts });
 }
@@ -1222,7 +1226,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), today: todayIso(), view: S.homeView,
+  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
@@ -1294,6 +1298,8 @@ document.addEventListener('click', e => {
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
+  if ('jobsort' in d) { S.jobSort = S.jobSort === 'value' ? null : 'value'; return render(); }
+  if ('edittarget' in d) { S.editTarget = d.edittarget !== 'close'; render(); if (S.editTarget) $('target-in')?.focus(); return; }
   if (d.move) { e.stopPropagation(); return moveJob(+d.job, d.move, boardVisible()); }
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; render(); window.scrollTo(0, 0); return; }
@@ -1386,6 +1392,13 @@ document.addEventListener('change', e => {
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('orderform' in f.dataset) return submitOrder();
+  if ('targetform' in f.dataset) {
+    const v = Math.round(Number($('target-in').value));
+    if (!(v > 0)) return toast('Type the monthly target in pounds.', null, true);
+    try { await data.saveSetting('monthly_target', v); S.settings = { ...S.settings, monthly_target: v }; S.editTarget = false; toast(`Monthly target set to ${gbp(v)}.`); }
+    catch (err) { toast(err.message, null, true); }
+    return render();
+  }
   if (f.dataset.bookform) return saveBookForm(f.dataset.bookform);
   if ('addcust' in f.dataset) { const v = $('newcust').value.trim(); if (!v) return; S.cust = normName(v); S.custName = v; S.bookEdit = null; return render(); }
   if (f.dataset.deliver) return markDelivery(+f.dataset.deliver, 'delivered', f.querySelector('input').value.trim());

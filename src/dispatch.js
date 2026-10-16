@@ -11,13 +11,13 @@ import { dispatchPo } from './core/xero.js';
 const notes = n => `${n} note${n === 1 ? '' : 's'}`;
 const noteMatch = ({ job: j, d }, q) => [d.dn, j.so, j.po, j.customer, ...j.lines.map(l => l.po)].some(v => (v || '').toLowerCase().includes(q));
 
-export function renderDispatch({ lists: s, office, view, chosen, search, desp, form, cancelDn, xero }, h) {
+export function renderDispatch({ lists: s, office, md = false, view, chosen, search, desp, form, cancelDn, xero }, h) {
   const { esc, fmt, gbp, dueChip, parts } = h;
   const cards = [
     card('ok', 'ready', s.ready.length, 'Ready to dispatch', s.ready.length > 0),
     card('warn', 'mail', s.notEmailed.length, 'Not emailed to the customer', s.notEmailed.length > 0),
     card('info', 'truck', s.out.length, 'Out for delivery', s.out.length > 0),
-    office ? card('warn', 'invoice', gbp(s.toXeroValue), `Waiting for Xero · ${notes(s.toXero.length)}`, s.toXero.length > 0)
+    office ? card('warn', 'invoice', md ? gbp(s.toXeroValue) : s.toXero.length, md ? `Waiting for Xero · ${notes(s.toXero.length)}` : 'Waiting for Xero', s.toXero.length > 0)
       : card('', 'soon', s.thisWeek, 'Sent this week', false),
   ].join('');
 

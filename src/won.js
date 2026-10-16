@@ -10,20 +10,20 @@ import { icon } from './icons.js';
 
 const days = n => `${n} day${n === 1 ? '' : 's'}`;
 
-export function renderWon({ rows, today, view, reading, error, converting, open, detail }, h) {
+export function renderWon({ rows, md = false, today, view, reading, error, converting, open, detail }, h) {
   const { esc, fmt, gbp } = h;
   const w = wonQuotes(rows, today);
   const oldTone = w.oldest ? quoteAgeTone(w.oldest.age) : '';
   const unsure = reading || !!error;   // SharePoint not read: the numbers would only count Xero imports
   const cards = [
     // Each card opens the list behind its number (the oldest one opens that quote's lines).
-    card('warn', 'quote', unsure ? '—' : w.waiting.length, w.waiting.length ? `Waiting · ${gbp(w.waitingValue)}` : 'Waiting', !reading && w.waiting.length > 0,
+    card('warn', 'quote', unsure ? '—' : w.waiting.length, md && w.waiting.length ? `Waiting · ${gbp(w.waitingValue)}` : 'Waiting', !reading && w.waiting.length > 0,
       'data-wondrill="waiting" title="Show the quotes waiting"'),
     card(oldTone === 'late' ? 'bad' : 'warn', 'late', !unsure && w.oldest ? days(w.oldest.age) : '—',
       !unsure && w.oldest ? `Oldest waiting · ${esc(w.oldest.customer)}` : 'Oldest waiting', !unsure && oldTone !== '',
       w.oldest ? `data-wondrill="oldest" data-key="${esc(w.oldest.key)}" title="Open the oldest quote"` : ''),
     card('ok', 'ready', unsure ? '—' : w.madeThisWeek, 'Made into orders this week', !unsure && w.madeThisWeek > 0, 'data-wondrill="week" title="Show the ones made this week"'),
-    card('info', 'book', unsure ? '—' : gbp(w.wonMonthValue), `Won this month · ${w.wonMonth} quote${w.wonMonth === 1 ? '' : 's'}`, !reading && w.wonMonth > 0,
+    card('info', 'book', unsure ? '—' : md ? gbp(w.wonMonthValue) : w.wonMonth, md ? `Won this month · ${w.wonMonth} quote${w.wonMonth === 1 ? '' : 's'}` : 'Won this month', !reading && w.wonMonth > 0,
       'data-wondrill="month" title="Show everything won this month"'),
   ].join('');
 
