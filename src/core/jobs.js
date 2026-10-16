@@ -380,7 +380,10 @@ export function monthProgress(jobs, today) {
   const dispatched = live.reduce((a, j) => a + j.despatches.filter(d => d.date >= start && d.date <= today).reduce((b, d) => b + despatchValue(j, d), 0), 0);
   const dueByEnd = live.filter(j => ['upcoming', 'current'].includes(stage(j)))
     .reduce((a, j) => a + j.lines.filter(l => l.due && l.due <= end).reduce((b, l) => b + left(j, l) * l.price, 0), 0);
-  return { start, end, dispatched: money ? round2(dispatched) : null, dueByEnd: money ? round2(dueByEnd) : null };
+  // Pace: working days (Mon–Fri) gone, today included, out of the month's working days.
+  const wd = (from, to) => { let n = 0; for (let d = new Date(from + 'T12:00:00Z'); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) if (d.getUTCDay() % 6) n++; return n; };
+  const pace = wd(start, today) / Math.max(1, wd(start, end));
+  return { start, end, pace, dispatched: money ? round2(dispatched) : null, dueByEnd: money ? round2(dueByEnd) : null };
 }
 
 /** Xero invoice IDs the board should ask Xero about: every note sent to Xero, less those already known

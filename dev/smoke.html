@@ -143,6 +143,31 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 #v-jobs .target .tbar{height:8px;border-radius:999px;background:var(--field);overflow:hidden}
 #v-jobs .target .tbar span{display:block;height:100%;background:var(--ink);border-radius:999px}
 #v-jobs .target.met .tbar span{background:var(--ok)}
+#v-home .hmonth{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:8px 24px;flex-wrap:wrap}
+#v-home .hmonth > div{display:flex;flex-direction:column;gap:4px;flex:1 1 220px}
+#v-home .hmonth h3{font-size:19px} #v-home .hmonth p{font-size:14.5px} #v-home .hmonth a{font-weight:600;color:var(--info);text-decoration:none;font-size:14px;margin-top:4px}
+#v-home .hmonth .gauge{width:200px}
+#v-jobs .target.has-gauge{flex-direction:row;align-items:center;gap:8px 24px;flex-wrap:wrap}
+#v-jobs .target .tinfo{flex:1 1 280px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.gauge{margin:0;width:220px;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px}
+.gauge svg{width:100%;height:auto;display:block;overflow:visible}
+.gauge path{fill:none;stroke-width:14;stroke-linecap:round}
+.gauge .g-track{stroke:var(--field)}
+.gauge .g-could{stroke:var(--muted);opacity:.4}
+.gauge .g-done{stroke:var(--ink)}
+.gauge.g-met .g-done{stroke:var(--ok)}
+.gauge .g-pace{stroke:var(--warn);stroke-width:3;stroke-linecap:round}
+.gauge text{fill:var(--ink);text-anchor:middle;font-family:var(--body)}
+.gauge .g-big{font-size:30px;font-weight:600;letter-spacing:-.02em}
+.gauge .g-small,.gauge .g-end{font-size:11px;fill:var(--muted)}
+.gauge .g-state{font-size:13px;font-weight:600;border-radius:999px;padding:2px 10px;background:var(--field)}
+.gauge.g-ahead .g-state{background:var(--ok-soft);color:var(--ok)} .gauge.g-met .g-state{background:var(--ok-soft);color:var(--ok)}
+.gauge.g-behind .g-state{background:var(--warn-soft);color:var(--warn)}
+#v-jobs .tkey{list-style:none;margin:0;padding:0;display:flex;gap:4px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+#v-jobs .tkey li{display:flex;align-items:center;gap:6px}
+#v-jobs .tkey i{display:inline-block;width:14px;height:6px;border-radius:3px}
+#v-jobs .tkey .k-done{background:var(--ink)} #v-jobs .tkey .k-could{background:var(--muted);opacity:.4} #v-jobs .tkey .k-pace{width:3px;height:12px;background:var(--warn)}
+@media (max-width:560px){#v-jobs .target.has-gauge{justify-content:center}.gauge{width:200px}}
 #v-jobs .tform{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 #v-jobs .tform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
 #v-jobs .tform input{width:160px}
@@ -689,7 +714,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

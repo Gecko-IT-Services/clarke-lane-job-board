@@ -6,6 +6,7 @@
  */
 import { boardLists, dashboard, byRunningOrder, needed, allDone, nextDue, value, lastDespatch, deliveryDates, left, monthProgress, SHORT } from './core/jobs.js';
 import { card } from './home.js';
+import { monthGauge } from './gauge.js';
 import { icon } from './icons.js';
 
 export function renderBoard({ jobs, today, office, md = false, stageKey, search, anyPlaced, target = null, editTarget = false, byValue = false }, h) {
@@ -72,17 +73,18 @@ export function renderBoard({ jobs, today, office, md = false, stageKey, search,
   if (md && !done) {
     const mp = monthProgress(jobs, today);
     const name = new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
-    const endDay = fmt(mp.end), pct = target ? Math.min(100, Math.round(100 * (mp.dispatched || 0) / target)) : 0;
+    const endDay = fmt(mp.end);
     const togo = target ? Math.max(0, target - (mp.dispatched || 0)) : 0, short = target ? Math.max(0, togo - (mp.dueByEnd || 0)) : 0;
     const form = `<form class="tform" data-targetform><label>Monthly target (net £) <input type="number" id="target-in" min="0" step="100" inputmode="numeric" value="${target ?? ''}" placeholder="£ per month"></label>
       <button class="btn sm pri" type="submit">Save</button><button class="btn sm" type="button" data-edittarget="close">Cancel</button></form>`;
-    month = mp.dispatched == null ? '' : `<div class="target${target && togo === 0 ? ' met' : ''}">
+    month = mp.dispatched == null ? '' : `<div class="target${target && togo === 0 ? ' met' : ''}${target ? ' has-gauge' : ''}">
+      ${target ? monthGauge({ ...mp, target, name }, { gbp, esc }) : ''}<div class="tinfo">
       <div class="t1"><b>${esc(name)}</b><span>${gbp(mp.dispatched)} dispatched${target ? ` of ${gbp(target)} target` : ''}</span>
         ${editTarget ? '' : `<button type="button" class="btn link sm" data-edittarget>${target ? 'Change target' : 'Set a monthly target'}</button>`}</div>
-      ${target ? `<div class="tbar" role="img" aria-label="${pct}% of target"><span style="width:${pct}%"></span></div>` : ''}
       <div class="t2">${target ? (togo === 0 ? '<b>Target met.</b> ' : `<b>${gbp(togo)} to go.</b> `) : ''}${gbp(mp.dueByEnd)} still to send on jobs due by ${endDay}${target && togo > 0
         ? (short > 0 ? ` · <span class="bad">${gbp(short)} short even if all of it goes</span>: bring later jobs forward` : ' · enough if it all goes out') : ''}.</div>
-      ${editTarget ? form : ''}</div>`;
+      ${target ? `<ul class="tkey"><li><i class="k-done"></i>Dispatched</li><li><i class="k-could"></i>If all due by ${endDay} goes</li><li><i class="k-pace"></i>Even pace to today</li></ul>` : ''}
+      ${editTarget ? form : ''}</div></div>`;
   }
 
   return { list, html: `<div class="home">

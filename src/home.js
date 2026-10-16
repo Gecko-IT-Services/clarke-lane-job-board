@@ -5,7 +5,8 @@
  * h: the formatting helpers from app.js.
  */
 import { icon, XERO } from './icons.js';
-import { dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue } from './core/jobs.js';
+import { monthGauge } from './gauge.js';
+import { monthProgress, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue } from './core/jobs.js';
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** A summary card. It only takes its colour when there is something to see. label/shown are HTML: escape before passing. */
@@ -13,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ jobs, me, office, md = false, today, wonQuotes, view, approval = { off: true } }, h) {
+export function renderHome({ jobs, me, office, md = false, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -43,6 +44,20 @@ export function renderHome({ jobs, me, office, md = false, today, wonQuotes, vie
       : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
         'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
   ].join('') : '';
+
+  // Levi's month at a glance (MD only); the detail and the target setting are on Jobs.
+  let month = '';
+  if (md) {
+    const mp = monthProgress(jobs, today);
+    const name = new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
+    if (mp.dispatched != null) month = target
+      ? `<section class="hmonth">${monthGauge({ ...mp, target, name }, { gbp, esc })}<div><h3>${esc(name)}</h3>
+          <p><b>${gbp(mp.dispatched)}</b> dispatched of ${gbp(target)} · ${gbp(Math.max(0, target - mp.dispatched))} to go</p>
+          <p class="note">${gbp(mp.dueByEnd)} still to send on jobs due by ${fmt(mp.end)}</p>
+          <a href="#jobs" data-tab="jobs">See the jobs →</a></div></section>`
+      : `<section class="hmonth"><div><h3>${esc(name)}</h3><p><b>${gbp(mp.dispatched)}</b> dispatched so far.</p>
+          <a href="#jobs" data-tab="jobs">Set a monthly target on Jobs →</a></div></section>`;
+  }
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
   const most = Math.max(1, ...busy.map(p => d.stations[p]));
@@ -121,6 +136,7 @@ export function renderHome({ jobs, me, office, md = false, today, wonQuotes, vie
     <div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>
     <div class="hcards">${cards}</div>
     ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}
+    ${month}
     <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>
     <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;
