@@ -136,35 +136,49 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .duepick .duebtn:hover .pen{opacity:1;color:var(--ink)}
 .duepick input[type=date]{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
 .duepick + .note{display:block;font-size:12px;margin-top:2px}
-:is(#v-home,#v-jobs) .month{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:8px 28px;flex-wrap:wrap}
-:is(#v-home,#v-jobs) .month .minfo{flex:1 1 300px;display:flex;flex-direction:column;gap:6px;min-width:0;align-items:flex-start}
-:is(#v-home,#v-jobs) .month h3{font-size:19px;display:flex;gap:4px 12px;align-items:baseline;flex-wrap:wrap} .month h3 span{font-family:var(--body);font-size:15px;font-weight:500;color:var(--muted)}
+:is(#v-home,#v-jobs) .month{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px 18px;display:flex;flex-direction:column;gap:10px}
+.month .mhead{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
+.month .mhead h3{font-size:19px} .month .mbig{font:600 24px var(--display);letter-spacing:-.02em} .month .mhead .g-state{margin-left:auto;align-self:center}
+.month .minfo{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .month p{font-size:14.5px} .month p.note{font-size:13.5px} .month .ok{color:var(--ok)} .month p.bad{color:var(--bad);font-weight:600;font-size:14px}
 .month a{font-weight:600;color:var(--info);text-decoration:none;font-size:14px}
-.month .gwrap{margin:0;width:260px;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px}
-.month.compact .gwrap{width:230px}
-.gauge{width:100%;height:auto;display:block;overflow:visible}
-.gauge path{fill:none;stroke-width:16;stroke-linecap:butt}
-.gauge .g-track{stroke:var(--field)}
-.gauge .z-under,.gauge .z-over{stroke-width:5} .gauge .z-under{stroke:var(--warn)} .gauge .z-over{stroke:var(--ok)}
-.gauge .g-could{stroke:var(--muted);opacity:.35}
-.gauge .g-done{stroke:var(--ink)}
-.gauge.g-top .g-done{stroke:var(--ok)}
-.gauge .g-be{stroke:var(--ink);stroke-width:2.5}
-.gauge text{fill:var(--ink);text-anchor:middle;font-family:var(--body)}
-.gauge .g-big{font-size:30px;font-weight:600;letter-spacing:-.02em}
-.gauge .g-small,.gauge .g-end{font-size:11px;fill:var(--muted)}
-.gauge .g-tag{font-size:11px;font-weight:600}
+.month .gwrap{margin:0}
 .month .g-state{font-size:13px;font-weight:600;border-radius:999px;padding:3px 12px;background:var(--warn-soft);color:var(--warn)}
 .month .g-state.g-ok,.month .g-state.g-top{background:var(--ok-soft);color:var(--ok)}
+/* The steel tube (Philip, 19 Oct): polished steel with a glass highlight, filled left to right. */
+.tube{--steel-a:#FBFBFC;--steel-b:#D5D8DC;--steel-c:#A9AEB5;--steel-d:#C9CDD2;--steel-e:#ECEEF0;--steel-edge:#8A8F96;--cap:#6E737A;
+  position:relative;padding:22px 14px 0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tube{--steel-a:#6A6E75;--steel-b:#45484E;--steel-c:#26282C;--steel-d:#3A3D42;--steel-e:#55585E;--steel-edge:#1A1B1E;--cap:#8C9097}}
+:root[data-theme="dark"] .tube{--steel-a:#6A6E75;--steel-b:#45484E;--steel-c:#26282C;--steel-d:#3A3D42;--steel-e:#55585E;--steel-edge:#1A1B1E;--cap:#8C9097}
+.tube-body{position:relative;height:30px;border-radius:999px;overflow:hidden;border:1px solid var(--steel-edge);
+  background:linear-gradient(180deg,var(--steel-a) 0%,var(--steel-b) 28%,var(--steel-c) 55%,var(--steel-d) 78%,var(--steel-e) 100%);
+  box-shadow:inset 0 3px 6px rgba(0,0,0,.28),inset 0 -2px 3px rgba(255,255,255,.35),0 1px 0 rgba(255,255,255,.6)}
+.tube-body::after{content:"";position:absolute;left:8px;right:8px;top:3px;height:9px;border-radius:999px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,0))}
+/* end caps: machined rings at both ends */
+.tube::before,.tube::after{content:"";position:absolute;top:18px;width:14px;height:38px;border-radius:5px;
+  background:linear-gradient(90deg,var(--cap),var(--steel-a) 45%,var(--cap));box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.tube::before{left:3px} .tube::after{right:3px}
+.tube-fill,.tube-could{position:absolute;left:0;top:0;bottom:0;border-radius:999px}
+.tube-fill{background:linear-gradient(180deg,var(--f1) 0%,var(--f2) 45%,var(--f3) 100%);box-shadow:inset 0 -3px 4px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.18)}
+.tube-fill.t-warn{--f1:#FFD9A0;--f2:#E39A2C;--f3:#A8620C}
+.tube-fill.t-ok,.tube-fill.t-top{--f1:#A6EBC2;--f2:#33A564;--f3:#1D6A40}
+.tube-could{background:repeating-linear-gradient(135deg,rgba(0,0,0,.14) 0 6px,rgba(0,0,0,0) 6px 12px)}
+.tube-ring{position:absolute;top:-1px;bottom:-1px;width:4px;margin-left:-2px;background:linear-gradient(90deg,#3A3D42,#C9CDD2,#3A3D42);box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.tube-tag{position:absolute;top:0;transform:translateX(-50%);font-size:11.5px;font-weight:600;white-space:nowrap;color:var(--ink)}
+.tube-pace{position:absolute;top:56px;width:0;height:0;margin-left:-6px;border:6px solid transparent;border-bottom:8px solid var(--info);border-top:0}
+.tube-scale{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:12px;padding:0 2px}
+.tube.grow .tube-fill,.tube.grow .tube-could{animation:tube-fill 1.1s cubic-bezier(.2,.7,.2,1) both}
+@keyframes tube-fill{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@media (prefers-reduced-motion: reduce){.tube.grow .tube-fill,.tube.grow .tube-could{animation:none}}
 .month .tkey{list-style:none;margin:2px 0 0;padding:0;display:flex;gap:4px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
 .month .tkey li{display:flex;align-items:center;gap:6px}
-.month .tkey i{display:inline-block;width:14px;height:8px;border-radius:2px}
-.month .tkey .k-done{background:var(--ink)} .month .tkey .k-could{background:var(--muted);opacity:.35} .month .tkey .k-under{background:var(--warn);height:4px} .month .tkey .k-over{background:var(--ok);height:4px}
+.month .tkey i{display:inline-block;width:16px;height:8px;border-radius:4px}
+.month .tkey .k-done{background:linear-gradient(90deg,#E39A2C 50%,#33A564 50%)} .month .tkey .k-could{background:repeating-linear-gradient(135deg,rgba(0,0,0,.25) 0 3px,transparent 3px 6px);outline:1px solid var(--line)}
+.month .tkey .k-pace{width:0;height:0;border:5px solid transparent;border-bottom:7px solid var(--info);border-top:0;border-radius:0}
 .month .tform{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .month .tform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
 .month .tform input{width:170px}
-@media (max-width:560px){.month{justify-content:center}.month .gwrap{width:240px}}
 .thsort{all:unset;cursor:pointer;font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit}
 .thsort:hover,.thsort.on{color:var(--ink)} .thsort:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .empty{color:var(--muted);padding:24px 16px;text-align:center}
