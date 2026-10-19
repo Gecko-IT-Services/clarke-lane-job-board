@@ -120,7 +120,7 @@ export function renderHome({ jobs, me, office, md = false, breakeven = null, tar
   const seg = `<div class="seg" role="group" aria-label="Show">
     <button type="button" data-homeview="attention" aria-pressed="${!isOut && !drill}">Needs attention <em>${rows.length}</em></button>
     <button type="button" data-homeview="out" aria-pressed="${isOut}">Going out <em>${d.goingOut.length}</em></button></div>`
-    + (drill ? ' <button type="button" class="btn sm" data-homeview="attention" title="Back to Needs attention">✕ Close this list</button>' : '');
+    + (drill ? ' <button type="button" class="btn sm" data-goback title="Back to the last screen">← Back</button>' : '');
 
   return `<div class="home">
     <div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>

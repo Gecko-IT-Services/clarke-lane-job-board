@@ -103,6 +103,7 @@ async function boot() {
   try { S.kiosk = localStorage.getItem('clj.kiosk') === '1'; } catch { /* none kept */ }
   fromHash();
   if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
+  history.replaceState({ ...navOf(), i: 0 }, '', '#' + S.tab);   // the first step: ← Back stays hidden here
   await reload();
   if (office()) {
     loadQuotes();
@@ -110,7 +111,7 @@ async function boot() {
   }
   const back = new URLSearchParams(location.search).get('xero');
   if (back) {
-    history.replaceState(null, '', location.pathname + '#xero'); S.tab = 'xero';
+    S.tab = 'xero'; history.replaceState({ ...navOf(), i: 0 }, '', location.pathname + '#xero');
     if (back === 'connected') { forgetXero(); toast('Xero connected.'); } else toast(back, null, true);
   }
   data.onChange(debounce(reload, 400)).catch(() => {});
@@ -144,7 +145,7 @@ function toast(msg, undo, bad) {
   t.innerHTML = `<span>${esc(msg)}</span>` + (undo ? '<button type="button" id="undo">Undo</button>' : '');
   t.hidden = false;
   if (undo) $('undo').onclick = () => { t.hidden = true; undo(); };
-  toastT = setTimeout(() => t.hidden = true, bad ? 9000 : 5000);
+  toastT = setTimeout(() => t.hidden = true, bad ? 9000 : undo ? 9000 : 5000);   // time to reach Undo
 }
 
 /* ---------- derived bits ---------- */
@@ -186,12 +187,18 @@ async function moveJob(id, how, visible) {
   const ids = how === 'reset' ? [] : target < 0 ? null : moveInOrder(all, id, target);
   if (!ids) return;
   const before = new Map(S.jobs.map(j => [j.id, j.priority]));
+  const prevIds = S.jobs.filter(j => j.priority != null).sort((a, b) => a.priority - b.priority).map(j => j.id);
   S.jobs.forEach(j => { const n = ids.indexOf(j.id); j.priority = n < 0 ? null : n + 1; }); render();
+  const undo = async () => {
+    S.jobs.forEach(j => { j.priority = before.get(j.id) ?? null; }); render();
+    try { await data.setRunningOrder(prevIds); toast('Running order put back.'); } catch (e) { toast(e.message, null, true); reload(); }
+  };
   try {
     await data.setRunningOrder(ids);
-    if (how === 'reset') toast('Back to date order.');
-    else if (how === 'top' || how === 0) toast(`${job(id).so} is now first on the shop floor.`);
-    else if (typeof how === 'number') toast(`${job(id).so} moved to number ${ids.indexOf(id) + 1}.`);
+    if (how === 'reset') toast('Back to date order.', undo);
+    else if (how === 'top' || how === 0) toast(`${job(id).so} is now first on the shop floor.`, undo);
+    else if (typeof how === 'number') toast(`${job(id).so} moved to number ${ids.indexOf(id) + 1}.`, undo);
+    else toast(`${job(id).so} moved ${how}.`, undo);
   } catch (e) { S.jobs.forEach(j => { j.priority = before.get(j.id) ?? null; }); render(); toast(e.message, null, true); }
 }
 
@@ -227,7 +234,9 @@ async function setDue(id, from, to) {
   const j = job(id); if (!j || !to || to === from) return;
   try {
     const n = await data.setJobDue(id, from || null, to);
-    toast(`${j.so} now due ${fmtLong(to)}${n > 1 ? ` (${n} lines)` : ''}.`);
+    toast(`${j.so} now due ${fmtLong(to)}${n > 1 ? ` (${n} lines)` : ''}.`, from ? async () => {
+      try { await data.setJobDue(id, to, from); toast(`${j.so} back to ${fmtLong(from)}.`); } catch (e) { toast(e.message, null, true); } reload();
+    } : null);
   } catch (e) { toast(e.message, null, true); }
   reload();
 }
@@ -276,7 +285,11 @@ async function makeDespatch() {
     const done = stage(job(j.id)) === 'completed';
     if (done) S.desp = null;
     showDoc('dn', j.id, d.id);
-    toast(`${d.dn_number} created.` + (done ? ` ${j.so} is fully dispatched.` : ' The rest stays outstanding on the order.'));
+    toast(`${d.dn_number} created.` + (done ? ` ${j.so} is fully dispatched.` : ' The rest stays outstanding on the order.'), async () => {
+      closeDoc();
+      try { await data.cancelDespatch(d.id); toast(`${d.dn_number} cancelled. Its quantities are outstanding again on ${j.so}.`); } catch (e) { toast(e.message, null, true); }
+      reload();
+    });
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
 }
@@ -304,15 +317,20 @@ async function cancelDispatchNote(id) {
   reload();
 }
 async function markDelivery(id, what, receivedBy = '') {
-  try { await data.markDespatch(id, what, receivedBy); toast(what === 'delivered' ? 'Marked delivered. It is now waiting for Xero.' : 'Set back to out for delivery.'); }
+  try {
+    await data.markDespatch(id, what, receivedBy);
+    toast(what === 'delivered' ? 'Marked delivered. It is now waiting for Xero.' : 'Set back to out for delivery.',
+      what === 'delivered' ? () => markDelivery(id, 'undelivered') : null);
+  }
   catch (e) { toast(e.message, null, true); }
   reload();
 }
-async function setStatus(id, status) {
-  const j = job(id);
+async function setStatus(id, status, undoing = false) {
+  const j = job(id), was = j.status;
   try {
     await data.setJobStatus(id, status); S.ask = null;
-    toast({ held: `${j.so} is on hold. It cannot be dispatched until it is released.`, open: `${j.so} released.`, cancelled: `${j.so} cancelled. It stays in the Sales orders list.` }[status]);
+    toast({ held: `${j.so} is on hold. It cannot be dispatched until it is released.`, open: `${j.so} ${was === 'cancelled' ? 'is open again' : 'released'}.`, cancelled: `${j.so} cancelled. It stays in the Sales orders list.` }[status],
+      undoing || was === status ? null : () => setStatus(id, was, true));
   } catch (e) { toast(e.message, null, true); }
   reload();
 }
@@ -358,7 +376,7 @@ function openOrderForm(prefill = {}, amendId = null) {
   const due = prefill.due || addWorkingDays(todayIso(), 10);
   S.form = { mode: amendId ? 'amend' : 'new', jobId: amendId, so: '', customer: '', po: '', contact: '', contactEmail: '',
     address: '', notes: '', due, lines: [blankLine(due)], procs: [], xeroQuoteId: null, spQuoteId: null, quoteNo: '', from: '', ...prefill };
-  S.open = null; S.tab = 'orders'; history.replaceState(null, '', '#orders'); keepInputs = false; render(); window.scrollTo(0, 0);
+  S.open = null; S.tab = 'orders'; keepInputs = false; render(); window.scrollTo(0, 0);
   if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
   if (S.xero && !S.xitems && !S.xitemsErr) loadXeroItems();
 }
@@ -997,7 +1015,7 @@ function renderDrawer() {
     <div class="dh"><div><div class="mono note">${esc(j.so)}${j.quote ? ' · from ' + esc(j.quote) : ''}</div><h2>${esc(j.customer)}</h2>
       <div class="actions" style="margin-top:6px">${j.status === 'cancelled' ? '<span class="chip">Cancelled</span>' : `<span class="chip ${despatchStatus(j) === 'Dispatched' ? 'ok' : ''}">${despatchStatus(j)}</span>`}
         ${money ? `<span class="chip ${invoiceStatus(j) === 'Invoiced' ? 'ok' : ''}">${invoiceStatus(j)}</span>` : ''}${j.status === 'held' ? '<span class="chip late">On hold</span>' : ''}${deliveryLabel(j) && st !== 'completed' ? `<span class="chip">${deliveryLabel(j)}</span>` : ''}</div></div>
-      <button class="btn sm x" type="button" data-close>Close</button></div>
+      <button class="btn sm x" type="button" data-close title="Close (Esc)">← Back</button></div>
     <div class="facts">
       <div class="fact"><div class="k">Customer order no.</div><div class="v mono">${esc(j.po) || '—'}</div></div>
       <div class="fact"><div class="k">Order date</div><div class="v">${fmtLong(j.ordered)}</div></div>
@@ -1259,7 +1277,36 @@ function nudge() {
 ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, nudge, { passive: true }));
 nudge();
 
+/* ---------- Back: every change of screen is a step that the browser's Back, and ← Back, undoes ---------- */
+const navOf = () => ({ v: 1, tab: S.tab, open: S.open ?? null, homeView: S.homeView ?? 'attention', station: S.station ?? null, wonView: S.wonView ?? 'waiting',
+  dispView: S.dispView ?? null, orderView: S.orderView ?? null, desp: S.desp ?? null, form: !!S.form });
+const sameNav = (a, b) => ['tab', 'open', 'homeView', 'station', 'wonView', 'dispView', 'orderView', 'desp', 'form'].every(k => (a?.[k] ?? null) === (b?.[k] ?? null));
+function navPush() {
+  if (sameNav(navOf(), history.state)) return;
+  history.pushState({ ...navOf(), i: (history.state?.i || 0) + 1 }, '', '#' + S.tab); renderBack();
+}
+function renderBack() { const b = $('backrow'); if (b) b.hidden = !(history.state?.i > 0); }
+window.addEventListener('popstate', e => {
+  const n = e.state;
+  if (!n?.v) { fromHash(); render(); renderBack(); return; }
+  if (S.form && !n.form && !confirm('Leave this order? What you have typed is not saved.')) { history.pushState({ ...navOf(), i: (n.i || 0) + 1 }, '', '#' + S.tab); return; }
+  Object.assign(S, { tab: n.tab, open: n.open, station: n.station, desp: n.desp, ask: null, cancelDn: null });
+  for (const k of ['homeView', 'wonView', 'dispView', 'orderView']) if (n[k] != null) S[k] = n[k];
+  if (!n.form) S.form = null;
+  closeDoc(); keepInputs = false; render(); renderBack(); window.scrollTo(0, 0);
+});
+/** Close the order panel: a step back when opening it was the last step, so Back doesn't reopen it. */
+function closeOpen() {
+  if (history.state?.open === S.open && history.state?.i > 0) return history.back();
+  S.open = null; render(); history.replaceState({ ...navOf(), i: history.state?.i || 0 }, '', '#' + S.tab);
+}
 document.addEventListener('click', e => {
+  const before = navOf();
+  onClick(e);
+  if (!sameNav(before, navOf())) navPush();
+});
+
+function onClick(e) {
   if (e.target.closest('[data-grip]')) return;        // dragging, not opening the row
   const pick = e.target.closest('.duepick');
   if (pick) {                                          // the due date: open the date picker, not the row
@@ -1269,6 +1316,7 @@ document.addEventListener('click', e => {
   }
   const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;
   const d = t.dataset;
+  if ('goback' in d) return history.back();
   if ('preview' in d) return enterPreview();
   if (d.cust) { S.cust = d.cust; S.custName = null; S.bookEdit = null; return render(); }
   if ('addperson' in d) { S.bookEdit = { kind: 'person', role: 'orders', main: false }; return render(); }
@@ -1281,7 +1329,7 @@ document.addEventListener('click', e => {
   if ('fromxerobook' in d) return copyXeroToBook();
   if ('booksave' in d) return saveFormToBook();
   if ('leavepreview' in d) return leavePreview();
-  if (d.gostation) { S.station = d.gostation; S.tab = 'floor'; history.replaceState(null, '', '#floor'); render(); window.scrollTo(0, 0); return; }
+  if (d.gostation) { S.station = d.gostation; S.tab = 'floor'; render(); window.scrollTo(0, 0); return; }
   if (t.matches('a[href^="#help-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ('signin' in d) return auth.signIn();
   if ('signout' in d) return auth.signOut();
@@ -1291,12 +1339,12 @@ document.addEventListener('click', e => {
     if (['attention', 'out'].includes(d.homeview)) { try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
     render(); $('home-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
   }
-  if (d.dispview) { S.dispView = d.dispview; S.dispChosen = true; if (S.tab !== 'dispatch') { S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); window.scrollTo(0, 0); } return render(); }
+  if (d.dispview) { S.dispView = d.dispview; S.dispChosen = true; if (S.tab !== 'dispatch') { S.tab = 'dispatch'; window.scrollTo(0, 0); } return render(); }
   if (d.orderview) { S.orderView = d.orderview; try { localStorage.setItem('clj.orderview', d.orderview); } catch { /* not kept */ } return render(); }
   if (d.wondrill) return wonDrill(d.wondrill, d.key);
   if (d.wonlines) { S.wonOpen = S.wonOpen === d.wonlines ? null : d.wonlines; return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
-  if (d.tab) { e.preventDefault(); S.tab = d.tab; history.replaceState(null, '', '#' + S.tab); render(); window.scrollTo(0, 0); return; }
+  if (d.tab) { e.preventDefault(); S.tab = d.tab; render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if ('jobsort' in d) { S.jobSort = S.jobSort === 'value' ? null : 'value'; return render(); }
   if ('edittarget' in d) { S.editTarget = d.edittarget !== 'close'; render(); if (S.editTarget) $('be-in')?.focus(); return; }
@@ -1319,7 +1367,7 @@ document.addEventListener('click', e => {
   if (d.oldel) { collectForm(); S.form.lines.splice(+d.oldel, 1); keepInputs = false; return render(); }
   if ('olsplit' in d) return splitLines();
   if ('olcancel' in d) { const back = S.form.jobId; S.form = null; if (back) S.open = back; return render(); }
-  if ('close' in d) { S.open = null; return render(); }
+  if ('close' in d) return closeOpen();
   if (d.start) { keepInputs = false; return startConvert(+d.start); }
   if ('reloadquotes' in d) { S.quotesRaw = null; render(); return loadQuotes(); }
   if (d.xdismiss) return dismissXero(d.xdismiss, true);
@@ -1331,7 +1379,7 @@ document.addEventListener('click', e => {
   if (d.sqset) return setSheet(d.sqset);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if ('despclose' in d) { S.desp = null; keepInputs = false; return render(); }
-  if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; history.replaceState(null, '', '#dispatch'); render(); return showDespForm(); }
+  if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; render(); return showDespForm(); }
   if ('print' in d) return window.print();
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
@@ -1345,10 +1393,10 @@ document.addEventListener('click', e => {
   if ('sendxero' in d) return sendToXero();
   if ('xcreload' in d) return loadXeroContacts(true).then(() => (S.xcErr || S.xc) && toast(S.xcErr || `Read ${S.xc.contacts.length} customers from Xero.`, null, !!S.xcErr));
   if (d.xcchange) { S.forcePick.add(d.xcchange); return render(); }
-});
-$('scrim').addEventListener('click', () => { S.open = null; render(); });
+}
+$('scrim').addEventListener('click', () => closeOpen());
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) { S.open = null; render(); } } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) closeOpen(); } });
 document.addEventListener('input', e => {
   if (e.target.dataset.sq && S.sheet) {   // job sheet quantities: redraw the sheet, keep the box being typed in
     S.sheet.qty[+e.target.dataset.sq] = Math.max(0, Math.floor(Number(e.target.value) || 0));
