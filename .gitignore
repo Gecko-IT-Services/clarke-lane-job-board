@@ -3,3 +3,8 @@
 supabase/.temp/
 .superpowers/
 dev/_check.mp4
+dev/video/audio/
+dev/video/*.jpg
+dev/video/*.mp4
+dev/video/frames.json
+dev/video/timeline.json

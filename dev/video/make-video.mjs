@@ -2,11 +2,16 @@
 // with Chrome's own encoder (WebCodecs) and mp4-muxer; no ffmpeg. Run from dev/video with the smoke server on :8080.
 // Turns the frames into a captioned video inside headless Chrome (canvas + MediaRecorder). No ffmpeg needed.
 import { open } from './cdp.mjs';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 const frames = JSON.parse(readFileSync('frames.json', 'utf8')).map(x => ({ caption: x.caption, src: 'data:image/jpeg;base64,' + readFileSync(x.f).toString('base64') }));
+// With narration (audio/durations.json from the "say" step), each step stays up as long as its voice-over.
+const durs = existsSync('audio/durations.json') ? JSON.parse(readFileSync('audio/durations.json', 'utf8')) : null;
+const TITLE_S = durs ? Math.max(4, durs[0] + 1) : 4, HOLDS = frames.map((_, k) => durs ? Math.max(6, durs[k + 1] + 1.4) : 7);
+const starts = [0, ...HOLDS.map((_, k) => TITLE_S + HOLDS.slice(0, k).reduce((a, h) => a + h, 0))];
+writeFileSync('timeline.json', JSON.stringify({ starts: starts.map(t => t + (t ? 0.4 : 0.3)), total: TITLE_S + HOLDS.reduce((a, h) => a + h, 0) }));
 const b = await open({ width: 1300, height: 800 });
 await b.go('http://localhost:8080/dev/smoke.html');   // same origin as the fonts (Archivo)
-await b.js(`window.__frames = ${JSON.stringify(frames)}; return 1;`);
+await b.js(`window.__frames = ${JSON.stringify(frames)}; window.__holds = ${JSON.stringify(HOLDS)}; window.__title = ${TITLE_S}; return 1;`);
 const out = await b.js(`
   await document.fonts.ready; await document.fonts.load('600 56px Archivo'); await document.fonts.load('400 24px Archivo');
   const W = 1280, H = 800, c = new OffscreenCanvas(W, H);
@@ -23,7 +28,7 @@ const out = await b.js(`
     g.globalAlpha = 1; g.fillStyle = '#0C0C0E'; g.fillRect(0, 0, W, H); g.globalAlpha = a;
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = font(600, 56); g.fillText('Clarke Lane Job Board', W / 2, 340);
     g.font = font(400, 30); g.fillStyle = '#C8C8CD'; g.fillText('From a sales order to the invoice, step by step', W / 2, 400);
-    g.font = font(400, 20); g.fillStyle = '#8C8C93'; g.fillText('Practice data only · ' + __frames.length + ' steps · about ' + Math.round((__frames.length * 7 + 4) / 60) + ' minutes', W / 2, 460);
+    g.font = font(400, 20); g.fillStyle = '#8C8C93'; g.fillText('Practice data only · ' + __frames.length + ' steps · about ' + Math.round(total / 60 * 2) / 2 + ' minutes', W / 2, 460);
     g.globalAlpha = 1; g.textAlign = 'left';
   }
   function frame(i, a) {
@@ -37,17 +42,17 @@ const out = await b.js(`
     g.fillStyle = '#3A3A40'; g.fillRect(0, H - 4, W, 4); g.fillStyle = '#fff'; g.fillRect(0, H - 4, W * (i + 1) / imgs.length, 4);
     g.globalAlpha = 1;
   }
-  const HOLD = 7, FADE = 0.5, TITLE = 4;          // seconds
-  const total = TITLE + imgs.length * HOLD, n = Math.round(total * FPS);
+  const FADE = 0.5, TITLE = __title, ends = __holds.map((_, k) => TITLE + __holds.slice(0, k + 1).reduce((a, h) => a + h, 0));   // seconds
+  const total = ends[ends.length - 1], n = Math.round(total * FPS);
   for (let f = 0; f < n; f++) {
     const t = f / FPS;
     if (t < TITLE) title(Math.min(1, t / FADE));
-    else { const k = Math.min(imgs.length - 1, Math.floor((t - TITLE) / HOLD)), into = (t - TITLE) - k * HOLD;
+    else { const k = Math.min(imgs.length - 1, ends.findIndex(e => t < e)), into = t - (k ? ends[k - 1] : TITLE);
       if (into < FADE && k > 0) { frame(k - 1, 1); frame(k, into / FADE); } else if (into < FADE) { title(1); frame(k, into / FADE); } else frame(k, 1); }
     const px = g.getImageData(0, 0, W, H).data;
     if (f === 400) { let s0 = 0; for (let k = 0; k < px.length; k += 4 * 97) s0 += px[k]; window.__dbg = 'canvas avg at 40s ' + Math.round(s0 / (px.length / (4 * 97))) + ', imgs ' + imgs.map(i => i.width).join(','); }   // pixels, not the canvas: headless Chrome hands the encoder a blank canvas
     const vf = new VideoFrame(px, { format: 'RGBA', codedWidth: W, codedHeight: H, timestamp: Math.round(f * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
-    enc.encode(vf, { keyFrame: f % (FPS * 7) === 0 }); vf.close();
+    enc.encode(vf, { keyFrame: f % (FPS * 5) === 0 }); vf.close();
     if (enc.encodeQueueSize > 20) await new Promise(r => setTimeout(r, 5));
   }
   await enc.flush(); muxer.finalize();
