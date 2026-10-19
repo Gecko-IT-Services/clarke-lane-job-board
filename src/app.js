@@ -1131,13 +1131,13 @@ function purchasePanel(j) {
 const blankPoLine = () => ({ description: '', qty: '1', unit: '' });
 function openPoForm(jobId) {
   if (!S.xero) return toast('Connect to Xero first (Xero tab).', null, true);
-  S.poForm = { jobId, contactId: '', delivery: '', lines: [blankPoLine()], key: crypto.randomUUID(), busy: false };
+  S.poForm = { jobId, contactId: '', delivery: '', account: '5000', other: '', lines: [blankPoLine()], key: crypto.randomUUID(), busy: false };
   if (!S.xc && !S.xcErr) loadXeroContacts();
   showPoForm();
 }
 function collectPo() {
   const f = S.poForm; if (!f || !$('po-sup')) return;
-  f.contactId = $('po-sup').value; f.delivery = $('po-del').value;
+  f.contactId = $('po-sup').value; f.delivery = $('po-del').value; f.account = $('po-acc').value; f.other = $('po-acc2')?.value ?? f.other;
   f.lines = f.lines.map((l, i) => ({ description: $('po-d' + i)?.value ?? l.description, qty: $('po-q' + i)?.value ?? l.qty, unit: $('po-u' + i)?.value ?? l.unit }));
 }
 function showPoForm() {
@@ -1152,6 +1152,10 @@ function showPoForm() {
       <div class="row2"><label class="fl">Supplier (from Xero)${S.xcErr ? ` <span class="bad">${esc(S.xcErr)}</span>` : ''}<select class="f" id="po-sup"><option value="">${S.xc ? 'Choose the supplier…' : 'Reading Xero…'}</option>
         ${sup.length ? `<optgroup label="Suppliers">${sup.map(opt).join('')}</optgroup>` : ''}${rest.length ? `<optgroup label="Other contacts">${rest.map(opt).join('')}</optgroup>` : ''}</select></label>
         <label class="fl">Delivery date (optional)<input type="date" id="po-del" value="${esc(f.delivery)}"></label></div>
+      <div class="row2"><label class="fl">Account in Xero (one for the whole PO)<select class="f" id="po-acc" data-poacc>
+          ${[['5000', 'Materials, e.g. steel (5000)'], ['other', 'Another account: type the code'], ['', 'Not sure: Keith codes it in Xero']]
+            .map(([v, t]) => `<option value="${v}"${v === f.account ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+        ${f.account === 'other' ? `<label class="fl">Account code<input type="text" id="po-acc2" value="${esc(f.other)}" placeholder="e.g. consumables or subcontract code" maxlength="10" inputmode="numeric"></label>` : '<span></span>'}</div>
       <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Description</th><th>Qty</th><th>Unit cost</th><th>Net</th><th></th></tr></thead><tbody>
       ${f.lines.map((l, i) => `<tr><td style="text-align:left;min-width:260px"><input type="text" id="po-d${i}" value="${esc(l.description)}" placeholder="e.g. Powder coat RAL 9005, 40 brackets" style="width:100%;text-align:left"></td>
         <td><input type="number" id="po-q${i}" min="0" step="any" value="${esc(l.qty)}" style="width:80px"></td>
@@ -1169,9 +1173,11 @@ async function createPo() {
   if (!f.contactId) return toast('Choose the supplier first.', null, true);
   if (!lines.length || lines.some(l => !l.description || !(l.qty > 0))) return toast('Every line needs a description and a quantity.', null, true);
   if (lines.some(l => !Number.isFinite(l.unit) || l.unit < 0)) return toast('Every line needs a unit cost (0 if not known yet).', null, true);
+  const accountCode = f.account === 'other' ? f.other.trim() : f.account;
+  if (f.account === 'other' && !accountCode) return toast('Type the account code, or choose "Not sure" and Keith will code it.', null, true);
   f.busy = true; showPoForm();
   try {
-    const r = await data.xero('po', { jobId: f.jobId, contactId: f.contactId, deliveryDate: f.delivery, lines, key: f.key });
+    const r = await data.xero('po', { jobId: f.jobId, contactId: f.contactId, deliveryDate: f.delivery, accountCode, lines, key: f.key });
     S.poForm = null; closeDoc(); await reload();
     toast(`${r.number || 'Draft purchase order'} for ${r.supplier || 'the supplier'} is in Xero as a draft, referenced ${j.so}.${r.recorded ? '' : ' It could not be listed on the board: refresh the page.'}`);
   } catch (e) { f.busy = false; showPoForm(); toast(e.message, null, true); }
@@ -1678,6 +1684,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
+  if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
