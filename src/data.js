@@ -3,7 +3,7 @@
  * Ordered quotes: Levi's SharePoint lists, read only.
  */
 import { CONFIG } from './config.js';
-import { getSupabase, graph } from './auth.js';
+import { getSupabase, graph, graphRaw } from './auth.js';
 import { QUOTE_FIELDS, LINE_FIELDS, resolveColumns, quoteLookupColumn, toQuote, toLine } from './core/quotes.js';
 
 /** UK spelling on screen: the database names and older messages say despatch. */
@@ -23,10 +23,10 @@ export async function whoAmI() {
 export async function loadJobs({ office }) {
   const sb = await getSupabase();
   const q = t => sb.from(t).select('*');
-  const [jobs, lines, prices, procs, desps, dlines] = await Promise.all([
+  const [jobs, lines, prices, procs, desps, dlines, files] = await Promise.all([
     q('jobs').order('id'), q('job_lines').order('line_no'),
     office ? q('job_line_prices') : Promise.resolve({ data: [] }),
-    q('job_processes'), q('despatches').order('id'), q('despatch_lines'),
+    q('job_processes'), q('despatches').order('id'), q('despatch_lines'), q('job_files').order('id'),
   ]);
   for (const r of [jobs, lines, prices, procs, desps, dlines]) if (r.error) fail('Could not load the jobs', r.error);
   const price = new Map(prices.data.map(p => [p.job_line_id, Number(p.unit_price)]));
@@ -35,7 +35,7 @@ export async function loadJobs({ office }) {
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
     ordered: j.ordered_on, due: j.due_date, notes: j.notes, address: j.delivery_address, status: j.status,
     createdBy: j.created_by, ackEmailedAt: j.ack_emailed_at, priority: j.priority ?? null,
-    lines: [], procs: {}, despatches: [], cancelledDespatches: [],
+    lines: [], procs: {}, despatches: [], cancelledDespatches: [], files: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
     { id: l.id, lineNo: l.line_no, part: l.part, qty: l.qty, due: l.due_date, po: l.customer_po || '', price: office ? (price.get(l.id) ?? null) : null });
@@ -53,6 +53,9 @@ export async function loadJobs({ office }) {
     dById.set(d.id, o); byJob.get(d.job_id)?.despatches.push(o);
   }
   for (const dl of dlines.data) { const d = dById.get(dl.despatch_id); if (d) d.lines[dl.job_line_id] = dl.qty; }
+  // Drawings: a missing table (before the migration) just means none yet.
+  for (const f of files.data || []) byJob.get(f.job_id)?.files.push({ id: f.id, name: f.name, driveId: f.drive_id, itemId: f.item_id,
+    url: f.web_url, size: f.size, mime: f.mime, by: f.uploaded_by, at: f.uploaded_at });
   return [...byJob.values()];
 }
 
@@ -161,6 +164,52 @@ export async function markInvoiced(despatchId, invoiceNo) {
     .eq('id', despatchId);
   if (error) fail('Not saved', error);
   if (!count) throw new Error('Not saved. Only Levi and Mandy can mark dispatches as invoiced.');
+}
+
+/* ---------- drawings: files in SharePoint (Factory Jobs › Documents › Job drawings › <SO>) ---------- */
+let driveId;
+async function factoryDrive() {
+  driveId ??= (await graph(`/sites/${CONFIG.SP_SITE}:/drive?$select=id`)).id;
+  return driveId;
+}
+const CHUNK = 320 * 1024 * 16;   // 5 MB, a multiple of 320 KiB as SharePoint asks
+/** Uploads one file into the job's folder and records it on the job. onProgress(0..1). */
+export async function uploadDrawing(job, file, onProgress = () => {}) {
+  if (file.size > 100 * 1024 * 1024) throw new Error(`${file.name} is over 100 MB. Make it smaller or put it in SharePoint by hand.`);
+  const drive = await factoryDrive();
+  const path = ['Job drawings', job.so.replace(/[\\/:*?"<>|#%]/g, '-'), file.name.replace(/[\\/:*?"<>|#%]/g, '-')].map(encodeURIComponent).join('/');
+  let item;
+  if (file.size <= 4 * 1024 * 1024) {
+    item = await (await graphRaw(`/drives/${drive}/root:/${path}:/content?@microsoft.graph.conflictBehavior=rename`,
+      { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } })).json();
+    onProgress(1);
+  } else {
+    const s = await (await graphRaw(`/drives/${drive}/root:/${path}:/createUploadSession`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'rename' } }) })).json();
+    for (let at = 0; at < file.size; at += CHUNK) {
+      const end = Math.min(file.size, at + CHUNK);
+      const r = await fetch(s.uploadUrl, { method: 'PUT', body: file.slice(at, end), headers: { 'Content-Range': `bytes ${at}-${end - 1}/${file.size}` } });
+      if (!r.ok && r.status !== 202) throw new Error(`The upload of ${file.name} stopped (${r.status}). Try again.`);
+      if (r.status === 200 || r.status === 201) item = await r.json();
+      onProgress(end / file.size);
+    }
+  }
+  const sb = await getSupabase();
+  const { error } = await sb.from('job_files').insert({ job_id: job.id, name: item.name, drive_id: drive, item_id: item.id,
+    web_url: item.webUrl || '', size: item.size ?? file.size, mime: item.file?.mimeType || file.type || '' });
+  if (error) fail(`${item.name} is in SharePoint but was not linked to ${job.so}`, error);
+  return item;
+}
+/** The file's contents, for showing it on screen. */
+export async function drawingBlob(f) {
+  return (await graphRaw(`/drives/${f.driveId}/items/${f.itemId}/content`)).blob();
+}
+/** Takes the drawing off the job. The file stays in SharePoint. */
+export async function removeDrawing(id) {
+  const sb = await getSupabase();
+  const { error, count } = await sb.from('job_files').delete({ count: 'exact' }).eq('id', id);
+  if (error) fail('Not removed', error);
+  if (!count) throw new Error('Not removed. Only Levi and Mandy can remove drawings.');
 }
 
 /* ---------- pro formas (office) ---------- */
@@ -321,7 +370,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

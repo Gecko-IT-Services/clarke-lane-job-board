@@ -240,6 +240,7 @@ function emails(office) {
 
 function faq(office) {
   const q = [
+    ['How do I see the drawing?', 'Press Drawing on the job (or open Job details and pick it under Drawings). It opens full screen; press Close to go back.'],
     ['I ticked the wrong box.', 'Tap it again, or press Undo on the message at the bottom of the screen.'],
     ['How do I go back?', 'Press ← Back (top left, or at the top of an open order), or your browser\'s Back button. Each press steps back one screen: closing an order, then a list opened from a card, then the tab before.'],
     ['I did something by mistake.', 'Most things show a message at the bottom with Undo for a few seconds: ticking a process, moving a job, changing a due date, making a dispatch note, marking delivered, hold, release and cancel. Things that cannot be undone ask Are you sure first.'],
@@ -253,6 +254,7 @@ function faq(office) {
     ['A dispatch note was made by mistake, or the goods came back.', 'On the Dispatch tab, under All notes, press Cancel beside the note, then Yes. The note stays on the list marked cancelled, and its quantities go back to outstanding on the order. Once a note is invoiced in Xero it can only be credited in Xero.'],
     ['The customer wants to change the order.', 'Open it and press Amend: change quantities, prices or dates, or add lines. Lines already dispatched cannot go below what was sent.'],
     ['Hold an order?', 'Open it and press Hold. A held order cannot be dispatched until you press Release.'],
+    ['Where do drawings go?', 'Open the order and press Attach drawings (PDFs and pictures show on the board; other files open in SharePoint). They are saved in SharePoint: Factory Jobs › Documents › Job drawings › the SO number. The shop floor sees a Drawing button on the job and it opens full screen. Remove only takes it off the job; the file stays in SharePoint.'],
     ['The customer must pay before we send (pro forma)?', 'Open the order and press New pro forma. Choose the quantities (everything still to send, or one call-off) and press Make the pro forma: it gets a PF number. Email it from there: the draft is copied to the accounts address (Keith) and asks the customer to quote the PF number when paying. When the money arrives press Mark paid; the order\'s draft invoices in Xero will then say Paid in advance with the PF number, so Keith can match the payment. A pro forma is not a VAT invoice and never goes to Xero itself. The first time, type the payment details and Keith\'s address in the box shown; they are kept for everyone in the office.'],
     ['The same order again?', 'Open the old one and press Repeat order. You get a new order with the same parts and prices, new dates and a blank PO.'],
   );
