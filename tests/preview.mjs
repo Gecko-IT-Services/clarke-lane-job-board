@@ -5,6 +5,7 @@ import { guessProcesses, previewJobs } from '../src/core/preview.js';
 assert.deepEqual(guessProcesses(['Bracket 3mm laser cut and folded, powder coat RAL 9005']), ['Laser', 'Fold', 'P/Coat Paint']);
 assert.deepEqual(guessProcesses(['Guard plate, zinc plated, M8 tapped']), ['Tap', 'Plating / Anodising']);
 assert.deepEqual(guessProcesses(['Mystery part']), ['Laser'], 'nothing recognised: Laser');
+assert.deepEqual(guessProcesses(['Tube 2mm, drilled and rolled']), ['Cut & Drill', 'Rolling']);
 
 const quotes = [
   { id: 'a', number: 'SO-9776', status: 'ACCEPTED', customer: 'Example Ltd', reference: 'P1', date: '2026-10-01', expiry: '2026-10-20',
