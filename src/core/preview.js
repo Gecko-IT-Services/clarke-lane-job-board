@@ -9,13 +9,14 @@ import { PROCESSES } from './jobs.js';
 const HINTS = [
   ['Laser', /laser|profile|\bcut\b/i],
   ['Fold', /fold|bend|brake|formed/i],
-  ['Roll Drill', /\broll|drill/i],
+  ['Cut & Drill', /drill|\bholes?\b/i],
   ['Tap', /\btap(ped|ping)?\b|thread/i],
   ['Insert', /insert|\bpem\b|rivnut|captive nut/i],
   ['C/Sink', /c\/?sink|countersink|\bcsk\b/i],
   ['Weld', /weld|fabricat/i],
   ['P/Coat Paint', /powder|p\/?coat|paint|\bral\s?\d/i],
   ['Plating / Anodising', /zinc|plat(ed|ing)|anodis|galv/i],
+  ['Rolling', /\brol(l|led|ling)\b/i],
 ];
 export function guessProcesses(texts) {
   const all = texts.join(' ');

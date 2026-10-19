@@ -11,12 +11,12 @@
  */
 
 // Levi's nine, in the order of his Jobs List.
-export const PROCESSES = ['Laser', 'Fold', 'Roll Drill', 'Tap', 'Insert', 'C/Sink', 'Weld',
-  'P/Coat Paint', 'Plating / Anodising'];
+export const PROCESSES = ['Laser', 'Fold', 'Cut & Drill', 'Tap', 'Insert', 'C/Sink', 'Weld',
+  'P/Coat Paint', 'Plating / Anodising', 'Rolling'];
 
-export const SHORT = { 'Laser': 'Laser', 'Fold': 'Fold', 'Roll Drill': 'Roll drill', 'Tap': 'Tap',
+export const SHORT = { 'Laser': 'Laser', 'Fold': 'Fold', 'Cut & Drill': 'Cut & drill', 'Tap': 'Tap',
   'Insert': 'Insert', 'C/Sink': 'C/Sink', 'Weld': 'Weld', 'P/Coat Paint': 'P/Coat',
-  'Plating / Anodising': 'Plating' };
+  'Plating / Anodising': 'Plating', 'Rolling': 'Rolling' };
 
 export const sent = (job, line) => job.despatches.reduce((a, d) => a + (d.lines[line.id] || 0), 0);
 export const left = (job, line) => Math.max(0, line.qty - sent(job, line));
@@ -120,7 +120,7 @@ export function suggestProcesses(lines) {
   for (const l of lines) {
     if (/laser/i.test(l.process || '') || !l.process) s.add('Laser');
     if (l.folds > 0) s.add('Fold');
-    if (l.holes > 0) s.add('Roll Drill');
+    if (l.holes > 0) s.add('Cut & Drill');
     if (l.inserts > 0) s.add('Insert');
     if (l.weld > 0) s.add('Weld');
     if (l.paint) s.add('P/Coat Paint');

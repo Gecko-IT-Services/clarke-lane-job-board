@@ -58,8 +58,9 @@ assert.equal(stage(job({ status: 'cancelled' })), 'cancelled');
 assert.deepEqual(suggestProcesses([{ process: 'Laser', folds: 2, weld: 0, inserts: 4, paint: true, plating: 0, holes: 0 }]),
   ['Laser', 'Fold', 'Insert', 'P/Coat Paint']);
 assert.deepEqual(suggestProcesses([{ process: 'Saw', folds: 0, weld: 120, holes: 3, plating: 5 }]),
-  ['Roll Drill', 'Weld', 'Plating / Anodising']);
-assert.equal(PROCESSES.length, 9);
+  ['Cut & Drill', 'Weld', 'Plating / Anodising']);
+assert.equal(PROCESSES.length, 10);
+assert.equal(PROCESSES.at(-1), 'Rolling', 'Rolling is last (Levi)');
 
 assert.equal(describeLine({ desc: 'Bracket', thickness: 3, material: 'S275' }), 'Bracket — 3mm S275');
 assert.equal(describeLine({ desc: '' }), 'Part');
@@ -264,7 +265,7 @@ console.log('jobs: ok');
   assert.deepEqual(ids(floorQueue(all, 'Laser')), [2], 'only jobs still needing Laser');
   assert.deepEqual(ids(floorQueue(all, 'Weld')), [1, 2]);
   const st = floorStations(all, '2026-10-15'), t = Object.fromEntries(st.map(s => [s.p, s]));
-  assert.equal(st.length, 9);
+  assert.equal(st.length, 10);
   assert.deepEqual(st.map(s => s.p), PROCESSES);
   assert.deepEqual([t['Laser'].waiting, t['Laser'].late, t['Weld'].waiting, t['Weld'].late, t['Fold'].waiting, t['Tap'].waiting], [1, 0, 2, 1, 1, 0]);
   console.log('jobs shop floor: ok');
