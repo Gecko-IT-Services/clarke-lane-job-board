@@ -199,7 +199,6 @@ function xero() {
     ${steps([`${n(1)} The board matches each customer to their Xero contact. If it cannot be sure, pick the contact once and it is remembered.`,
       `${n(2)} <b>Create draft invoices</b> makes one <b>draft</b> invoice per delivery note in Xero, for exactly what was sent, with the SO, PO and DN numbers on it.`,
       'Keith checks and approves them in Xero as usual. The board never approves, sends or deletes anything in Xero.',
-      '<b>Preview with Xero\'s order book:</b> on the Xero tab, <b>Start the preview</b> shows every open sales order in Xero as a job on every screen, to see the board with real orders. An orange PREVIEW bar shows across the top; nothing is saved and Xero is not changed. Ticks and moving jobs work on that screen only. <b>Leave preview</b> puts everything back.',
       '<b>Changeover day:</b> on the Xero tab, press <b>Import open sales orders</b> once. It brings Xero\'s open sales orders onto Won quotes. After that, orders are only raised on the board.'])}
   </section>`;
 }

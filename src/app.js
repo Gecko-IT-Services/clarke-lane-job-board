@@ -107,7 +107,7 @@ async function boot() {
   await reload();
   if (office()) {
     loadQuotes();
-    loadXeroStatus().then(() => { let p = null; try { p = sessionStorage.getItem('clj.preview'); } catch { /* none */ } return p ? enterPreview() : checkSoNumbers(); });
+    loadXeroStatus().then(() => { try { sessionStorage.removeItem('clj.preview'); } catch { /* none */ } return checkSoNumbers(); });   // the preview was retired at go-live (Philip, 19 Oct)
   }
   const back = new URLSearchParams(location.search).get('xero');
   if (back) {
@@ -818,9 +818,7 @@ function renderXero() {
       <span class="right"><span class="chip ${x ? 'ok' : ''}">${x ? icon('link') + 'Connected' : 'Not connected'}</span></span></div>
     ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
     <div class="panel"><h3>Connection</h3>${head}</div>
-    ${x ? `<div class="panel"><h3>Preview with Xero's order book</h3>
-      <p>Shows every open sales order in Xero as a job on every screen (Home, Sales orders, Jobs, Shop floor), so you can see the board with real orders before go-live. It is read only: <b>nothing is saved</b>, Xero is not changed, and the changeover import below is not used up. Ticks and moving jobs work, in this browser only. Leaving the preview (or closing the tab) puts everything back.</p>
-      <div class="actions"><button class="btn ${PREVIEW.on ? '' : 'pri'}" type="button" ${PREVIEW.on ? 'data-leavepreview' : 'data-preview'} ${busy}>${icon('eye')}${PREVIEW.on ? 'Leave preview' : 'Start the preview'}</button></div></div>` : ''}${importPanel}`;
+    ${importPanel}`;
 }
 function makeJobFromXero(id) {
   const q = (S.xeroOrders || []).find(x => x.id === id); if (!q) return;
