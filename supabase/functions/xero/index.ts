@@ -278,11 +278,13 @@ async function purchaseOrder(b: any, me: { email: string; name: string }) {
     .filter((l: any) => l.description && l.qty > 0);
   if (!lines.length) throw new HttpError(400, 'Add at least one line with a description and a quantity.');
   if (lines.some((l: any) => !Number.isFinite(l.unit) || l.unit < 0)) throw new HttpError(400, 'Every line needs a cost (0 or more).');
+  const accountCode = String(b?.accountCode || '').trim();
+  if (accountCode && !/^[A-Za-z0-9.-]{1,10}$/.test(accountCode)) throw new HttpError(400, 'That account code does not look right: use the number from Xero, e.g. 5000.');
   const { data: job } = await admin.from('jobs').select('id, so_number, customer, status').eq('id', jobId).single();
   if (!job || job.status === 'cancelled') throw new HttpError(404, 'That order is cancelled or no longer exists.');
   const s = await session();
   const po = buildPurchaseOrder({ date: new Date().toISOString().slice(0, 10), deliveryDate: /^\d{4}-\d{2}-\d{2}$/.test(b.deliveryDate || '') ? b.deliveryDate : '',
-    so: job.so_number, customer: job.customer, lines }, contactId);
+    so: job.so_number, customer: job.customer, accountCode, lines }, contactId);
   const r = await xeroPost(s, 'PurchaseOrders', { PurchaseOrders: [po] }, `clj-po-${key}`);
   const made = r.PurchaseOrders?.[0];
   if (!made?.PurchaseOrderID) throw new HttpError(502, 'Xero did not return a purchase order.');

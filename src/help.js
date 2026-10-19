@@ -54,7 +54,7 @@ const orderExtras = () => `<section class="hsec" id="help-extras">${head(0, 'On 
     <p>Open an order from <b>Sales orders</b> and scroll down: each has its own section.</p>
     ${steps([
       '<b>Drawings:</b> press <b>Attach drawings</b>. Files are saved in SharePoint (Factory Jobs › Documents › Job drawings › the SO number). The shop floor gets a <b>Drawing</b> button on the job and it opens full screen. <b>Remove</b> only takes it off the job; the file stays in SharePoint.',
-      '<b>Purchase orders:</b> press <b>New purchase order</b>, choose the supplier from Xero, add lines and costs (<b>Copy this order\'s parts</b> helps), then <b>Create draft PO in Xero</b>. It goes to Xero as a draft with the SO number as its reference; approve and send it from Xero, and Keith matches the supplier\'s bill to it.',
+      '<b>Purchase orders:</b> press <b>New purchase order</b>, choose the supplier from Xero, pick the account (materials such as steel are 5000; for consumables or subcontract work type that code, or choose <b>Not sure</b> and Keith codes it), add lines and costs (<b>Copy this order\'s parts</b> helps), then <b>Create draft PO in Xero</b>. It goes to Xero as a draft with the SO number as its reference; approve and send it from Xero, and Keith matches the supplier\'s bill to it.',
       '<b>Pro forma:</b> press <b>New pro forma</b>, choose the quantities, then <b>Make the pro forma</b> (PF-0001…). <b>Email to customer</b> makes an Outlook draft copied to Keith; the customer pays quoting the PF number. Press <b>Mark paid</b> when it arrives: the order\'s later draft invoices in Xero then say it was paid in advance. It is not a VAT invoice and never goes to Xero itself.'])}
   </section>`;
 

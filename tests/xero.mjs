@@ -74,5 +74,9 @@ console.log('xero: ok');
   assert.equal(po.Reference, 'SO-9790 for Example Ltd');
   assert.equal(po.DeliveryDate, '2026-10-24');
   assert.deepEqual(po.LineItems, [{ Description: 'Powder coat RAL 9005, 40 brackets', Quantity: 1, UnitAmount: 120 }]);
+  const coded = buildPurchaseOrder({ date: '2026-10-19', so: 'SO-9790', accountCode: '5000',
+    lines: [{ description: 'Steel 3mm sheet', qty: 2, unit: 50 }, { description: 'Steel 2mm sheet', qty: 1, unit: 40 }] }, 's1');
+  assert.deepEqual(coded.LineItems.map(l => l.AccountCode), ['5000', '5000'], 'one account on every line');
+  assert.equal('AccountCode' in buildPurchaseOrder({ date: '2026-10-19', so: 'SO-1', accountCode: '', lines: [{ description: 'x', qty: 1, unit: 1 }] }, 's1').LineItems[0], false, 'not sure: left for Keith');
   console.log('xero purchase order: ok');
 }

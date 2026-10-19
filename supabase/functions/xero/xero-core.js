@@ -86,8 +86,9 @@ export function dispatchPo(orderPo, linePos) {
 }
 
 /**
- * A DRAFT purchase order for Xero, raised from a sales order. d: { date, deliveryDate, so, customer, lines: [{ description, qty, unit }] }.
+ * A DRAFT purchase order for Xero, raised from a sales order. d: { date, deliveryDate, so, customer, accountCode, lines: [{ description, qty, unit }] }.
  * The SO number is the reference so Keith can see which job the bill belongs to; tax follows the supplier/account in Xero.
+ * accountCode (Keith, 19 Oct: materials are 5000, one account per PO) goes on every line; left off, Keith codes it in Xero.
  */
 export function buildPurchaseOrder(d, contactId) {
   return {
@@ -95,6 +96,7 @@ export function buildPurchaseOrder(d, contactId) {
     Reference: [d.so, d.customer ? `for ${d.customer}` : ''].filter(Boolean).join(' ').slice(0, 255),
     Status: 'DRAFT', LineAmountTypes: 'Exclusive',
     LineItems: d.lines.filter(l => l.qty > 0 && String(l.description || '').trim())
-      .map(l => ({ Description: String(l.description).trim().slice(0, 4000), Quantity: l.qty, UnitAmount: round2(Number(l.unit) || 0) })),
+      .map(l => ({ Description: String(l.description).trim().slice(0, 4000), Quantity: l.qty, UnitAmount: round2(Number(l.unit) || 0),
+        ...(d.accountCode ? { AccountCode: String(d.accountCode) } : {}) })),
   };
 }
