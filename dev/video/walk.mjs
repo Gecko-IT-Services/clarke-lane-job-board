@@ -17,7 +17,7 @@ await b.go('http://localhost:8080/dev/smoke.html#xero');
 await b.js(`sessionStorage.setItem('fakeXero','1'); localStorage.clear(); location.reload();`); await W(3000);
 
 await step('xero', 'Changeover day: on the Xero tab, press "Import open sales orders" once. It brings every open sales order in Xero onto Won quotes.', click('[data-xero="import"]'), 2500);
-await step('won', 'Won quotes lists the orders brought in from Xero, and quotes Levi marks Ordered in the quote calculator. Press "Make order" on one.', click('[data-tab="quotes"]'), 1500);
+await step('won', 'Won quotes lists the orders brought in from Xero, and quotes Levi marks Ordered in the quote calculator. Press "Create sales order" on one.', click('[data-tab="quotes"]'), 1500);
 await step('form', 'The order form fills itself in: customer, lines, prices and due dates. Check the customer PO and tick the processes the job needs.', click('[data-start]'), 2000);
 await step('soa', 'Press "Create sales order". It gets the next SO number and the order acknowledgement is ready to email to the customer.',
   `document.getElementById('of-po') && (document.getElementById('of-po').value='PO 4471'); document.querySelector('[data-orderform]').requestSubmit();`, 2500);
@@ -27,16 +27,20 @@ await step('drawing', 'Attach drawings: they are saved in SharePoint (Factory Jo
   `const c=document.createElement('canvas');c.width=900;c.height=560;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,900,560);g.strokeStyle='#111';g.lineWidth=3;g.strokeRect(120,120,660,300);g.beginPath();g.arc(300,270,46,0,7);g.stroke();g.beginPath();g.arc(600,270,46,0,7);g.stroke();g.font='26px sans-serif';g.fillStyle='#111';g.fillText('VALVE GUARD  2mm Zintec  Rev A',220,490);
    const blob=await new Promise(r=>c.toBlob(r,'image/png'));const dt=new DataTransfer();dt.items.add(new File([blob],'valve-guard-rev-A.png',{type:'image/png'}));const i=document.querySelector('[data-attach]');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}));
    await new Promise(r=>setTimeout(r,800)); [...document.querySelectorAll('#drawer h3')].find(h=>h.innerText==='Drawings').scrollIntoView({block:'start'});`, 1200);
-await step('po', 'Buying parts or outside work for the job? "New purchase order": pick the supplier from Xero, add the lines and costs, and it goes to Xero as a draft PO with the SO number on it.',
-  `document.querySelector('[data-ponew]').click(); await new Promise(r=>setTimeout(r,900)); document.getElementById('po-sup').value='00000000-0000-0000-0000-0000000000a1'; document.getElementById('po-d0').value='Powder coat RAL 9005, 10 valve guards'; document.getElementById('po-u0').value='85';`, 1200);
+await step('po', 'Buying parts or outside work? "New purchase order": pick the supplier and the account (materials are 5000; type another code, or leave it for Keith), add lines and costs. It goes to Xero as a draft PO with the SO number on it.',
+  `document.querySelector('[data-ponew]').click(); await new Promise(r=>setTimeout(r,900)); document.getElementById('po-sup').value='00000000-0000-0000-0000-0000000000a1'; document.getElementById('po-d0').value='Powder coat RAL 9005, 10 valve guards'; document.getElementById('po-u0').value='85'; document.getElementById('po-acc').dispatchEvent(new Event('change',{bubbles:true}));`, 1200);
 await step('pf', 'Customer to pay first? "New pro forma" makes PF-0001. Email it: the draft is copied to Keith, and the customer pays quoting the PF number. Press "Mark paid" when the money arrives.',
   `document.querySelector('[data-pocreate]').click(); await new Promise(r=>setTimeout(r,1500)); document.querySelector('[data-pfnew]').click(); await new Promise(r=>setTimeout(r,700));
    if (document.getElementById('pf-pay')) { document.getElementById('pf-pay').value='Example Bank · Sort code 00-00-00 · Account 00000000\\nPayment before dispatch, please.'; document.getElementById('pf-cc').value='accounts@example.com'; document.querySelector('[data-pfsettings]').requestSubmit(); await new Promise(r=>setTimeout(r,700)); }
    document.querySelector('[data-pfcreate]').click();`, 1800);
 await step('sheet', 'Print the job sheet for the job folder: what to make, the processes to tick, and no prices.',
   `document.querySelector('[data-closedoc]').click(); await new Promise(r=>setTimeout(r,500)); document.querySelector('[data-jobsheet]').click(); await new Promise(r=>setTimeout(r,600)); document.querySelector('#doc .paper').scrollIntoView({block:'start'});`, 1200);
-await step('jobs', 'Jobs lists every open job, soonest due first. Click a due date to change it, drag ⠿ to bring a job forward. The shop floor follows this order.',
-  `document.querySelector('[data-closedoc]').click(); document.querySelector('[data-close]')?.click(); await new Promise(r=>setTimeout(r,400)); document.querySelector('[data-tab="jobs"]').click(); window.scrollTo(0,0);`, 1200);
+// Break-even and target here are made up for the video (this repo is public): never Clarke Lane's real figures.
+await step('jobs', 'Jobs lists every open job, soonest due first. Click a due date to change it, drag ⠿ to bring a job forward. For Levi, the steel tube shows the month against break-even and target.',
+  `document.querySelector('[data-closedoc]').click(); document.querySelector('[data-close]')?.click(); await new Promise(r=>setTimeout(r,400)); document.querySelector('[data-tab="jobs"]').click();
+   await new Promise(r=>setTimeout(r,500)); document.querySelector('[data-edittarget]')?.click(); await new Promise(r=>setTimeout(r,300));
+   if (document.getElementById('be-in')) { document.getElementById('be-in').value='50000'; document.getElementById('target-in').value='65000'; document.querySelector('[data-targetform]').requestSubmit(); }
+   await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);`, 1500);
 await step('floor', 'The shop floor screen: tap your station to see the jobs waiting there, in the running order.',
   `document.querySelector('[data-tab="floor"]').click(); window.scrollTo(0,0);`, 1200);
 await step('station', 'Tap a step when it is finished; it turns green. Press "Drawing" to see the drawing full screen. Tap a green step again to undo.',
@@ -47,7 +51,7 @@ await step('dn', 'Dispatch: choose what is going (all or part), press "Create di
   `document.querySelector('[data-desp]')?.click(); await new Promise(r=>setTimeout(r,700)); document.getElementById('mkdn')?.click();`, 1800);
 await step('xero', 'Once delivered, notes wait under "Waiting for Xero". Tick them and press "Send to Xero": one draft invoice per note, for exactly what was sent. Keith approves in Xero.',
   `document.querySelector('[data-closedoc]')?.click(); await new Promise(r=>setTimeout(r,300)); document.querySelector('[data-dispview="xero"]')?.click(); window.scrollTo(0,0);`, 1500);
-await step('home', 'Home, every morning: what is late, due this week and ready to go, invoicing to do, and (for Levi) the month against break-even and target.',
-  `document.querySelector('[data-tab="home"]').click(); window.scrollTo(0,0);`, 1500);
+await step('home', 'Home, every morning: what is late, due this week and ready to go, invoicing to do, and (for Levi) the month so far, Xero invoices included, against break-even and target.',
+  `document.querySelector('[data-tab="home"]').click(); window.scrollTo(0,0);`, 2200);
 writeFileSync('frames.json', JSON.stringify(frames, null, 1));
 b.close();

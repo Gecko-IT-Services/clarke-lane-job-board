@@ -12,6 +12,7 @@ export async function open({ width = 1440, height = 900, scheme = 'light' } = {}
   let id = 0; const wait = new Map();
   ws.onmessage = m => { const d = JSON.parse(m.data); if (d.id && wait.has(d.id)) { wait.get(d.id)(d); wait.delete(d.id); } };
   const send = (method, params = {}) => new Promise(r => { const i = ++id; wait.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+  await send('Network.enable'); await send('Network.setCacheDisabled', { cacheDisabled: true });   // always the files as they are now
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });
   const api = {
