@@ -352,7 +352,8 @@ function renderTabs() {
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
   // Map lives under Dispatch and Customers under Sales orders (Philip: fewer tabs); their parent tab stays lit.
   const lit = { map: 'dispatch', customers: 'orders' }[S.tab] || S.tab;
-  $('tabs').innerHTML = TABS.filter(([k]) => !['map', 'customers'].includes(k) && (office() || !['quotes', 'orders', 'xero'].includes(k))).map(([k, t]) => {
+  $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -1133,7 +1134,7 @@ function showPoForm() {
         ${sup.length ? `<optgroup label="Suppliers">${sup.map(opt).join('')}</optgroup>` : ''}${rest.length ? `<optgroup label="Other contacts">${rest.map(opt).join('')}</optgroup>` : ''}</select></label>
         <label class="fl">Delivery date (optional)<input type="date" id="po-del" value="${esc(f.delivery)}"></label></div>
       <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Description</th><th>Qty</th><th>Unit cost</th><th>Net</th><th></th></tr></thead><tbody>
-      ${f.lines.map((l, i) => `<tr><td style="text-align:left;min-width:260px"><input type="text" id="po-d${i}" value="${esc(l.description)}" placeholder="e.g. Powder coat RAL 9005, 40 brackets" style="width:100%"></td>
+      ${f.lines.map((l, i) => `<tr><td style="text-align:left;min-width:260px"><input type="text" id="po-d${i}" value="${esc(l.description)}" placeholder="e.g. Powder coat RAL 9005, 40 brackets" style="width:100%;text-align:left"></td>
         <td><input type="number" id="po-q${i}" min="0" step="any" value="${esc(l.qty)}" style="width:80px"></td>
         <td><input type="number" id="po-u${i}" min="0" step="any" value="${esc(l.unit)}" placeholder="£" style="width:100px"></td>
         <td>${gbp(round2((Number(l.qty) || 0) * (Number(l.unit) || 0)), 2)}</td>
@@ -1450,6 +1451,7 @@ function render() {
   const kept = snapshotInputs();
   if (!office() && ['quotes', 'orders', 'customers', 'xero'].includes(S.tab)) S.tab = 'floor';
   if (S.kiosk) { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
+  if (!office() && S.tab !== 'floor') S.tab = 'floor';   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
   document.body.classList.toggle('kiosk-mode', !!S.kiosk);
   renderTabs();
   $('err').hidden = !S.error;
