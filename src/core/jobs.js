@@ -11,11 +11,11 @@
  */
 
 // Levi's nine, in the order of his Jobs List.
-export const PROCESSES = ['Laser', 'Fold', 'Cut & Drill', 'Tap', 'Insert', 'C/Sink', 'Weld',
+export const PROCESSES = ['Laser', 'Fold', 'Cut & Drill', 'Tap & C/Sink', 'Insert', 'Weld',
   'P/Coat Paint', 'Plating / Anodising', 'Rolling'];
 
-export const SHORT = { 'Laser': 'Laser', 'Fold': 'Fold', 'Cut & Drill': 'Cut & drill', 'Tap': 'Tap',
-  'Insert': 'Insert', 'C/Sink': 'C/Sink', 'Weld': 'Weld', 'P/Coat Paint': 'P/Coat',
+export const SHORT = { 'Laser': 'Laser', 'Fold': 'Fold', 'Cut & Drill': 'Cut & drill', 'Tap & C/Sink': 'Tap & C/Sink',
+  'Insert': 'Insert', 'Weld': 'Weld', 'P/Coat Paint': 'P/Coat',
   'Plating / Anodising': 'Plating', 'Rolling': 'Rolling' };
 
 export const sent = (job, line) => job.despatches.reduce((a, d) => a + (d.lines[line.id] || 0), 0);
@@ -111,7 +111,7 @@ export function splitIntoCalloffs(lines, dates) {
 }
 
 /**
- * Processes to pre-tick from the quote lines (Mandy checks them). Tap and C/Sink are
+ * Processes to pre-tick from the quote lines (Mandy checks them). Tap & C/Sink is
  * not in the quote data, so they are never suggested.
  * line: { process, folds, weld, inserts, paint, plating, holes }
  */
