@@ -84,3 +84,17 @@ export function dispatchPo(orderPo, linePos) {
   const own = [...new Set((linePos || []).map(p => String(p || '').trim()).filter(Boolean))];
   return own.length ? own.join(', ') : String(orderPo || '').trim();
 }
+
+/**
+ * A DRAFT purchase order for Xero, raised from a sales order. d: { date, deliveryDate, so, customer, lines: [{ description, qty, unit }] }.
+ * The SO number is the reference so Keith can see which job the bill belongs to; tax follows the supplier/account in Xero.
+ */
+export function buildPurchaseOrder(d, contactId) {
+  return {
+    Contact: { ContactID: contactId }, Date: d.date, ...(d.deliveryDate ? { DeliveryDate: d.deliveryDate } : {}),
+    Reference: [d.so, d.customer ? `for ${d.customer}` : ''].filter(Boolean).join(' ').slice(0, 255),
+    Status: 'DRAFT', LineAmountTypes: 'Exclusive',
+    LineItems: d.lines.filter(l => l.qty > 0 && String(l.description || '').trim())
+      .map(l => ({ Description: String(l.description).trim().slice(0, 4000), Quantity: l.qty, UnitAmount: round2(Number(l.unit) || 0) })),
+  };
+}

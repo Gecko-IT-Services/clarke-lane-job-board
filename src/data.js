@@ -212,6 +212,15 @@ export async function removeDrawing(id) {
   if (!count) throw new Error('Not removed. Only Levi and Mandy can remove drawings.');
 }
 
+/* ---------- purchase orders (office): made in Xero by the edge function, listed here ---------- */
+export async function loadPurchaseOrders() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('purchase_orders').select('*').order('id');
+  if (error) fail('Could not load the purchase orders', error);
+  return data.map(p => ({ id: p.id, jobId: p.job_id, xeroId: p.xero_id, no: p.po_number, supplier: p.supplier_name, delivery: p.delivery_date,
+    lines: p.lines, net: Number(p.net), by: p.created_by, at: p.created_at }));
+}
+
 /* ---------- pro formas (office) ---------- */
 export async function loadProformas() {
   const sb = await getSupabase();
@@ -370,7 +379,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 
