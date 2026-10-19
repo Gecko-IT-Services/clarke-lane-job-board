@@ -44,7 +44,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk }, h) {
       : `${done} of ${n.length} done · next: <b>${esc(nextStep(j))}</b>`;
     return `<article class="fcard${late ? ' late' : ''}${held ? ' held' : ''}${ready ? ' ready' : ''}">
       <div class="ftop"><span class="pos">${i + 1}</span><div><div class="cu">${esc(j.customer)}<span class="so">${esc(j.so)}</span></div><div class="parts">${parts(j)}</div></div>
-        <div class="side">${chips}<button type="button" class="btn" data-open="${j.id}">Job details</button></div></div>
+        <div class="side">${chips}${j.files?.length ? `<button type="button" class="btn" data-drawing="${j.files[0].id}" data-job="${j.id}">${j.files.length > 1 ? `Drawings (${j.files.length})` : 'Drawing'}</button>` : ''}<button type="button" class="btn" data-open="${j.id}">Job details</button></div></div>
       <div class="route">${steps}</div><p class="fstat">${status}</p></article>`;
   };
   const sub = isAll ? 'Tap any step when it is finished · tap a green step to undo it' : `${count(list.length, 'job')} waiting for ${esc(station)} · do them in this order`;

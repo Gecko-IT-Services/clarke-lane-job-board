@@ -98,6 +98,22 @@ export async function signOut() {
 
 export const currentAccount = () => account;
 
+/** Graph call returning the raw Response (file uploads and downloads). body is sent as it is. */
+export async function graphRaw(path, { method = 'GET', body, headers = {}, scopes = CONFIG.GRAPH_SCOPES } = {}) {
+  let token;
+  try { token = (await msal.acquireTokenSilent({ scopes, account })).accessToken; }
+  catch { await msal.acquireTokenRedirect({ scopes, account }); return new Promise(() => {}); }
+  const res = await fetch(path.startsWith('http') ? path : CONFIG.GRAPH + path, { method, body, headers: { Authorization: `Bearer ${token}`, ...headers } });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { msg = (await res.json()).error?.message || msg; } catch { /* not JSON */ }
+    throw new Error(res.status === 403 || res.status === 401
+      ? 'Your Microsoft account cannot open the Factory Jobs site in SharePoint, where the drawings are kept. Ask for access to that site.'
+      : `SharePoint said: ${msg} (${res.status})`);
+  }
+  return res;
+}
+
 /** Graph call as the signed-in person. Used only to read Levi's quotes. */
 export async function graph(path, { headers = {}, method = 'GET', body, scopes = CONFIG.GRAPH_SCOPES } = {}) {
   let token;

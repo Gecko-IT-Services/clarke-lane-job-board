@@ -1029,6 +1029,7 @@ function renderDrawer() {
       ${j.lines.map(l => `<tr><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
+    ${drawingsPanel(j)}
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div></div>
     <div class="panel"><h3>Dispatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
       ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>
@@ -1044,6 +1045,53 @@ function renderDrawer() {
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">${icon('orders')}Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
       ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">${icon('truck')}Dispatch…</button>` : ''}
     </div>${actions}${confirm}`;
+}
+
+/* ---------- drawings: kept in SharePoint (Factory Jobs › Documents › Job drawings › SO), shown on every screen ---------- */
+const kb = n => n == null ? '' : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+function drawingsPanel(j) {
+  const up = S.uploading?.jobId === j.id ? `<p class="note">Uploading ${esc(S.uploading.name)} to SharePoint… ${Math.round(S.uploading.pct * 100)}%</p>` : '';
+  return `<div class="panel"><h3>Drawings</h3>${j.files.length ? `<ul class="files">${j.files.map(f => `<li>
+      <button type="button" class="btn" data-drawing="${f.id}" data-job="${j.id}">${icon('doc')}${esc(f.name)}</button><span class="note">${kb(f.size)} · ${fmt(f.at.slice(0, 10))}</span>
+      ${office() ? `<button type="button" class="btn link sm" data-rmdrawing="${f.id}" title="Takes it off this job. The file stays in SharePoint.">Remove</button>` : ''}</li>`).join('')}</ul>`
+    : `<div class="note">${office() ? 'No drawings yet. Attach the drawing so the shop floor can see it.' : 'No drawings on this job.'}</div>`}${up}
+    ${office() ? `<label class="btn"${S.uploading ? ' aria-disabled="true"' : ''}>${icon('plus')}Attach drawings<input type="file" class="sr" data-attach="${j.id}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.dxf,.dwg,.step,.stp,.doc,.docx,.xls,.xlsx"${S.uploading ? ' disabled' : ''}></label>
+      <p class="note">Saved in SharePoint: Factory Jobs › Documents › Job drawings › ${esc(j.so)}.</p>` : ''}</div>`;
+}
+async function attachDrawings(jobId, files) {
+  const j = job(jobId); if (!j || !files.length) return;
+  for (const f of files) {
+    S.uploading = { jobId, name: f.name, pct: 0 }; render();
+    try {
+      await data.uploadDrawing(j, f, p => { S.uploading.pct = p; render(); });
+      toast(`${f.name} attached to ${j.so}.`);
+    } catch (e) { toast(e.message, null, true); break; }
+  }
+  S.uploading = null; await reload();
+}
+async function removeDrawingFrom(id) {
+  const j = S.jobs.find(x => x.files.some(f => f.id === id)), f = j?.files.find(x => x.id === id);
+  try { await data.removeDrawing(id); toast(`${f?.name || 'Drawing'} taken off ${j?.so || 'the job'}. It is still in SharePoint.`); } catch (e) { toast(e.message, null, true); }
+  reload();
+}
+let viewUrl = null;
+/** Full screen on any screen, the shop floor included: PDFs and pictures shown here, anything else opens in SharePoint. */
+async function showDrawing(jobId, fileId) {
+  const j = job(jobId), f = j?.files.find(x => x.id === fileId); if (!f) return;
+  const others = j.files.length > 1 ? j.files.map(x => `<button class="btn${x.id === f.id ? ' pri' : ''}" type="button" data-drawing="${x.id}" data-job="${j.id}">${esc(x.name)}</button>`).join('') : '';
+  $('doc').innerHTML = `<div class="docbar"><span>${esc(j.so)} · ${esc(j.customer)} · <b>${esc(f.name)}</b></span>${others}
+      ${f.url && f.url !== '#' ? `<a class="btn" href="${esc(f.url)}" target="_blank" rel="noopener">Open in SharePoint</a>` : ''}<button class="btn" type="button" data-closedoc>Close</button></div>
+    <div class="viewer" id="viewer"><p class="note">Opening ${esc(f.name)}…</p></div>`;
+  $('doc').hidden = false; document.body.classList.add('doc-open', 'viewing');
+  try {
+    const blob = await data.drawingBlob(f);
+    if (viewUrl) URL.revokeObjectURL(viewUrl);
+    const type = blob.type || f.mime || '', pdf = /pdf/i.test(type) || /\.pdf$/i.test(f.name), img = /^image\//i.test(type) || /\.(png|jpe?g|gif|webp)$/i.test(f.name);
+    viewUrl = URL.createObjectURL(pdf && !/pdf/i.test(blob.type) ? new Blob([blob], { type: 'application/pdf' }) : blob);
+    $('viewer').innerHTML = pdf ? `<iframe class="vframe" src="${viewUrl}#view=FitH" title="${esc(f.name)}"></iframe>`
+      : img ? `<img class="vimg" src="${viewUrl}" alt="${esc(f.name)}">`
+      : `<div class="panel"><b>${esc(f.name)}</b><p class="note">This kind of file cannot be shown on the board. ${f.url && f.url !== '#' ? 'Open it in SharePoint, or ' : ''}<a href="${viewUrl}" download="${esc(f.name)}">download it</a>.</p></div>`;
+  } catch (e) { $('viewer').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 
 /* ---------- pro formas: a priced request for payment before the goods go. Not a VAT invoice; never sent to Xero.
@@ -1312,7 +1360,7 @@ function stillToCome(j, di) {
   if (!by.size) return '<p>This completes the order.</p>';
   return `<div><div class="k">Still to come on this order</div>${[...by.entries()].map(([p, r]) => `${r.qty} × ${esc(p)} (next due ${fmtLong(r.next)})`).join('<br>')}</div>`;
 }
-function closeDoc() { $('doc').hidden = true; document.body.classList.remove('doc-open'); }
+function closeDoc() { $('doc').hidden = true; document.body.classList.remove('doc-open', 'viewing'); if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; } }
 
 /* ---------- render + events ---------- */
 let keepInputs = true;
@@ -1476,6 +1524,8 @@ function onClick(e) {
   if (d.restore) return restore(+d.restore);
   if (d.soa) return showDoc('soa', +d.soa);
   if (d.jobsheet) return openJobSheet(+d.jobsheet);
+  if (d.drawing) return showDrawing(+d.job, +d.drawing);
+  if (d.rmdrawing) return removeDrawingFrom(+d.rmdrawing);
   if (d.pfnew) return openProformaDraft(+d.pfnew);
   if (d.pfview) return showDoc('pf', +d.job, +d.pfview);
   if (d.pfcreate) return createProforma(+d.pfcreate);
@@ -1544,6 +1594,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
+  if (e.target.dataset.attach) { const fs = [...e.target.files]; e.target.value = ''; attachDrawings(+e.target.dataset.attach, fs); return; }
   if (e.target.dataset.setdue) { setDue(+e.target.dataset.setdue, e.target.dataset.from, e.target.value); return; }
   if (e.target.dataset.mapkind) { S.mapShow[e.target.dataset.mapkind] = e.target.checked; render(); }
   if (e.target.id === 'mapmiles') { S.mapMiles = +e.target.value; render(); }

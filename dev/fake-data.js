@@ -17,7 +17,12 @@ let jobs = [
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
 export const whoAmI = async () => ({ email: 'x', name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : 'Shop Floor', role });
-export const loadJobs = async () => structuredClone(jobs).map(hide);
+const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
+export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
+export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
+  blobs.set(f.id, file); files.set(job.id, [...(files.get(job.id) || []), f]); onProgress(1); return f; };
+export const drawingBlob = async f => blobs.get(f.id);
+export const removeDrawing = async id => { for (const [k, v] of files) files.set(k, v.filter(f => f.id !== id)); };
 export const setProcess = async (id, p, done, by) => { find(id).procs[p] = done ? { done, by, at: new Date().toISOString() } : { done: false }; };
 export const setJobProcesses = async (id, add, remove) => { const j = find(id); add.forEach(p => { j.procs[p] = { done: false }; }); remove.forEach(p => delete j.procs[p]); };
 export const updateJob = async (id, patch) => { if ('contact_email' in patch) find(id).contactEmail = patch.contact_email; };
