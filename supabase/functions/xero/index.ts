@@ -57,7 +57,7 @@ async function office(req: Request) {
   if (error) throw new HttpError(401, 'Your job board sign-in has expired. Reload the page.');
   const me = data?.[0];
   if (!['md', 'office'].includes(me?.role)) throw new HttpError(403, 'Only Levi and Mandy can use the Xero connection.');
-  return me as { email: string; name: string };
+  return me as { email: string; name: string; role: string };
 }
 
 async function tokenRequest(body: Record<string, string>) {
@@ -316,6 +316,26 @@ async function read() {
   };
 }
 
+/** Levi's month (MD only): this month's approved and paid sales invoices, and credit notes, net of
+ *  VAT. The board leaves out its own invoices (by ID and by their DN- reference) and adds the rest, so
+ *  the month counts what was invoiced in Xero outside the board too (the weeks before changeover). */
+async function monthSales(from: string, to: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new HttpError(400, 'Which month?');
+  const s = await session();
+  const dt = (d: string) => `DateTime(${d.split('-').map(Number).join(',')})`;
+  const where = encodeURIComponent(`Type=="ACCREC" AND Date>=${dt(from)} AND Date<=${dt(to)}`);
+  const inv = await allPages(s, `Invoices?where=${where}&Statuses=AUTHORISED,PAID&summaryOnly=true`, 'Invoices');
+  let credits: any[] | null = null;
+  try {
+    const cw = encodeURIComponent(`Type=="ACCRECCREDIT" AND Date>=${dt(from)} AND Date<=${dt(to)} AND (Status=="AUTHORISED" OR Status=="PAID")`);
+    credits = await allPages(s, `CreditNotes?where=${cw}`, 'CreditNotes');
+  } catch (e) { console.warn('credit notes not read:', (e as Error).message); }
+  const row = (x: any, sign: number) => ({ id: x.InvoiceID || x.CreditNoteID, number: x.InvoiceNumber || x.CreditNoteNumber || '',
+    reference: x.Reference || '', customer: x.Contact?.Name || '', date: xDate(x.DateString || x.Date), net: sign * Number(x.SubTotal || 0),
+    credit: sign < 0 });
+  return { from, to, invoices: [...inv.map(x => row(x, 1)), ...(credits || []).map(x => row(x, -1))], creditsRead: credits != null };
+}
+
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return cors(req, new Response(null, { status: 204 }));
   const url = new URL(req.url);
@@ -330,6 +350,11 @@ Deno.serve(async req => {
     if (route === 'contact') return cors(req, json(await contact((await req.json().catch(() => ({}))).id)));
     if (route === 'items') return cors(req, json(await items()));
     if (route === 'po') return cors(req, json(await purchaseOrder(await req.json().catch(() => ({})), me)));
+    if (route === 'month') {
+      if (me.role !== 'md') throw new HttpError(403, 'Only Levi can see the month figures.');
+      const b = await req.json().catch(() => ({}));
+      return cors(req, json(await monthSales(b.from, b.to)));
+    }
     if (route === 'invoices') return cors(req, json(await invoiceStatus((await req.json().catch(() => ({}))).ids)));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }

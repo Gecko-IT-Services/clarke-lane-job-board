@@ -364,6 +364,25 @@ console.log('jobs: ok');
   assert.equal(monthProgress([], '2026-02-10').end, '2026-02-28');
   assert.equal(Math.round(p.pace * 100), 55, 'Fri 16 Oct: 12 of 22 working days');
   assert.equal(monthProgress([], '2026-10-31').pace, 1, 'a weekend month end counts the whole month');
+  // Xero invoices raised outside the board count; the board's own (by ID or DN- reference) do not.
+  jobs[0].despatches[0].xero = { id: 'ours', no: 'INV-1' };
+  const xero = [
+    { id: 'ours', reference: 'SO-1 / DN-0001', date: '2026-10-07', net: 40 },
+    { id: 'byref', reference: 'SO-9 / PO 12 / DN-0002', date: '2026-10-08', net: 500 },
+    { id: 'old1', reference: 'P31608', date: '2026-10-02', net: 1000 },
+    { id: 'old2', reference: '', date: '2026-10-09', net: 250.5 },
+    { id: 'cn', reference: 'credit', date: '2026-10-10', net: -100 },
+    { id: 'sep', reference: '', date: '2026-09-30', net: 999 },
+    { id: 'later', reference: '', date: '2026-10-20', net: 999 },
+  ];
+  const px = monthProgress(jobs, '2026-10-16', xero);
+  assert.equal(px.fromXero, 1150.5, 'two old invoices less a credit note; ours, last month and after today left out');
+  assert.equal(px.xeroCount, 3);
+  assert.equal(px.onBoard, 40);
+  assert.equal(px.dispatched, 1190.5, 'board + Xero outside it');
+  assert.equal(px.dueByEnd, p.dueByEnd, 'due figure unchanged');
+  assert.equal(monthProgress(jobs, '2026-10-16').fromXero, 0, 'Xero not read: board only');
+  assert.equal(monthProgress(jobs, '2026-10-16').xeroRead, false);
   console.log('jobs month target: ok');
 }
 

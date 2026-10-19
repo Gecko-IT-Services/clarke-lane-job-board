@@ -14,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ jobs, me, office, md = false, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
+export function renderHome({ jobs, me, office, md = false, monthXero = { x: null, note: '' }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -46,7 +46,7 @@ export function renderHome({ jobs, me, office, md = false, breakeven = null, tar
   ].join('') : '';
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
-  const month = md ? monthPanel({ mp: monthProgress(jobs, today), breakeven, target, compact: true,
+  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), xeroNote: monthXero.note, breakeven, target, compact: true,
     name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
