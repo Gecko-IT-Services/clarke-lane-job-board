@@ -371,7 +371,20 @@ export function dashboard(jobs, today) {
  * left out) and what is still to send on lines due by the month end (late lines included). Values are
  * null when prices are not loaded (the shop floor).
  */
-export function monthProgress(jobs, today) {
+/**
+ * Xero's sales this month that the board did not raise (xero: rows from the xero function's month
+ * read: { id, reference, date, net }). The board's own invoices are left out by their ID on a dispatch
+ * note and by the DN- number in their reference, so nothing is counted twice; credit notes come in
+ * with a minus net. Returns { value, invoices } or null when Xero was not read.
+ */
+export function xeroOutsideBoard(jobs, xero, start, end) {
+  if (!xero) return null;
+  const ours = new Set(jobs.flatMap(j => j.despatches.map(d => d.xero?.id).filter(Boolean)));
+  const list = xero.filter(x => x.date >= start && x.date <= end && !ours.has(x.id) && !/\bDN-\d+/i.test(x.reference || ''));
+  return { value: round2(list.reduce((a, x) => a + (Number(x.net) || 0), 0)), invoices: list };
+}
+
+export function monthProgress(jobs, today, xero = null) {
   const start = today.slice(0, 7) + '-01';
   const [y, m] = today.split('-').map(Number);
   const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
@@ -383,7 +396,11 @@ export function monthProgress(jobs, today) {
   // Pace: working days (Mon–Fri) gone, today included, out of the month's working days.
   const wd = (from, to) => { let n = 0; for (let d = new Date(from + 'T12:00:00Z'); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) if (d.getUTCDay() % 6) n++; return n; };
   const pace = wd(start, today) / Math.max(1, wd(start, end));
-  return { start, end, pace, dispatched: money ? round2(dispatched) : null, dueByEnd: money ? round2(dueByEnd) : null };
+  // Sales invoiced in Xero outside the board this month (before changeover, or raised there by hand) count as done.
+  const outside = xeroOutsideBoard(live, xero, start, today);
+  const fromXero = outside ? outside.value : 0;
+  return { start, end, pace, dispatched: money ? round2(dispatched + fromXero) : null, dueByEnd: money ? round2(dueByEnd) : null,
+    onBoard: money ? round2(dispatched) : null, fromXero, xeroCount: outside ? outside.invoices.length : 0, xeroRead: !!outside };
 }
 
 /** Xero invoice IDs the board should ask Xero about: every note sent to Xero, less those already known

@@ -131,6 +131,7 @@ async function reload() {
   } catch (e) { S.error = e.message; }
   render();
   loadInvoiceStatus();
+  loadMonthSales();
 }
 async function loadQuotes() {
   S.quotesErr = null;
@@ -362,7 +363,7 @@ function renderTabs() {
 
 /* ---------- jobs ---------- */
 function renderJobs() {
-  const { html, list } = renderBoard({ jobs: S.jobs, today: todayIso(), office: office(), md: md(), stageKey: S.stage, search: S.search,
+  const { html, list } = renderBoard({ jobs: S.jobs, today: todayIso(), office: office(), md: md(), monthXero: monthXero(), stageKey: S.stage, search: S.search,
     anyPlaced: S.jobs.some(j => j.priority != null && onBoardStage(j)), breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, editTarget: S.editTarget, byValue: S.jobSort === 'value' },
     { esc, fmt, fmtTime, gbp, dueChip, statusChips, match: jobMatch, TICK });
   S.boardList = list;
@@ -719,6 +720,7 @@ async function loadXeroStatus() {
   try { S.xero = await data.xeroStatus(); } catch (e) { S.xeroErr = e.message; }
   render();
   loadInvoiceStatus();
+  loadMonthSales();
 }
 /** Xero's status for the invoices the board made, for Home's "In Xero, not approved" card. Approved,
  *  paid or voided ones are remembered on this computer and never asked about again; the rest are asked
@@ -742,6 +744,25 @@ async function loadInvoiceStatus() {
   invAsking = false;
   render();
 }
+/** Levi's month (MD only): this month's sales invoices in Xero, so work invoiced there outside the board
+ *  (before changeover) counts too. Asked at most every 15 minutes, kept for this browser tab only. */
+let monthAsking = false;
+async function loadMonthSales(force = false) {
+  if (!S.xero || !md() || monthAsking || PREVIEW.on) return;
+  const today = todayIso(), from = today.slice(0, 7) + '-01';
+  try { const kept = JSON.parse(sessionStorage.getItem('clj.monthx') || 'null');
+    if (!force && kept && kept.from === from && Date.now() - kept.at < 15 * 60e3) { S.monthX = kept.v; S.monthXErr = null; return render(); } } catch { /* ask again */ }
+  monthAsking = true;
+  try {
+    const v = await data.xero('month', { from, to: today });
+    S.monthX = v.invoices || []; S.monthXErr = null;
+    try { sessionStorage.setItem('clj.monthx', JSON.stringify({ at: Date.now(), from, v: S.monthX })); } catch { /* asked again next time */ }
+  } catch (e) { S.monthXErr = e.message; }
+  monthAsking = false;
+  render();
+}
+const monthXero = () => (!S.xero || PREVIEW.on ? { x: null, note: '' } : S.monthX ? { x: S.monthX, note: '' } : { x: null, note: S.monthXErr || 'checking' });
+
 /** The one-off changeover import: reads Xero's open sales orders and keeps them on the board
  *  (xero_orders), so Won quotes offers them until each becomes a sales order or is marked not a job.
  *  Nothing reads Xero's sales orders by itself; running it again only adds new ones. */
@@ -1455,7 +1476,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
+  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
@@ -1543,7 +1564,7 @@ function onClick(e) {
   if (d.gostation) { S.station = d.gostation; S.tab = 'floor'; render(); window.scrollTo(0, 0); return; }
   if (t.matches('a[href^="#help-"]')) { e.preventDefault(); document.querySelector(t.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ('signin' in d) return auth.signIn();
-  if ('signout' in d) return auth.signOut();
+  if ('signout' in d) { try { sessionStorage.removeItem('clj.monthx'); } catch { /* none */ } return auth.signOut(); }   // Levi's figures leave with him
   if ('reload' in d) return location.reload();
   if (d.homeview) {   // the switch is remembered; a card's list is just for now, and scrolls into view
     S.homeView = d.homeview;
