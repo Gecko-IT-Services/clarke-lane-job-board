@@ -40,21 +40,24 @@ export function invoiceLine(part, qty, unit, accountCode, taxType) {
 
 /**
  * The draft invoice for one despatch. Exactly what went out on that despatch note.
- * d: { dn, date, so, po, calloff: 'n of m' | '', lines: [{ part, qty, unit }] }
+ * d: { dn, date, so, po, calloff: 'n of m' | '', lines: [{ part, qty, unit }], prepaid: ['PF-0003'] }
+ * prepaid: pro formas paid in advance on this order, named in the reference and on a note line so
+ * Keith can allocate the money already received.
  */
 export function buildInvoice(d, contactId, accountCode, taxType) {
   return {
     Type: 'ACCREC', Status: 'DRAFT', LineAmountTypes: 'Exclusive',
     Contact: { ContactID: contactId },
     Date: d.date,
-    Reference: [d.so, d.po ? `PO ${d.po}` : '', d.dn].filter(Boolean).join(' / ').slice(0, 255),
+    Reference: [d.so, d.po ? `PO ${d.po}` : '', d.dn, d.prepaid?.length ? `paid in advance ${d.prepaid.join(', ')}` : ''].filter(Boolean).join(' / ').slice(0, 255),
     LineItems: d.lines.filter(l => l.qty > 0).map(l =>
-      invoiceLine(d.calloff ? `${l.part} (call-off ${d.calloff})` : l.part, l.qty, l.unit, accountCode, taxType)),
+      invoiceLine(d.calloff ? `${l.part} (call-off ${d.calloff})` : l.part, l.qty, l.unit, accountCode, taxType))
+      .concat(d.prepaid?.length ? [{ Description: `Paid in advance: pro forma ${d.prepaid.join(', ')}` }] : []),
   };
 }
 
 /** Net of the invoice as Xero will total it (lines are rounded to the penny each). */
-export const invoiceNet = inv => round2(inv.LineItems.reduce((a, l) => a + round2(l.Quantity * l.UnitAmount), 0));
+export const invoiceNet = inv => round2(inv.LineItems.reduce((a, l) => a + (l.Quantity == null ? 0 : round2(l.Quantity * l.UnitAmount)), 0));
 
 /**
  * The sales account and VAT rate Clarke Lane's own invoices use most, so drafts land where

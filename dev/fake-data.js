@@ -48,6 +48,18 @@ export const orderedQuotes = async () => [
 export const quoteLines = async () => [{ lineNo: 1, qty: 10, sellTotal: 290.25, desc: 'Valve guard', thickness: 2, material: 'Zintec', process: 'Laser', folds: 3, weld: 0, inserts: 0, paint: true, plating: 0, holes: 0 }];
 let dismissed = [];
 export const loadDismissed = async () => [...dismissed];
+const pfs = []; let pfNo = 1; const office = {};
+export const loadProformas = async () => structuredClone(pfs);
+export const createProforma = async (jobId, lines) => { const j = find(jobId);
+  const ls = lines.filter(l => l.qty > 0).map(l => { const x = j.lines.find(y => y.id === l.job_line_id); return { job_line_id: x.id, part: x.part, qty: l.qty, unit_price: x.price, net: Math.round(l.qty * x.price * 100) / 100 }; });
+  if (!ls.length) throw new Error('Enter a quantity for at least one part.');
+  const net = ls.reduce((a, l) => a + l.net, 0), p = { id: pfNo, pf: 'PF-' + String(pfNo++).padStart(4, '0'), jobId, lines: ls, net, vat: Math.round(net * 20) / 100, at: new Date().toISOString() };
+  pfs.push(p); return { id: p.id, pf_number: p.pf }; };
+export const markProforma = async (id, what) => { const p = pfs.find(x => x.id === id);
+  if (what === 'emailed') p.emailedAt = new Date().toISOString(); if (what === 'paid') p.paidOn = '2026-10-19'; if (what === 'unpaid') p.paidOn = null;
+  if (what === 'cancel') p.cancelledAt = new Date().toISOString(); if (what === 'uncancel') p.cancelledAt = null; };
+export const loadOfficeSettings = async () => ({ ...office });
+export const saveOfficeSetting = async (k, v) => { if (v == null || v === '') delete office[k]; else office[k] = v; };
 const settings = {};
 export const loadSettings = async () => ({ ...settings });
 export const saveSetting = async (k, v) => { if (v == null) delete settings[k]; else settings[k] = v; };
