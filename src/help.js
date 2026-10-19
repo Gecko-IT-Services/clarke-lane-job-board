@@ -20,7 +20,7 @@ const steps = items => {
 /** The whole journey of an order, left to right like the tabs. */
 function flow(office) {
   const all = [
-    ['Won quotes', 'Levi\'s quotes marked Ordered, waiting to become orders', 'M4 6h16v12H4z M4 6l8 7 8-7', 'quotes'],
+    ['Won quotes', 'Levi\'s quotes marked Ordered (and, once, Xero\'s open orders), waiting to become orders', 'M4 6h16v12H4z M4 6l8 7 8-7', 'quotes'],
     ['Sales orders', 'Checked and saved; value, dispatched, invoiced', 'M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4', 'form'],
     ['Jobs', 'The job board in running order', 'M4 5h16v14H4z M4 10h16 M9 10v9', 'jobs'],
     ['Shop floor', 'The factory ticks off each process', 'M5 12.5l4.5 4.5L19 7.5', 'floor'],
@@ -34,6 +34,29 @@ function flow(office) {
       <span><b>${t}</b><small>${d}</small></span></a>`).join('')}</div>
     <div class="hmore"><b class="hlbl">Also on the board</b>${more.map(([t, d, k]) => `<a href="#help-${k}"><b>${t}</b><small>${d}</small></a>`).join('')}</div></div>`;
 }
+
+/** The whole process as a short video (made from the practice board: made-up customers only; see dev/video). */
+const video = () => `<section class="hsec" id="help-video">${head(0, 'Watch: from order to invoice (2 minutes)')}
+    <figure class="hvideo"><video controls preload="none" playsinline poster="/help/walkthrough.jpg" src="/help/walkthrough.mp4"></video>
+    <figcaption>Every step with captions: the Xero changeover, making an order, drawings, purchase orders, pro forma, job sheet, Jobs, the shop floor, dispatch and Xero. Practice data only.</figcaption></figure>
+  </section>`;
+
+/** Changeover day: bring Xero's open sales orders across once, then the board is where orders are raised. */
+const changeover = () => `<section class="hsec key" id="help-changeover">${head(0, 'Changeover day: moving from Xero to the board')}
+    ${steps(['<span class="hn">1</span> On the <b>Xero</b> tab, press <b>Import open sales orders</b> once. Every open sales order in Xero appears on <b>Won quotes</b>.',
+      '<span class="hn">2</span> On <b>Won quotes</b>, press <b>Create sales order</b> on each one. Check the lines and the customer PO, tick the processes, and save. It goes onto Jobs and the shop floor.',
+      '<span class="hn">3</span> From then on, raise sales orders <b>only on the board</b>, not in Xero. The board keeps its SO numbers after the last one in Xero.',
+      'Nothing is ever deleted or changed in Xero by the board. Invoices and purchase orders go to Xero as <b>drafts</b> for Keith.'])}
+  </section>`;
+
+/** Drawings, purchase orders and pro formas: everything else on an order. */
+const orderExtras = () => `<section class="hsec" id="help-extras">${head(0, 'On each order: drawings, purchase orders, pro forma')}
+    <p>Open an order from <b>Sales orders</b> and scroll down: each has its own section.</p>
+    ${steps([
+      '<b>Drawings:</b> press <b>Attach drawings</b>. Files are saved in SharePoint (Factory Jobs › Documents › Job drawings › the SO number). The shop floor gets a <b>Drawing</b> button on the job and it opens full screen. <b>Remove</b> only takes it off the job; the file stays in SharePoint.',
+      '<b>Purchase orders:</b> press <b>New purchase order</b>, choose the supplier from Xero, add lines and costs (<b>Copy this order\'s parts</b> helps), then <b>Create draft PO in Xero</b>. It goes to Xero as a draft with the SO number as its reference; approve and send it from Xero, and Keith matches the supplier\'s bill to it.',
+      '<b>Pro forma:</b> press <b>New pro forma</b>, choose the quantities, then <b>Make the pro forma</b> (PF-0001…). <b>Email to customer</b> makes an Outlook draft copied to Keith; the customer pays quoting the PF number. Press <b>Mark paid</b> when it arrives: the order\'s later draft invoices in Xero then say it was paid in advance. It is not a VAT invoice and never goes to Xero itself.'])}
+  </section>`;
 
 /** Home: the start of the day. */
 function home(office) {
@@ -166,7 +189,8 @@ function shopFloor(office) {
       'When every step is green the job is <b>ready to dispatch</b> and goes back to the office. The Dispatch tab shows it too.',
       'A job <b>on hold</b> can\'t be ticked: the office has paused it, so don\'t start it.',
       '<span class="chip late">Brought forward</span> means the office has moved this job up. Do it first.',
-      'Tap <b>Job details</b> to see the full job.',
+      'Tap <b>Drawing</b> on a job to see its drawing full screen; <b>Close</b> goes back. <b>Job details</b> shows the full job.',
+      'The shop floor login (workshop@) only has this screen: no other tabs and no prices.',
       'After <b>2 minutes</b> untouched the screen goes back to the tiles. <b>Kiosk mode</b> (under the tiles) is for the shared screen: it goes full screen where the browser allows it, hides the header and tabs so the screen stays on the Shop floor, and is remembered on that screen. <b>Leave kiosk mode</b> brings them back.'])}
   </section>`;
 }
@@ -263,9 +287,9 @@ function faq(office) {
 }
 
 export function renderHelp(office) {
-  const parts = office ? [home(true), newOrders(), orderForm(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), mapAndCustomers(true), xero(), emails(true), faq(true)]
+  const parts = office ? [video(), changeover(), home(true), newOrders(), orderForm(), orderExtras(), calloffs(), jobsBoard(), shopFloor(true), dispatch(true), mapAndCustomers(true), xero(), emails(true), faq(true)]
     : [home(false), shopFloor(false), dispatch(false), mapAndCustomers(false), faq(false)];
-  const toc = office ? [['home', 'Home'], ['quotes', 'Won quotes', 1], ['form', 'Sales orders', 2], ['calloffs', 'Call-offs', 3], ['jobs', 'Jobs', 4], ['floor', 'Shop floor', 5],
+  const toc = office ? [['video', 'Watch the video'], ['changeover', 'Changeover day'], ['home', 'Home'], ['quotes', 'Won quotes', 1], ['form', 'Sales orders', 2], ['extras', 'Drawings, POs, pro forma'], ['calloffs', 'Call-offs', 3], ['jobs', 'Jobs', 4], ['floor', 'Shop floor', 5],
     ['dispatch', 'Dispatch', 6], ['xero', 'Xero', 7], ['map', 'Map'], ['customers', 'Customers'], ['email', 'Emails'], ['faq', 'Questions']]
     : [['home', 'Home'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['faq', 'Questions']];
   return `<div class="sec-h"><h2>Help</h2><span class="sub">${office ? 'How an order goes from quote to invoice.' : 'How to use the shop floor screen.'} The pictures are examples, not real orders. Sign in at <b>jobs.clarke-lane.co.uk</b> with your Clarke Lane Microsoft account.</span></div>
