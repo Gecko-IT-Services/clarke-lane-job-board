@@ -56,3 +56,12 @@ console.log('xero: ok');
   assert.equal(dispatchPo('', []), '');
   console.log('xero dispatch PO: ok');
 }
+
+// Pro forma paid in advance: named in the reference and on a note line, not counted in the net.
+{
+  const pre = buildInvoice({ dn: 'DN-1', date: '2026-10-19', so: 'SO-9790', po: '', calloff: '', lines: [{ part: 'a', qty: 2, unit: 5 }], prepaid: ['PF-0003'] }, 'c', '200', 'OUTPUT2');
+  assert.equal(pre.Reference, 'SO-9790 / DN-1 / paid in advance PF-0003');
+  assert.deepEqual(pre.LineItems.at(-1), { Description: 'Paid in advance: pro forma PF-0003' });
+  assert.equal(invoiceNet(pre), 10);
+  console.log('xero pro forma note: ok');
+}

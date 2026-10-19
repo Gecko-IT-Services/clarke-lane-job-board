@@ -125,6 +125,7 @@ async function reload() {
     [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() }),
       office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
+    if (office()) [S.pfs, S.officeSet] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {})]);
     S.error = null;
   } catch (e) { S.error = e.message; }
   render();
@@ -1036,12 +1037,87 @@ function renderDrawer() {
         <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>
       <p class="note">Mark deliveries on the Dispatch tab.</p>` : '<div class="note">Nothing dispatched yet.</div>'}
       ${(j.cancelledDespatches || []).length ? `<p class="note">Cancelled dispatch notes: ${j.cancelledDespatches.map(d => esc(d.dn)).join(', ')}.</p>` : ''}</div>
+    ${money ? proformaPanel(j) : ''}
     <div class="actions">
       <button class="btn" type="button" data-jobsheet="${j.id}">${icon('doc')}Job sheet</button>
       ${money ? `<button class="btn" type="button" data-repeat="${j.id}">${icon('repeat')}Repeat order</button>` : ''}
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">${icon('orders')}Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
       ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">${icon('truck')}Dispatch…</button>` : ''}
     </div>${actions}${confirm}`;
+}
+
+/* ---------- pro formas: a priced request for payment before the goods go. Not a VAT invoice; never sent to Xero.
+   Keith (the office's accounts address) is copied into every email; once paid, the order's later draft
+   invoices in Xero say "Paid in advance, pro forma PF-…". ---------- */
+const pfsFor = j => (S.pfs || []).filter(p => p.jobId === j.id);
+const pfTotal = p => round2(p.net + p.vat);
+const pfState = p => p.cancelledAt ? '<span class="chip">Cancelled</span>' : p.paidOn ? `<span class="chip ok">Paid ${fmt(p.paidOn)}</span>`
+  : p.emailedAt ? `<span class="chip soon">Emailed ${fmt(p.emailedAt.slice(0, 10))}, not paid</span>` : '<span class="chip soon">Not paid</span>';
+function proformaPanel(j) {
+  const list = pfsFor(j);
+  return `<div class="panel"><h3>Pro forma</h3>${list.length ? `<table class="lines"><thead><tr><th>Pro forma</th><th>Date</th><th>Total inc VAT</th><th>Status</th><th></th></tr></thead><tbody>
+    ${list.map(p => `<tr><td class="mono">${esc(p.pf)}</td><td>${fmt(p.at.slice(0, 10))}</td><td>${gbp(pfTotal(p), 2)}</td><td>${pfState(p)}</td>
+      <td><button class="btn sm" type="button" data-pfview="${p.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>`
+    : '<div class="note">For payment before the goods go. Not a VAT invoice: the invoice still goes to Xero after dispatch.</div>'}
+    ${j.status !== 'cancelled' ? `<div class="actions"><button class="btn" type="button" data-pfnew="${j.id}">${icon('doc')}New pro forma</button></div>` : ''}</div>`;
+}
+function openProformaDraft(jobId) {
+  const j = job(jobId); if (!j) return;
+  const out = Object.fromEntries(j.lines.map(l => [l.id, left(j, l)]));
+  S.pfDraft = { jobId, qty: Object.values(out).some(q => q > 0) ? out : Object.fromEntries(j.lines.map(l => [l.id, l.qty])) };
+  S.pfSettings = !S.officeSet?.payment_details;
+  showDoc('pfnew', jobId);
+}
+function pfEditor(j) {
+  const o = S.officeSet || {};
+  const settings = S.pfSettings ? `<form class="pfset" data-pfsettings>
+      <label class="fl">Payment details printed on every pro forma (bank, sort code, account, terms)<textarea id="pf-pay" rows="4" placeholder="Typed in by Levi or Mandy">${esc(o.payment_details || '')}</textarea></label>
+      <label class="fl">Copy every pro forma email to (Keith)<input type="text" id="pf-cc" value="${esc(o.accounts_email || '')}" placeholder="accounts@…"></label>
+      <div class="actions"><button class="btn sm pri" type="submit">Save these</button>${o.payment_details ? '<button class="btn sm" type="button" data-pfset="close">Cancel</button>' : ''}</div>
+      <p class="note">Kept on the board for everyone in the office, never in the code.</p></form>`
+    : `<p class="note">Payment details and the copy to ${esc(o.accounts_email || 'accounts')} are set. <button class="btn link sm" type="button" data-pfset="open">Change them</button></p>`;
+  return `<div class="sheetedit panel"><h3>New pro forma for ${esc(j.so)}</h3>
+    <p class="note">Choose what this pro forma asks payment for: everything still to send, or one call-off. Prices are the order's.</p>
+    <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Due</th><th>Ordered</th><th>Outstanding</th><th>Unit</th><th>On this pro forma</th></tr></thead><tbody>
+    ${j.lines.map(l => `<tr><td style="text-align:left">${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${left(j, l)}</td><td>${unit(l.price)}</td>
+      <td><input type="number" min="0" max="${l.qty}" step="1" value="${S.pfDraft.qty[l.id] || 0}" data-pq="${l.id}" style="width:90px" aria-label="Quantity on this pro forma: ${esc(l.part)}"></td></tr>`).join('')}</tbody></table></div>
+    ${settings}
+    <div class="actions"><button class="btn pri" type="button" data-pfcreate="${j.id}" ${S.officeSet?.payment_details ? '' : 'disabled title="Save the payment details first"'}>${icon('doc')}Make the pro forma</button></div></div>`;
+}
+function pfLinesFrom(j) {   // the draft's lines with the order's prices (the server takes its own prices when it is made)
+  return j.lines.filter(l => (S.pfDraft.qty[l.id] || 0) > 0).map(l => ({ part: l.part, qty: S.pfDraft.qty[l.id], unit_price: l.price, net: round2(S.pfDraft.qty[l.id] * l.price) }));
+}
+async function createProforma(jobId) {
+  const j = job(jobId);
+  const lines = j.lines.map(l => ({ job_line_id: l.id, qty: S.pfDraft.qty[l.id] || 0 })).filter(l => l.qty > 0);
+  if (!lines.length) return toast('Enter a quantity for at least one part.', null, true);
+  try {
+    const p = await data.createProforma(jobId, lines);
+    S.pfDraft = null; await reload();
+    showDoc('pf', jobId, p.id);
+    toast(`${p.pf_number} made. Email it to the customer, or print it.`, async () => {
+      closeDoc(); try { await data.markProforma(p.id, 'cancel'); toast(`${p.pf_number} cancelled.`); } catch (e) { toast(e.message, null, true); } reload();
+    });
+  } catch (e) { toast(e.message, null, true); }
+}
+async function markPf(id, what) {
+  const p = S.pfs.find(x => x.id === id); if (!p) return;
+  const back = { paid: 'unpaid', unpaid: 'paid', cancel: 'uncancel' }[what];
+  try {
+    await data.markProforma(id, what, S.me.name); await reload(); showDoc('pf', p.jobId, id);
+    toast({ paid: `${p.pf} marked paid. The order's draft invoices in Xero will say it was paid in advance.`, unpaid: `${p.pf} set back to not paid.`, cancel: `${p.pf} cancelled.` }[what],
+      back ? () => markPf(id, back) : null);
+  } catch (e) { toast(e.message, null, true); }
+}
+async function savePfSettings() {
+  const pay = $('pf-pay').value.trim(), cc = $('pf-cc').value.trim();
+  if (!pay) return toast('Type the payment details first: they go on every pro forma.', null, true);
+  if (cc && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cc)) return toast('That copy address does not look like an email address.', null, true);
+  try {
+    await Promise.all([data.saveOfficeSetting('payment_details', pay), data.saveOfficeSetting('accounts_email', cc)]);
+    S.officeSet = { ...S.officeSet, payment_details: pay, accounts_email: cc }; S.pfSettings = false;
+    toast('Saved for everyone in the office.'); showDoc('pfnew', S.pfDraft.jobId);
+  } catch (e) { toast(e.message, null, true); }
 }
 
 /* ---------- documents (print / save as PDF) ---------- */
@@ -1076,6 +1152,23 @@ function docHtml(kind, jobId, despId) {
       ${skip.length ? `<div class="k" style="text-transform:none;letter-spacing:0">Not needed: ${skip.map(esc).join(', ')}</div>` : ''}
       <div class="jlines"><div>Drawing no. / revision</div><div>Material</div><div>Notes</div></div>
       <div class="foot">Printed ${fmtLong(todayIso())} from the job board. The job board is the live record: tick processes there too.</div>`;
+  } else if (kind === 'pf' || kind === 'pfnew') {
+    const p = kind === 'pf' ? S.pfs.find(x => x.id === despId) : null;
+    const lines = p ? p.lines : pfLinesFrom(j);
+    const net = p ? p.net : round2(lines.reduce((a, l) => a + l.net, 0)), vat = p ? p.vat : round2(net * 0.2);
+    const no = p ? p.pf : 'PF-(number when made)', date = p ? p.at.slice(0, 10) : todayIso();
+    body = head('Pro forma invoice', esc(no)) + `
+      <div class="two"><div><div class="k">For</div><b>${esc(j.customer)}</b>${j.contactName ? `<div>${esc(j.contactName)}</div>` : ''}${j.address ? `<div style="white-space:pre-line">${esc(j.address)}</div>` : ''}</div>
+        <div class="kv"><span class="k">Date</span><span>${fmtLong(date)}</span><span class="k">Your order</span><span>${esc(j.po) || '—'}</span>
+        <span class="k">Our order</span><span>${esc(j.so)}</span></div></div>
+      <p>Please pay this pro forma before the goods are dispatched. <b>This is not a VAT invoice</b>; the VAT invoice follows when the goods are sent.</p>
+      <table><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Net</th></tr></thead><tbody>
+      ${lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${unit(Number(l.unit_price))}</td><td>${gbp(Number(l.net), 2)}</td></tr>`).join('') || '<tr><td colspan="4">Nothing chosen yet.</td></tr>'}</tbody></table>
+      <div class="tot"><span>Net</span><span>${gbp(net, 2)}</span><span>VAT 20%</span><span>${gbp(vat, 2)}</span><span class="g">To pay</span><span class="g">${gbp(round2(net + vat), 2)}</span></div>
+      <div class="jnote"><div class="k">How to pay</div><div style="white-space:pre-line">${esc(S.officeSet?.payment_details || 'Payment details to be added.')}</div>
+        <div style="margin-top:6px">Please use <b>${esc(no)}</b> as the payment reference.</div></div>
+      ${p?.paidOn ? `<p><b>Paid ${fmtLong(p.paidOn)}. Thank you.</b></p>` : ''}
+      <div class="foot">Clarke Lane Engineering Ltd. Pro forma ${esc(no)} for order ${esc(j.so)}. Not a VAT invoice.</div>`;
   } else if (kind === 'soa') {
     const net = value(j), vat = round2(net * 0.2);
     body = head('Order acknowledgement', esc(j.so)) + `
@@ -1130,13 +1223,16 @@ function setSheet(how) {
 function showDoc(kind, jobId, despId) {
   const j = job(jobId); if (!j) return;
   const d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
-  const sentAt = kind === 'soa' ? j.ackEmailedAt : d?.emailedAt;
-  const canEmail = kind !== 'job' && (kind === 'dn' || office());
-  $('doc').innerHTML = `<div class="docbar"><span>${kind === 'job' ? 'Print it for the job folder.' : sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>
+  const p = kind === 'pf' ? (S.pfs || []).find(x => x.id === despId) : null;
+  const sentAt = kind === 'soa' ? j.ackEmailedAt : kind === 'pf' ? p?.emailedAt : d?.emailedAt;
+  const canEmail = !['job', 'pfnew'].includes(kind) && (kind === 'dn' || office()) && !p?.cancelledAt;
+  const pfBtns = p && !p.cancelledAt ? `${p.paidOn ? `<button class="btn" type="button" data-pfmark="unpaid" data-pf="${p.id}">Not paid after all</button>`
+      : `<button class="btn" type="button" data-pfmark="paid" data-pf="${p.id}">Mark paid</button><button class="btn" type="button" data-pfmark="cancel" data-pf="${p.id}">Cancel pro forma</button>`}` : '';
+  $('doc').innerHTML = `<div class="docbar"><span>${kind === 'job' ? 'Print it for the job folder.' : kind === 'pfnew' ? 'Check it, then make the pro forma.' : sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>${pfBtns}
       ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">${icon('doc')}Job sheet</button>` : ''}
       ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${icon('mail')}${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
       <button class="btn" type="button" data-print>${icon('print')}Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
-    ${kind === 'job' ? sheetEditor(j) : ''}
+    ${kind === 'job' ? sheetEditor(j) : kind === 'pfnew' ? pfEditor(j) : ''}
     <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
   $('doc').hidden = false;
   document.body.classList.add('doc-open');
@@ -1179,22 +1275,26 @@ async function emailDoc(kind, jobId, despId) {
   const j = job(jobId), d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
   const btn = document.querySelector('[data-emaildoc]'); if (btn) { btn.disabled = true; btn.textContent = 'Making the PDF…'; }
   try {
-    const no = kind === 'soa' ? j.so : d.dn;
+    const pf = kind === 'pf' ? S.pfs.find(x => x.id === despId) : null;
+    const no = kind === 'soa' ? j.so : pf ? pf.pf : d.dn;
     const pdf = await pdfBase64(docHtml(kind, jobId, despId));
     // Delivery notes go to the customer's goods-in contact when the contact book has one.
-    const goodsIn = kind === 'dn' ? mainPerson(j.customer, 'deliveries') : null;
+    const goodsIn = kind === 'dn' ? mainPerson(j.customer, 'deliveries') : kind === 'pf' ? mainPerson(j.customer, 'orders') : null;
     const to = goodsIn?.email || j.contactEmail, who = goodsIn?.email ? goodsIn.name : j.contactName;
     const hello = who ? `Dear ${esc(who.split(' ')[0])},` : 'Hello,';
     const po = kind === 'dn' ? dnPo(j, d) : j.po;
     const ref = po ? ` (your order ${esc(po)})` : '';
-    const html = kind === 'soa'
+    const html = pf
+      ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached pro forma invoice ${esc(pf.pf)} for ${gbp(pfTotal(pf), 2)} including VAT, for payment before dispatch.</p><p>Please use <b>${esc(pf.pf)}</b> as the payment reference. The VAT invoice follows when the goods are sent.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
+      : kind === 'soa'
       ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached our sales order acknowledgement ${esc(j.so)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
       : `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} have been dispatched. Please find attached delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
-    const subject = kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${po ? ' / ' + po : ''}`;
-    const link = await data.draftEmail({ to, subject, html, fileName: `${no}.pdf`, pdfBase64: pdf });
-    if (kind === 'soa') await data.markAckEmailed(jobId); else await data.markDespatch(despId, 'emailed');
+    const subject = pf ? `Pro forma invoice ${pf.pf} – order ${j.so}${j.po ? ' / ' + j.po : ''}` : kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${po ? ' / ' + po : ''}`;
+    const cc = pf ? S.officeSet?.accounts_email || '' : '';
+    const link = await data.draftEmail({ to, cc, subject, html, fileName: `${no}.pdf`, pdfBase64: pdf });
+    if (kind === 'soa') await data.markAckEmailed(jobId); else if (pf) await data.markProforma(pf.id, 'emailed'); else await data.markDespatch(despId, 'emailed');
     await reload(); showDoc(kind, jobId, despId);
-    toast(`Draft ready in your Outlook Drafts${to ? ` to ${to}${goodsIn?.email ? ' (goods in, from the contact book)' : ''}` : ' (no email address on the order: add one in Outlook)'}. Check it and press Send.`);
+    toast(`Draft ready in your Outlook Drafts${to ? ` to ${to}${goodsIn?.email ? (pf ? ' (orders contact, from the contact book)' : ' (goods in, from the contact book)') : ''}` : ' (no email address on the order: add one in Outlook)'}${cc ? `, copied to ${cc}` : ''}. Check it and press Send.`);
     if (link) window.open(link, '_blank', 'noopener');
   } catch (e) {
     toast(/Mail\.ReadWrite|consent|AADSTS65001/i.test(e.message) ? 'Emailing needs a one-off permission in Microsoft 365 (Mail.ReadWrite). Ask Gecko IT to grant it.' : e.message, null, true);
@@ -1376,6 +1476,11 @@ function onClick(e) {
   if (d.restore) return restore(+d.restore);
   if (d.soa) return showDoc('soa', +d.soa);
   if (d.jobsheet) return openJobSheet(+d.jobsheet);
+  if (d.pfnew) return openProformaDraft(+d.pfnew);
+  if (d.pfview) return showDoc('pf', +d.job, +d.pfview);
+  if (d.pfcreate) return createProforma(+d.pfcreate);
+  if (d.pfmark) return markPf(+d.pf, d.pfmark);
+  if (d.pfset) { S.pfSettings = d.pfset === 'open'; return showDoc('pfnew', S.pfDraft.jobId); }
   if (d.sqset) return setSheet(d.sqset);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if ('despclose' in d) { S.desp = null; keepInputs = false; return render(); }
@@ -1398,6 +1503,12 @@ $('scrim').addEventListener('click', () => closeOpen());
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) closeOpen(); } });
 document.addEventListener('input', e => {
+  if (e.target.dataset.pq && S.pfDraft) {   // pro forma quantities: redraw the preview, keep the box being typed in
+    const j = job(S.pfDraft.jobId), l = j?.lines.find(x => x.id === +e.target.dataset.pq);
+    S.pfDraft.qty[+e.target.dataset.pq] = Math.max(0, Math.min(l?.qty ?? 0, Math.floor(Number(e.target.value) || 0)));
+    document.querySelector('#doc .paper').innerHTML = docHtml('pfnew', S.pfDraft.jobId);
+    return;
+  }
   if (e.target.dataset.sq && S.sheet) {   // job sheet quantities: redraw the sheet, keep the box being typed in
     S.sheet.qty[+e.target.dataset.sq] = Math.max(0, Math.floor(Number(e.target.value) || 0));
     document.querySelector('#doc .paper').innerHTML = docHtml('job', S.sheet.jobId);
@@ -1440,6 +1551,7 @@ document.addEventListener('change', e => {
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('orderform' in f.dataset) return submitOrder();
+  if ('pfsettings' in f.dataset) return savePfSettings();
   if ('targetform' in f.dataset) {
     const num = id => { const v = $(id).value.trim(); return v === '' ? null : Math.round(Number(v)); };
     const be = num('be-in'), tg = num('target-in');

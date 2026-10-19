@@ -144,10 +144,11 @@ export async function markAckEmailed(jobId) {
  * An Outlook draft in the signed-in person's mailbox with the PDF attached. Never sends:
  * the person checks it in Outlook and presses Send. Returns Outlook's link to the draft.
  */
-export async function draftEmail({ to, subject, html, fileName, pdfBase64 }) {
+export async function draftEmail({ to, cc, subject, html, fileName, pdfBase64 }) {
   const msg = await graph('/me/messages', { method: 'POST', scopes: CONFIG.MAIL_SCOPES, body: {
     subject, body: { contentType: 'HTML', content: html },
     toRecipients: to ? [{ emailAddress: { address: to } }] : [],
+    ccRecipients: cc ? [{ emailAddress: { address: cc } }] : [],
     attachments: [{ '@odata.type': '#microsoft.graph.fileAttachment', name: fileName, contentType: 'application/pdf', contentBytes: pdfBase64 }],
   } });
   return msg.webLink;
@@ -160,6 +161,45 @@ export async function markInvoiced(despatchId, invoiceNo) {
     .eq('id', despatchId);
   if (error) fail('Not saved', error);
   if (!count) throw new Error('Not saved. Only Levi and Mandy can mark dispatches as invoiced.');
+}
+
+/* ---------- pro formas (office) ---------- */
+export async function loadProformas() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('proformas').select('*').order('id');
+  if (error) fail('Could not load the pro formas', error);
+  return data.map(p => ({ id: p.id, pf: p.pf_number, jobId: p.job_id, lines: p.lines, net: Number(p.net), vat: Number(p.vat),
+    by: p.created_by, at: p.created_at, emailedAt: p.emailed_at, paidOn: p.paid_on, paidBy: p.paid_by, cancelledAt: p.cancelled_at }));
+}
+/** lines: [{ job_line_id, qty }]. Prices are taken from the order on the server. */
+export async function createProforma(jobId, lines) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('create_proforma', { p_job_id: jobId, p_lines: lines });
+  if (error) fail('The pro forma was not made', error);
+  return data;
+}
+/** what: 'emailed' | 'paid' | 'unpaid' | 'cancel' | 'uncancel' */
+export async function markProforma(id, what, by = '') {
+  const sb = await getSupabase();
+  const now = new Date().toISOString();
+  const set = { emailed: { emailed_at: now }, paid: { paid_on: now.slice(0, 10), paid_by: by }, unpaid: { paid_on: null, paid_by: null },
+    cancel: { cancelled_at: now }, uncancel: { cancelled_at: null } }[what];
+  const { error, count } = await sb.from('proformas').update(set, { count: 'exact' }).eq('id', id);
+  if (error) fail('Not saved', error);
+  if (!count) throw new Error('Not saved. Only Levi and Mandy can change a pro forma.');
+}
+/** The office's own settings: the accounts address copied into pro forma emails, the payment details. */
+export async function loadOfficeSettings() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('office_settings').select('key, value');
+  if (error) fail('Could not load the office settings', error);
+  return Object.fromEntries(data.map(r => [r.key, r.value]));
+}
+export async function saveOfficeSetting(key, value) {
+  const sb = await getSupabase();
+  const { error } = value == null || value === '' ? await sb.from('office_settings').delete().eq('key', key)
+    : await sb.from('office_settings').upsert({ key, value, updated_at: new Date().toISOString() });
+  if (error) fail('Not saved', error);
 }
 
 /** sp_quote_id of every quote marked "Not a job". Office only. */
@@ -281,7 +321,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

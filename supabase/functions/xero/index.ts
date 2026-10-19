@@ -234,8 +234,11 @@ async function send(items: { despatchId: number; contactId: string }[]) {
         .sort((a, b) => a.job_lines.line_no - b.job_lines.line_no)
         .map(l => ({ part: l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
       if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this dispatch has no price.');
+      const { data: pfs } = await admin.from('proformas').select('pf_number')
+        .eq('job_id', row.job_id).not('paid_on', 'is', null).is('cancelled_at', null).order('id');
       const inv = buildInvoice({ dn: row.dn_number, date: row.despatched_on, so: job.so_number,
-        po: dispatchPo(job.customer_po, (row.despatch_lines as any[]).map(l => l.job_lines.customer_po)), calloff: '', lines },
+        po: dispatchPo(job.customer_po, (row.despatch_lines as any[]).map(l => l.job_lines.customer_po)), calloff: '', lines,
+        prepaid: (pfs || []).map((p: any) => p.pf_number) },
         it.contactId, d.accountCode, d.taxType);
       const r = await xeroPost(s, 'Invoices', { Invoices: [inv] }, `clj-despatch-${row.id}`);
       const made = r.Invoices?.[0];
