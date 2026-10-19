@@ -457,7 +457,7 @@ function orderForm() {
     ${(() => { const ps = formParts(n), c = k => ps.filter(x => x.from === k).length;
       return `<datalist id="of-parts">${ps.map(x => `<option value="${esc(x.part)}">${x.from === 'xero' ? `Xero${x.code ? ' ' + esc(x.code) : ''}` : x.from === 'customer' ? `${esc(x.so)}, ${fmt(x.date)}` : `ordered by others, ${esc(x.so)}`}${x.price != null ? ' · ' + gbp(x.price, 2) : ''}</option>`).join('')}</datalist>
       <p class="note">Parts list: ${c('customer')} from this customer's orders, ${c('board')} from other orders${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Picking one fills in its price; change it if needed.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
-    <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap or C/Sink if needed.' : ''}</div>
+    <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
     <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button>

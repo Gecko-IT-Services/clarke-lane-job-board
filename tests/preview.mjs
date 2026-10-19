@@ -3,7 +3,7 @@ import { guessProcesses, previewJobs } from '../src/core/preview.js';
 
 // — Preview: Xero's open sales orders as jobs, never saved. —
 assert.deepEqual(guessProcesses(['Bracket 3mm laser cut and folded, powder coat RAL 9005']), ['Laser', 'Fold', 'P/Coat Paint']);
-assert.deepEqual(guessProcesses(['Guard plate, zinc plated, M8 tapped']), ['Tap', 'Plating / Anodising']);
+assert.deepEqual(guessProcesses(['Guard plate, zinc plated, M8 tapped']), ['Tap & C/Sink', 'Plating / Anodising']);
 assert.deepEqual(guessProcesses(['Mystery part']), ['Laser'], 'nothing recognised: Laser');
 assert.deepEqual(guessProcesses(['Tube 2mm, drilled and rolled']), ['Cut & Drill', 'Rolling']);
 

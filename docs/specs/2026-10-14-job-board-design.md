@@ -30,11 +30,11 @@ Mockup agreed with Philip: https://claude.ai/artifact/AG5aXVQL7FPDu9AFNZFEeY (pr
    The board never approves, emails or deletes anything in Xero.
 
 ## Processes (Levi's 9, decided 14 Oct)
-Laser, Fold, Cut & Drill (was Roll Drill until 19 Oct), Tap, Insert, C/Sink, Weld, P/Coat Paint, Plating / Anodising, Rolling (added 19 Oct) — the
+Laser, Fold, Cut & Drill (was Roll Drill until 19 Oct), Tap & C/Sink (one process from 19 Oct), Insert, Weld, P/Coat Paint, Plating / Anodising, Rolling (added 19 Oct) — the
 existing choice columns on `Jobs List`. Pre-tick from QuoteLines:
 Process = Laser → Laser; FoldCount > 0 → Fold; HoleQty1-3 > 0 → Cut & Drill; InsertCount > 0 →
 Insert; WeldLength > 0 → Weld; PaintRequired → P/Coat Paint; PlatingCost > 0 → Plating / Anodising.
-Tap and C/Sink are not in the quote data; Mandy ticks them.
+Tap & C/Sink is not in the quote data; Mandy ticks it.
 **To confirm:** the choice values on those columns (expected something like blank / Yes / Done).
 The board needs "not needed", "needed" and "done".
 
