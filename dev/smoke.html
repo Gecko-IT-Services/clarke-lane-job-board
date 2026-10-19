@@ -57,6 +57,7 @@ nav.tabs a[aria-current="page"]{color:#fff;border-color:#fff;font-weight:600}
 nav.tabs .badge{font-family:var(--body);font-size:12px;background:#2A2A2F;color:#fff;border-radius:999px;padding:1px 8px}
 nav.tabs .badge.go{background:#25744A;margin-right:4px}
 
+.backrow{margin-bottom:-8px} .kiosk-mode .backrow{display:none}
 .wrap{max-width:1640px;margin:0 auto;padding-inline:16px;padding-block:18px 64px;display:flex;flex-direction:column;gap:18px}
 .banner{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ink);border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap}
 .banner p{flex:1 1 420px;min-width:0}
@@ -686,6 +687,7 @@ form.inv input{width:110px}
 </div></header>
 <div id="preview-bar" class="previewbar" hidden></div>
 <main class="wrap" id="views">
+  <div class="backrow" id="backrow" hidden><button class="btn sm" type="button" data-goback title="Back to the last screen (or press your browser's Back)">← Back</button></div>
   <div class="err" id="err" hidden></div>
   <section class="view" id="v-home" hidden></section>
   <section class="view" id="v-orders" hidden></section>

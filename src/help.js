@@ -241,6 +241,8 @@ function emails(office) {
 function faq(office) {
   const q = [
     ['I ticked the wrong box.', 'Tap it again, or press Undo on the message at the bottom of the screen.'],
+    ['How do I go back?', 'Press ← Back (top left, or at the top of an open order), or your browser\'s Back button. Each press steps back one screen: closing an order, then a list opened from a card, then the tab before.'],
+    ['I did something by mistake.', 'Most things show a message at the bottom with Undo for a few seconds: ticking a process, moving a job, changing a due date, making a dispatch note, marking delivered, hold, release and cancel. Things that cannot be undone ask Are you sure first.'],
     ['The screen looks out of date.', 'It updates by itself when anyone makes a change. If in doubt, refresh the page.'],
     ['How do I print a job sheet?', 'Open the job (tap its sales order number) and press Job sheet. Check the To make quantities (they start on the next delivery and can be changed for this sheet only), then press Print.'],
     ['It says I am not on the staff list.', 'Ask Gecko IT to add your Microsoft 365 address.'],
