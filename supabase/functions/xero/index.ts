@@ -15,7 +15,7 @@
 // Supabase token; every other route checks the caller itself (office()).
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 // A copy of src/core/xero.js (tests/xero.mjs checks they are identical).
-import { buildInvoice, invoiceNet, salesDefaults, dispatchPo } from './xero-core.js';
+import { buildInvoice, invoiceNet, salesDefaults, dispatchPo, buildPurchaseOrder } from './xero-core.js';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const admin = createClient(SB_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -177,7 +177,7 @@ async function contacts() {
   // The postcode (delivery address first) lets the delivery map place a customer with no address on the order.
   const pc = (c: any) => { const a = (c.Addresses || []) as any[];
     return ((a.find(x => x.AddressType === 'DELIVERY' && x.PostalCode) || a.find(x => x.AddressType === 'STREET' && x.PostalCode) || a.find(x => x.PostalCode))?.PostalCode || '').trim(); };
-  return { contacts: list.map(c => ({ id: c.ContactID, name: c.Name, postcode: pc(c) })).sort((a, b) => a.name.localeCompare(b.name)), defaults: d };
+  return { contacts: list.map(c => ({ id: c.ContactID, name: c.Name, postcode: pc(c), supplier: !!c.IsSupplier })).sort((a, b) => a.name.localeCompare(b.name)), defaults: d };
 }
 
 /** One Xero contact, for filling in a new order the way Sage does when you pick the account. */
@@ -269,6 +269,29 @@ async function invoiceStatus(ids: unknown) {
   return { invoices: out };
 }
 
+/** A DRAFT purchase order in Xero for a sales order (office). Recorded on the board once Xero has it. */
+async function purchaseOrder(b: any, me: { email: string; name: string }) {
+  const jobId = Number(b?.jobId), contactId = String(b?.contactId || ''), key = String(b?.key || '');
+  if (!jobId || !/^[0-9a-f-]{36}$/i.test(contactId)) throw new HttpError(400, 'Choose the supplier first.');
+  if (!/^[\w-]{8,64}$/.test(key)) throw new HttpError(400, 'Missing request key.');
+  const lines = (Array.isArray(b.lines) ? b.lines : []).map((l: any) => ({ description: String(l.description || '').trim(), qty: Number(l.qty), unit: Number(l.unit) }))
+    .filter((l: any) => l.description && l.qty > 0);
+  if (!lines.length) throw new HttpError(400, 'Add at least one line with a description and a quantity.');
+  if (lines.some((l: any) => !Number.isFinite(l.unit) || l.unit < 0)) throw new HttpError(400, 'Every line needs a cost (0 or more).');
+  const { data: job } = await admin.from('jobs').select('id, so_number, customer, status').eq('id', jobId).single();
+  if (!job || job.status === 'cancelled') throw new HttpError(404, 'That order is cancelled or no longer exists.');
+  const s = await session();
+  const po = buildPurchaseOrder({ date: new Date().toISOString().slice(0, 10), deliveryDate: /^\d{4}-\d{2}-\d{2}$/.test(b.deliveryDate || '') ? b.deliveryDate : '',
+    so: job.so_number, customer: job.customer, lines }, contactId);
+  const r = await xeroPost(s, 'PurchaseOrders', { PurchaseOrders: [po] }, `clj-po-${key}`);
+  const made = r.PurchaseOrders?.[0];
+  if (!made?.PurchaseOrderID) throw new HttpError(502, 'Xero did not return a purchase order.');
+  const net = lines.reduce((a: number, l: any) => a + Math.round(l.qty * l.unit * 100) / 100, 0);
+  const { error } = await admin.from('purchase_orders').upsert({ job_id: job.id, xero_id: made.PurchaseOrderID, po_number: made.PurchaseOrderNumber || '',
+    supplier_id: contactId, supplier_name: made.Contact?.Name || '', delivery_date: po.DeliveryDate || null, lines, net, created_by: me.email }, { onConflict: 'xero_id' });
+  return { id: made.PurchaseOrderID, number: made.PurchaseOrderNumber || '', supplier: made.Contact?.Name || '', recorded: !error };
+}
+
 async function read() {
   const s = await session();
   // Sales orders only. (Invoices were read here too but nothing used them, and Xero's invoice search
@@ -306,6 +329,7 @@ Deno.serve(async req => {
     if (route === 'contacts') return cors(req, json(await contacts()));
     if (route === 'contact') return cors(req, json(await contact((await req.json().catch(() => ({}))).id)));
     if (route === 'items') return cors(req, json(await items()));
+    if (route === 'po') return cors(req, json(await purchaseOrder(await req.json().catch(() => ({})), me)));
     if (route === 'invoices') return cors(req, json(await invoiceStatus((await req.json().catch(() => ({}))).ids)));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }

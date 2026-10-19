@@ -53,7 +53,8 @@ export const orderedQuotes = async () => [
 export const quoteLines = async () => [{ lineNo: 1, qty: 10, sellTotal: 290.25, desc: 'Valve guard', thickness: 2, material: 'Zintec', process: 'Laser', folds: 3, weld: 0, inserts: 0, paint: true, plating: 0, holes: 0 }];
 let dismissed = [];
 export const loadDismissed = async () => [...dismissed];
-const pfs = []; let pfNo = 1; const office = {};
+const pfs = []; let pfNo = 1; const office = {}; const pos = [];
+export const loadPurchaseOrders = async () => structuredClone(pos);
 export const loadProformas = async () => structuredClone(pfs);
 export const createProforma = async (jobId, lines) => { const j = find(jobId);
   const ls = lines.filter(l => l.qty > 0).map(l => { const x = j.lines.find(y => y.id === l.job_line_id); return { job_line_id: x.id, part: x.part, qty: l.qty, unit_price: x.price, net: Math.round(l.qty * x.price * 100) / 100 }; });
@@ -81,12 +82,15 @@ export const xero = async (route, body) => {
     quotes: [{ id: 'q1', number: 'SO-9776', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
       lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] }],
     invoices: [] };
-  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering', postcode: 'PO1 2NH' }],
+  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering', postcode: 'PO1 2NH' }, { id: '00000000-0000-0000-0000-0000000000a1', name: 'Example Powder Coaters Ltd', postcode: 'SO15 1AA', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a2', name: 'Example Steel Supplies', postcode: 'SO16 2BB', supplier: true }],
     defaults: { accountCode: '200', taxType: 'OUTPUT2', from: 'your last 100 invoices' } };
   if (route === 'contact') return { id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
   if (route === 'items') return { items: fakeItems };
+  if (route === 'po') { const no = 'PO-' + String(pos.length + 1).padStart(4, '0'), sup = body.contactId.endsWith('a1') ? 'Example Powder Coaters Ltd' : 'Example Steel Supplies';
+    pos.push({ id: pos.length + 1, jobId: body.jobId, xeroId: 'x' + pos.length, no, supplier: sup, delivery: body.deliveryDate || null, lines: body.lines, net: body.lines.reduce((a, l) => a + l.qty * l.unit, 0), at: new Date().toISOString() });
+    return { id: 'x', number: no, supplier: sup, recorded: true }; }
   if (route === 'invoices') return { invoices: body.ids.map(id => ({ id, number: 'INV-0001', status: 'DRAFT' })) };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
 };

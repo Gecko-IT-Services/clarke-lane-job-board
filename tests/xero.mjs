@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { normName, matchContact, invoiceLine, buildInvoice, invoiceNet, salesDefaults } from '../src/core/xero.js';
+import { normName, matchContact, invoiceLine, buildInvoice, invoiceNet, salesDefaults, buildPurchaseOrder } from '../src/core/xero.js';
 
 // — Customer names. —
 assert.equal(normName('BSA Regal Group LTD'), normName('BSA Regal Group Limited'));
@@ -64,4 +64,15 @@ console.log('xero: ok');
   assert.deepEqual(pre.LineItems.at(-1), { Description: 'Paid in advance: pro forma PF-0003' });
   assert.equal(invoiceNet(pre), 10);
   console.log('xero pro forma note: ok');
+}
+
+// Purchase orders: draft, SO as the reference, empty lines dropped, pennies rounded.
+{
+  const po = buildPurchaseOrder({ date: '2026-10-19', deliveryDate: '2026-10-24', so: 'SO-9790', customer: 'Example Ltd',
+    lines: [{ description: 'Powder coat RAL 9005, 40 brackets', qty: 1, unit: 120.004 }, { description: '', qty: 2, unit: 5 }, { description: 'Inserts M6', qty: 0, unit: 1 }] }, 's1');
+  assert.equal(po.Status, 'DRAFT');
+  assert.equal(po.Reference, 'SO-9790 for Example Ltd');
+  assert.equal(po.DeliveryDate, '2026-10-24');
+  assert.deepEqual(po.LineItems, [{ Description: 'Powder coat RAL 9005, 40 brackets', Quantity: 1, UnitAmount: 120 }]);
+  console.log('xero purchase order: ok');
 }

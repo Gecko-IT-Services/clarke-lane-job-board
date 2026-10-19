@@ -125,7 +125,8 @@ async function reload() {
     [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() }),
       office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
-    if (office()) [S.pfs, S.officeSet] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {})]);
+    if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
+      data.loadPurchaseOrders().catch(() => S.pos || [])]);
     S.error = null;
   } catch (e) { S.error = e.message; }
   render();
@@ -772,7 +773,7 @@ async function keptFor(key, ms, read) {
   try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), v })); } catch { /* read again next time */ }
   return v;
 }
-function forgetXero() { try { for (const k of ['clj.socheck', 'clj.xc', 'clj.invstatus', 'clj.settled']) localStorage.removeItem(k); } catch { /* nothing kept */ } }
+function forgetXero() { try { for (const k of ['clj.socheck', 'clj.xc', 'clj.xc2', 'clj.invstatus', 'clj.settled']) localStorage.removeItem(k); } catch { /* nothing kept */ } }
 /** Imported Xero sales orders still waiting to go on the board. */
 function xeroWaiting() {
   return (S.xeroOrders || []).filter(q => !q.dismissed && !onBoard(q));
@@ -932,10 +933,11 @@ let xcLoading = false;
 async function loadXeroContacts(fresh) {
   if (xcLoading) return;
   xcLoading = true; S.xcErr = null; if (S.form) collectForm();
-  if (fresh) try { localStorage.removeItem('clj.xc'); } catch { /* not kept */ }
-  try { [S.xc, S.xcMap] = await Promise.all([keptFor('clj.xc', 30 * 60e3, () => data.xero('contacts')), data.loadContactMap()]); }
+  if (fresh) try { localStorage.removeItem('clj.xc2'); } catch { /* not kept */ }
+  try { [S.xc, S.xcMap] = await Promise.all([keptFor('clj.xc2', 30 * 60e3, () => data.xero('contacts')), data.loadContactMap()]); }
   catch (e) { S.xcErr = e.message; }
   xcLoading = false; render();
+  if (S.poForm && !$('doc').hidden) { collectPo(); showPoForm(); }
 }
 async function pickContact(key, id) {
   const c = S.xc.contacts.find(x => x.id === id); if (!c) return;
@@ -1038,7 +1040,7 @@ function renderDrawer() {
         <td><button class="btn sm" type="button" data-dn="${d.id}" data-job="${j.id}">View</button></td></tr>`).join('')}</tbody></table>
       <p class="note">Mark deliveries on the Dispatch tab.</p>` : '<div class="note">Nothing dispatched yet.</div>'}
       ${(j.cancelledDespatches || []).length ? `<p class="note">Cancelled dispatch notes: ${j.cancelledDespatches.map(d => esc(d.dn)).join(', ')}.</p>` : ''}</div>
-    ${money ? proformaPanel(j) : ''}
+    ${money ? purchasePanel(j) + proformaPanel(j) : ''}
     <div class="actions">
       <button class="btn" type="button" data-jobsheet="${j.id}">${icon('doc')}Job sheet</button>
       ${money ? `<button class="btn" type="button" data-repeat="${j.id}">${icon('repeat')}Repeat order</button>` : ''}
@@ -1092,6 +1094,67 @@ async function showDrawing(jobId, fileId) {
       : img ? `<img class="vimg" src="${viewUrl}" alt="${esc(f.name)}">`
       : `<div class="panel"><b>${esc(f.name)}</b><p class="note">This kind of file cannot be shown on the board. ${f.url && f.url !== '#' ? 'Open it in SharePoint, or ' : ''}<a href="${viewUrl}" download="${esc(f.name)}">download it</a>.</p></div>`;
   } catch (e) { $('viewer').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+/* ---------- purchase orders: bought-in parts or outside work for a sales order, as DRAFT POs in Xero
+   (the SO number is the reference) for Keith to match against the supplier's invoice ---------- */
+const posFor = j => (S.pos || []).filter(p => p.jobId === j.id);
+const xeroPoLink = id => `https://go.xero.com/Accounts/Payable/PurchaseOrders/View/${encodeURIComponent(id)}`;
+function purchasePanel(j) {
+  const list = posFor(j);
+  return `<div class="panel"><h3>Purchase orders</h3>${list.length ? `<table class="lines"><thead><tr><th>PO</th><th>Supplier</th><th>Date</th><th>Net</th><th></th></tr></thead><tbody>
+    ${list.map(p => `<tr><td class="mono">${esc(p.no || 'draft')}</td><td style="text-align:left">${esc(p.supplier)}</td><td>${fmt(p.at.slice(0, 10))}</td><td>${gbp(p.net, 2)}</td>
+      <td><a class="btn sm" href="${xeroPoLink(p.xeroId)}" target="_blank" rel="noopener">Open in ${XERO}</a></td></tr>`).join('')}</tbody></table>`
+    : '<div class="note">Bought-in parts or outside work (painting, plating) for this order. Each one goes to Xero as a draft purchase order.</div>'}
+    ${j.status !== 'cancelled' ? `<div class="actions"><button class="btn" type="button" data-ponew="${j.id}">${icon('plus')}New purchase order</button></div>` : ''}</div>`;
+}
+const blankPoLine = () => ({ description: '', qty: '1', unit: '' });
+function openPoForm(jobId) {
+  if (!S.xero) return toast('Connect to Xero first (Xero tab).', null, true);
+  S.poForm = { jobId, contactId: '', delivery: '', lines: [blankPoLine()], key: crypto.randomUUID(), busy: false };
+  if (!S.xc && !S.xcErr) loadXeroContacts();
+  showPoForm();
+}
+function collectPo() {
+  const f = S.poForm; if (!f || !$('po-sup')) return;
+  f.contactId = $('po-sup').value; f.delivery = $('po-del').value;
+  f.lines = f.lines.map((l, i) => ({ description: $('po-d' + i)?.value ?? l.description, qty: $('po-q' + i)?.value ?? l.qty, unit: $('po-u' + i)?.value ?? l.unit }));
+}
+function showPoForm() {
+  const f = S.poForm, j = job(f.jobId); if (!j) return;
+  const cs = (S.xc?.contacts || []).slice().sort((a, b) => (b.supplier - a.supplier) || a.name.localeCompare(b.name));
+  const sup = cs.filter(c => c.supplier), rest = cs.filter(c => !c.supplier);
+  const opt = c => `<option value="${esc(c.id)}"${c.id === f.contactId ? ' selected' : ''}>${esc(c.name)}</option>`;
+  const net = round2(f.lines.reduce((a, l) => a + round2((Number(l.qty) || 0) * (Number(l.unit) || 0)), 0));
+  $('doc').innerHTML = `<div class="docbar"><span>New purchase order for ${esc(j.so)} · ${esc(j.customer)}</span><button class="btn" type="button" data-closedoc>Close</button></div>
+    <div class="sheetedit panel poform"><h3>Purchase order for ${esc(j.so)}</h3>
+      <p class="note">It goes to Xero as a <b>draft</b> purchase order, with ${esc(j.so)} as the reference. Approve and send it to the supplier from Xero; Keith matches the supplier's bill to it there.</p>
+      <div class="row2"><label class="fl">Supplier (from Xero)${S.xcErr ? ` <span class="bad">${esc(S.xcErr)}</span>` : ''}<select class="f" id="po-sup"><option value="">${S.xc ? 'Choose the supplier…' : 'Reading Xero…'}</option>
+        ${sup.length ? `<optgroup label="Suppliers">${sup.map(opt).join('')}</optgroup>` : ''}${rest.length ? `<optgroup label="Other contacts">${rest.map(opt).join('')}</optgroup>` : ''}</select></label>
+        <label class="fl">Delivery date (optional)<input type="date" id="po-del" value="${esc(f.delivery)}"></label></div>
+      <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Description</th><th>Qty</th><th>Unit cost</th><th>Net</th><th></th></tr></thead><tbody>
+      ${f.lines.map((l, i) => `<tr><td style="text-align:left;min-width:260px"><input type="text" id="po-d${i}" value="${esc(l.description)}" placeholder="e.g. Powder coat RAL 9005, 40 brackets" style="width:100%"></td>
+        <td><input type="number" id="po-q${i}" min="0" step="any" value="${esc(l.qty)}" style="width:80px"></td>
+        <td><input type="number" id="po-u${i}" min="0" step="any" value="${esc(l.unit)}" placeholder="£" style="width:100px"></td>
+        <td>${gbp(round2((Number(l.qty) || 0) * (Number(l.unit) || 0)), 2)}</td>
+        <td>${f.lines.length > 1 ? `<button class="btn sm link" type="button" data-podel="${i}" aria-label="Remove line ${i + 1}">Remove</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+      <div class="actions"><button class="btn sm" type="button" data-poadd>${icon('plus')}Add line</button><button class="btn sm" type="button" data-pofill title="One line per part on the order, to price">Copy this order's parts</button>
+        <span class="note" style="margin-left:auto">Net <b>${gbp(net, 2)}</b> + VAT as set in Xero</span></div>
+      <div class="actions"><button class="btn pri" type="button" data-pocreate ${f.busy ? 'disabled' : ''}>${f.busy ? 'Sending to Xero…' : `Create draft PO in ${XERO}`}</button></div></div>`;
+  $('doc').hidden = false; document.body.classList.add('doc-open');
+}
+async function createPo() {
+  collectPo(); const f = S.poForm, j = job(f.jobId);
+  const lines = f.lines.map(l => ({ description: l.description.trim(), qty: Number(l.qty), unit: l.unit === '' ? NaN : Number(l.unit) })).filter(l => l.description || l.qty);
+  if (!f.contactId) return toast('Choose the supplier first.', null, true);
+  if (!lines.length || lines.some(l => !l.description || !(l.qty > 0))) return toast('Every line needs a description and a quantity.', null, true);
+  if (lines.some(l => !Number.isFinite(l.unit) || l.unit < 0)) return toast('Every line needs a unit cost (0 if not known yet).', null, true);
+  f.busy = true; showPoForm();
+  try {
+    const r = await data.xero('po', { jobId: f.jobId, contactId: f.contactId, deliveryDate: f.delivery, lines, key: f.key });
+    S.poForm = null; closeDoc(); await reload();
+    toast(`${r.number || 'Draft purchase order'} for ${r.supplier || 'the supplier'} is in Xero as a draft, referenced ${j.so}.${r.recorded ? '' : ' It could not be listed on the board: refresh the page.'}`);
+  } catch (e) { f.busy = false; showPoForm(); toast(e.message, null, true); }
 }
 
 /* ---------- pro formas: a priced request for payment before the goods go. Not a VAT invoice; never sent to Xero.
@@ -1360,7 +1423,7 @@ function stillToCome(j, di) {
   if (!by.size) return '<p>This completes the order.</p>';
   return `<div><div class="k">Still to come on this order</div>${[...by.entries()].map(([p, r]) => `${r.qty} × ${esc(p)} (next due ${fmtLong(r.next)})`).join('<br>')}</div>`;
 }
-function closeDoc() { $('doc').hidden = true; document.body.classList.remove('doc-open', 'viewing'); if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; } }
+function closeDoc() { S.poForm = null; $('doc').hidden = true; document.body.classList.remove('doc-open', 'viewing'); if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; } }
 
 /* ---------- render + events ---------- */
 let keepInputs = true;
@@ -1525,6 +1588,11 @@ function onClick(e) {
   if (d.soa) return showDoc('soa', +d.soa);
   if (d.jobsheet) return openJobSheet(+d.jobsheet);
   if (d.drawing) return showDrawing(+d.job, +d.drawing);
+  if (d.ponew) return openPoForm(+d.ponew);
+  if ('poadd' in d) { collectPo(); S.poForm.lines.push(blankPoLine()); return showPoForm(); }
+  if (d.podel) { collectPo(); S.poForm.lines.splice(+d.podel, 1); return showPoForm(); }
+  if ('pofill' in d) { collectPo(); const j = job(S.poForm.jobId); S.poForm.lines = [...S.poForm.lines.filter(l => l.description.trim()), ...j.lines.map(l => ({ description: l.part, qty: String(left(j, l) || l.qty), unit: '' }))]; return showPoForm(); }
+  if ('pocreate' in d) return createPo();
   if (d.rmdrawing) return removeDrawingFrom(+d.rmdrawing);
   if (d.pfnew) return openProformaDraft(+d.pfnew);
   if (d.pfview) return showDoc('pf', +d.job, +d.pfview);
