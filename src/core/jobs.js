@@ -468,20 +468,42 @@ export function partSuggestions(jobs, items, customer, parts = []) {
     const k = key(l.part); if (seen.has(k)) continue;
     seen.set(k, { part: l.part.trim(), price: l.price, from: l.mine ? 'customer' : 'board', so: l.so, date: l.date });
   }
+  // Every word already offered, so a part number already in the list is not offered twice. A Set, not a
+  // search of the list per product: Xero can send thousands of products (20 Oct: the form froze).
+  const words = new Set();
+  const note = text => { for (const w of key(text).split(/[^a-z0-9\-/.]+/)) if (w) words.add(w); };
+  for (const s of seen.values()) note(s.part);
+  const add = (k, v) => { seen.set(k, v); note(v.part); };
   // Parts saved in Sales orders › Parts: the customer's own (part number and description).
   const ck = customer ? normName(customer) : '';
   for (const p of parts || []) {
     const text = xeroLinePart({ code: p.partNo, description: p.description });
-    const k = key(text); if (!k || [...seen.values()].some(s => key(s.part).includes(key(p.partNo)))) continue;
-    seen.set(k, { part: text, price: null, from: ck && p.customerKey === ck ? 'customer' : 'parts', code: p.partNo });
+    const k = key(text); if (!k || seen.has(k) || words.has(key(p.partNo))) continue;
+    add(k, { part: text, price: null, from: ck && p.customerKey === ck ? 'customer' : 'parts', code: p.partNo });
   }
   // Xero's Products and services: code and description together, so typing the part number finds it.
   for (const i of items || []) {
     const text = xeroLinePart({ code: i.code, description: i.description });
-    const k = key(text); if (!k || seen.has(k) || seen.has(key(i.description)) || (i.code && [...seen.values()].some(s => key(s.part).includes(key(i.code))))) continue;
-    seen.set(k, { part: text, price: i.price, from: 'xero', code: i.code || '' });
+    const k = key(text); if (!k || seen.has(k) || seen.has(key(i.description)) || (i.code && words.has(key(i.code)))) continue;
+    add(k, { part: text, price: i.price, from: 'xero', code: i.code || '' });
   }
   return [...seen.values()];
+}
+
+/**
+ * What the Part box's list offers for what is typed (20 Oct: thousands of Xero products in one list froze the
+ * browser when Mandy clicked into the box). Under 2 characters: the board's and Parts' entries only. Otherwise
+ * every entry containing each typed word, the board's and Parts' first, at most `limit`.
+ */
+export function partMatches(list, typed, limit = 50) {
+  const words = String(typed || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const own = list.filter(x => x.from !== 'xero');
+  if (words.join('').length < 2) return own.slice(0, limit * 4);
+  const hit = x => { const t = x.part.toLowerCase(); return words.every(w => t.includes(w)); };
+  const out = [];
+  for (const x of own) { if (out.length >= limit) break; if (hit(x)) out.push(x); }
+  for (const x of list) { if (out.length >= limit) break; if (x.from === 'xero' && hit(x)) out.push(x); }
+  return out;
 }
 
 /**

@@ -20,7 +20,7 @@ import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists, partSuggestions, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions, partMatches, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -417,7 +417,14 @@ async function loadXeroItems() {
   xitemsLoading = false;
   if (S.form) { collectForm(); keepInputs = false; render(); } else if (S.tab === 'xero') render();
 }
-const formParts = n => partSuggestions(S.jobs.filter(j => !j.preview), S.xitems || [], n.customer, S.parts || []);
+// Worked out once per change of its inputs, not on every redraw or key press (thousands of Xero products).
+let partsMemo = null;
+const formParts = n => {
+  const k = [S.jobs, S.xitems, S.parts, n.customer];
+  if (!partsMemo || partsMemo.k.some((x, i) => x !== k[i])) partsMemo = { k, v: partSuggestions(S.jobs.filter(j => !j.preview), S.xitems || [], n.customer, S.parts || []) };
+  return partsMemo.v;
+};
+const partOptions = ps => ps.map(x => `<option value="${esc(x.part)}">${x.from === 'xero' ? 'Xero product' : !x.so ? 'in Parts' : x.from === 'customer' ? `${esc(x.so)}, ${fmt(x.date)}` : `ordered by others, ${esc(x.so)}`}${x.price != null ? ' · ' + gbp(x.price, 2) : ''}</option>`).join('');
 /** PO(s) for one dispatch note: its lines' own call-off POs, else the order's PO. */
 const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
 const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
@@ -487,7 +494,7 @@ function orderForm() {
         <button class="btn sm" type="button" data-olsplit>Split the lines</button></details></div>
     <p class="note" id="of-tot">${formTotals(n.lines)}</p>
     ${(() => { const ps = formParts(n), c = k => ps.filter(x => x.from === k).length;
-      return `<datalist id="of-parts">${ps.map(x => `<option value="${esc(x.part)}">${x.from === 'xero' ? 'Xero product' : !x.so ? 'in Parts' : x.from === 'customer' ? `${esc(x.so)}, ${fmt(x.date)}` : `ordered by others, ${esc(x.so)}`}${x.price != null ? ' · ' + gbp(x.price, 2) : ''}</option>`).join('')}</datalist>
+      return `<datalist id="of-parts">${partOptions(partMatches(ps, ''))}</datalist>
       <p class="note">Parts list: ${c('customer')} for this customer, ${c('board')} from other orders${c('parts') ? `, ${c('parts')} in Parts` : ''}${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Type the part number or a word from the description; picking one fills in its price.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
     <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : n.procNote ? '. ' + esc(n.procNote) : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
@@ -2061,7 +2068,10 @@ document.addEventListener('input', e => {
   const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);
   const pm = /^of-part(\d+)$/.exec(e.target.id);
   if (pm && S.form) {   // a part picked from the list brings its price, unless a price is already typed
-    const hit = formParts(S.form).find(x => x.part === e.target.value);
+    const all = formParts(S.form), hit = all.find(x => x.part === e.target.value);
+    // The list shows only what matches the typing, so Xero's thousands of products never sit in it at once.
+    const dl = $('of-parts'), want = hit ? [hit] : partMatches(all, e.target.value), key = want.map(x => x.part).join('\n');
+    if (dl && dl.dataset.k !== key) { dl.innerHTML = partOptions(want); dl.dataset.k = key; }
     const price = $('of-price' + pm[1]);
     if (hit && hit.price != null && price && !price.value) {
       price.value = String(hit.price); collectForm();
@@ -2074,6 +2084,12 @@ document.addEventListener('input', e => {
     const i = +m[2]; if ($('of-net' + i)) $('of-net' + i).textContent = gbp(lineNet(S.form.lines[i]), 2);
     $('of-tot').innerHTML = formTotals(S.form.lines);
   }
+});
+// Clicking into a Part box: its list matches what that box already says.
+document.addEventListener('focusin', e => {
+  if (!/^of-part\d+$/.test(e.target.id) || !S.form) return;
+  const dl = $('of-parts'), want = partMatches(formParts(S.form), e.target.value), key = want.map(x => x.part).join('\n');
+  if (dl && dl.dataset.k !== key) { dl.innerHTML = partOptions(want); dl.dataset.k = key; }
 });
 document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
