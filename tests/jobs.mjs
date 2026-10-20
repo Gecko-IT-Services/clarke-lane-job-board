@@ -324,9 +324,15 @@ console.log('jobs: ok');
   ];
   const items = [{ code: 'BR3', description: 'Bracket 3mm', price: 11 }, { code: 'PL', description: 'Plate 6mm', price: 30 }];
   const s = partSuggestions(jobs, items, 'vfs ltd');
-  assert.deepEqual(s.map(x => [x.part, x.price, x.from]), [['bracket  3mm', 12.4, 'customer'], ['Cover', 5, 'customer'], ['Guard', 8, 'board'], ['Plate 6mm', 30, 'xero']],
+  assert.deepEqual(s.map(x => [x.part, x.price, x.from]), [['bracket  3mm', 12.4, 'customer'], ['Cover', 5, 'customer'], ['Guard', 8, 'board'], ['PL Plate 6mm', 30, 'xero']],
     'latest price for the customer wins; a Xero item already ordered is not repeated; blank parts ignored');
   assert.deepEqual(partSuggestions([], items, 'x').map(x => x.from), ['xero', 'xero']);
+  // Xero products by part number (code in front), and Parts for the customer (Mandy, 20 Oct).
+  const vfs = partSuggestions([], [{ code: 'VFS01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'VFS (Southampton) Ltd');
+  assert.deepEqual(vfs.map(x => x.part), ['VFS01-11-1696 Post - Rear LH - Support'], 'typing the part number finds it');
+  const withParts = partSuggestions([], [{ code: 'VFS01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'VFS (Southampton) Ltd',
+    [{ partNo: 'VFS01-11-1696', description: 'Post - Rear LH', customerKey: 'vfssouthampton' }, { partNo: 'EX-1', description: 'Shim', customerKey: 'other' }]);
+  assert.deepEqual(withParts.map(x => [x.part, x.from]), [['VFS01-11-1696 Post - Rear LH', 'customer'], ['EX-1 Shim', 'parts']], 'Parts first; the same number from Xero not repeated');
   console.log('jobs part suggestions: ok');
 }
 

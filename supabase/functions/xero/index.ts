@@ -205,10 +205,13 @@ async function contact(id: string) {
 async function items() {
   const s = await session();
   const r = await xero(s, 'Items');
-  return { items: (r.Items || []).filter((i: any) => i.IsSold !== false).map((i: any) => ({
-    code: i.Code || '', name: i.Name || '', description: (i.Description || i.Name || '').trim(),
-    price: i.SalesDetails?.UnitPrice ?? null })).filter((i: any) => i.description)
-    .sort((a: any, b: any) => a.description.localeCompare(b.description)) };
+  // Every product Xero has, sold or not: those converted from Sage are often not ticked as sold
+  // (Mandy, 20 Oct: VFS01-11-1696 is in Xero but never showed). The code is usually the part number.
+  const all = r.Items || [];
+  return { total: all.length, items: all.map((i: any) => ({
+    code: (i.Code || '').trim(), name: (i.Name || '').trim(), description: (i.Description || i.Name || '').trim(),
+    price: i.SalesDetails?.UnitPrice ?? null, sold: i.IsSold !== false })).filter((i: any) => i.code || i.description)
+    .sort((a: any, b: any) => (a.code || a.description).localeCompare(b.code || b.description, 'en', { numeric: true })) };
 }
 
 /** items: [{ despatchId, contactId }] → one draft invoice each, recorded on the despatch. */

@@ -410,11 +410,11 @@ function openOrderForm(prefill = {}, amendId = null) {
 /** Xero's Products and services, read once per visit for the Part box. Not fatal: the board's own parts still show. */
 async function loadXeroItems() {
   S.xitemsErr = null;
-  try { S.xitems = (await data.xero('items')).items || []; }
+  try { const r = await data.xero('items'); S.xitems = r.items || []; S.xitemsTotal = r.total ?? S.xitems.length; }
   catch (e) { S.xitems = []; S.xitemsErr = e.message; }
   if (S.form) { collectForm(); keepInputs = false; render(); }
 }
-const formParts = n => partSuggestions(S.jobs.filter(j => !j.preview), S.xitems || [], n.customer);
+const formParts = n => partSuggestions(S.jobs.filter(j => !j.preview), S.xitems || [], n.customer, S.parts || []);
 /** PO(s) for one dispatch note: its lines' own call-off POs, else the order's PO. */
 const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
 const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
@@ -484,8 +484,8 @@ function orderForm() {
         <button class="btn sm" type="button" data-olsplit>Split the lines</button></details></div>
     <p class="note" id="of-tot">${formTotals(n.lines)}</p>
     ${(() => { const ps = formParts(n), c = k => ps.filter(x => x.from === k).length;
-      return `<datalist id="of-parts">${ps.map(x => `<option value="${esc(x.part)}">${x.from === 'xero' ? `Xero${x.code ? ' ' + esc(x.code) : ''}` : x.from === 'customer' ? `${esc(x.so)}, ${fmt(x.date)}` : `ordered by others, ${esc(x.so)}`}${x.price != null ? ' · ' + gbp(x.price, 2) : ''}</option>`).join('')}</datalist>
-      <p class="note">Parts list: ${c('customer')} from this customer's orders, ${c('board')} from other orders${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Picking one fills in its price; change it if needed.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
+      return `<datalist id="of-parts">${ps.map(x => `<option value="${esc(x.part)}">${x.from === 'xero' ? 'Xero product' : !x.so ? 'in Parts' : x.from === 'customer' ? `${esc(x.so)}, ${fmt(x.date)}` : `ordered by others, ${esc(x.so)}`}${x.price != null ? ' · ' + gbp(x.price, 2) : ''}</option>`).join('')}</datalist>
+      <p class="note">Parts list: ${c('customer')} for this customer, ${c('board')} from other orders${c('parts') ? `, ${c('parts')} in Parts` : ''}${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Type the part number or a word from the description; picking one fills in its price.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
     <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : n.procNote ? '. ' + esc(n.procNote) : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>

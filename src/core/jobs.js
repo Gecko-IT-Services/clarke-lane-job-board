@@ -1,3 +1,4 @@
+import { normName } from './xero.js';
 /**
  * Pure job logic: no window, no network, so it runs under Node in tests/jobs.mjs.
  *
@@ -457,7 +458,7 @@ export function attention(d, { office = false, wonQuotes = 0 } = {}) {
  * listed. Text matching ignores case and spacing. jobs: the app's jobs (with prices for the office);
  * items: [{ code, description, price }] from Xero (may be empty).
  */
-export function partSuggestions(jobs, items, customer) {
+export function partSuggestions(jobs, items, customer, parts = []) {
   const key = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   const cust = key(customer), seen = new Map();
   const lines = jobs.flatMap(j => j.lines.map(l => ({ part: l.part, price: l.price, so: j.so, date: j.ordered || '', mine: key(j.customer) === cust })))
@@ -467,9 +468,18 @@ export function partSuggestions(jobs, items, customer) {
     const k = key(l.part); if (seen.has(k)) continue;
     seen.set(k, { part: l.part.trim(), price: l.price, from: l.mine ? 'customer' : 'board', so: l.so, date: l.date });
   }
+  // Parts saved in Sales orders › Parts: the customer's own (part number and description).
+  const ck = customer ? normName(customer) : '';
+  for (const p of parts || []) {
+    const text = xeroLinePart({ code: p.partNo, description: p.description });
+    const k = key(text); if (!k || [...seen.values()].some(s => key(s.part).includes(key(p.partNo)))) continue;
+    seen.set(k, { part: text, price: null, from: ck && p.customerKey === ck ? 'customer' : 'parts', code: p.partNo });
+  }
+  // Xero's Products and services: code and description together, so typing the part number finds it.
   for (const i of items || []) {
-    const k = key(i.description); if (!k || seen.has(k)) continue;
-    seen.set(k, { part: i.description.trim(), price: i.price, from: 'xero', code: i.code || '' });
+    const text = xeroLinePart({ code: i.code, description: i.description });
+    const k = key(text); if (!k || seen.has(k) || seen.has(key(i.description)) || (i.code && [...seen.values()].some(s => key(s.part).includes(key(i.code))))) continue;
+    seen.set(k, { part: text, price: i.price, from: 'xero', code: i.code || '' });
   }
   return [...seen.values()];
 }
@@ -531,7 +541,8 @@ export function selectionTotals(jobs, ids) {
  *  the description, unless the description already has it (Mandy, 20 Oct: VFS 01-11-1696). */
 export function xeroLinePart(l) {
   const code = String(l.code || '').trim(), d = String(l.description || '').trim();
-  return !code ? d : !d ? code : d.toUpperCase().includes(code.toUpperCase()) ? d : `${code} ${d}`;
+  const has = new RegExp(`(^|[^A-Z0-9])${code.toUpperCase().replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}($|[^A-Z0-9])`).test(d.toUpperCase());   // as a whole word
+  return !code ? d : !d ? code : has ? d : `${code} ${d}`;
 }
 /**
  * Orders already made from a Xero import whose lines lack that Xero line's item code: [{ id (job line), code, so, part }].
