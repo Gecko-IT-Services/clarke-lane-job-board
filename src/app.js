@@ -394,7 +394,7 @@ function renderJobs() {
 }
 /** Sales orders: the office's own tab, as Sage's Sales Order Processing. New and Amend open here. */
 function renderOrders() {
-  $('v-orders').innerHTML = renderSalesOrders({ jobs: S.jobs, md: md(), today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
+  $('v-orders').innerHTML = renderSalesOrders({ selected: S.sel || (S.sel = new Set()), jobs: S.jobs, md: md(), today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
     { esc, fmt, gbp, dueChip, match: orderMatch });
 }
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
@@ -1874,7 +1874,7 @@ function onClick(e) {
     if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
     return;
   }
-  const t = e.target.closest('button,a,tr[data-open]'); if (!t) return;
+  const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open]'); if (!t) return;
   const d = t.dataset;
   if ('goback' in d) return history.back();
   if ('preview' in d) return enterPreview();
@@ -1940,6 +1940,15 @@ function onClick(e) {
   if (d.drawing) return showDrawing(+d.job, +d.drawing);
   if (d.ponew) return openPoForm(+d.ponew);
   if (d.pob2b) return backToBackPo(+d.pob2b);
+  if (d.pick) { e.stopPropagation(); const id = +d.pick, sel = S.sel || (S.sel = new Set());
+    // Shift-click ticks (or unticks) every order between the last one and this one.
+    if (e.shiftKey && S.lastPick != null) { const ids = [...document.querySelectorAll('#v-orders [data-pick]')].map(x => +x.dataset.pick);
+      const a = ids.indexOf(S.lastPick), b = ids.indexOf(id); const on = !sel.has(id);
+      if (a >= 0 && b >= 0) { for (const x of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) on ? sel.add(x) : sel.delete(x); S.lastPick = id; return render(); } }
+    sel.has(id) ? sel.delete(id) : sel.add(id); S.lastPick = id; return render(); }
+  if (d.pickall != null) { e.stopPropagation(); const ids = d.pickall.split(',').filter(Boolean).map(Number), sel = S.sel || (S.sel = new Set());
+    const all = ids.every(x => sel.has(x)); ids.forEach(x => (all ? sel.delete(x) : sel.add(x))); return render(); }
+  if ('pickclear' in d) { S.sel = new Set(); S.lastPick = null; return render(); }
   if (d.chase) return chaseDebt(d.chase);
   if (d.hintadd) return addHinted(+d.hintadd);
   if (d.keeppart) return keepForPart(+d.keeppart);
