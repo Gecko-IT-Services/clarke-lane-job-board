@@ -487,7 +487,7 @@ function orderForm() {
       <label class="fl">Contact email<input type="text" inputmode="email" id="of-email" value="${esc(n.contactEmail)}" placeholder="Several? Separate with commas" autocomplete="off"></label></div>
     ${bookFor(n.customer).sites.length > 0 ? `<label class="fl">Saved delivery addresses<select class="f" id="of-site"><option value="">Choose one to fill in the address…</option>${bookFor(n.customer).sites.map(x => `<option value="${x.id}">${esc(x.label || x.address.split('\n')[0])}${x.main ? ' (usual)' : ''}</option>`).join('')}</select></label>` : ''}
     <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
-      <label class="fl">Promised delivery (default for new lines)<input type="date" id="of-due" value="${esc(n.due)}"></label></div>
+      <label class="fl">Promised delivery<input type="date" id="of-due" value="${esc(n.due)}" data-was="${esc(n.due)}"><span class="note">Changing it moves the lines on the same date (not yet dispatched) with it, and new lines get it.</span></label></div>
     <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th title="Only if the customer sent a separate PO for this delivery. Blank = the order's PO.">Call-off PO</th><th>Net</th>${amend ? '<th>Dispatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="actions"><button class="btn sm" type="button" data-oladd>Add a line</button>
       <details class="splitter"><summary class="btn sm">Split into call-offs…</summary>
@@ -2210,6 +2210,17 @@ document.addEventListener('change', e => {
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
+  // Promised delivery changed (Mandy, 20 Oct: changing it on an amend did nothing): the lines still on the old
+  // date and not fully dispatched follow it, so Next due moves too. Lines on other dates keep theirs.
+  if (e.target.id === 'of-due' && S.form) {
+    const was = e.target.dataset.was, now = e.target.value; let moved = 0; e.target.dataset.was = now;
+    if (was && now && was !== now) S.form.lines.forEach((l, i) => {
+      const el = $('of-ldue' + i);
+      if (el && el.value === was && !(l.sent > 0 && l.sent >= Number(l.qty))) { el.value = now; moved++; }
+    });
+    collectForm();
+    if (moved) toast(`${moved === 1 ? 'The line' : moved + ' lines'} due ${fmt(was)} moved to ${fmt(now)}. Press ${S.form.mode === 'amend' ? 'Save the changes' : 'Create order'} to keep it.`);
+  }
   if (e.target.id === 'out-sent' && S.outForm && !$('out-due').dataset.touched && e.target.value) $('out-due').value = defaultDueBack(e.target.value);
   if (e.target.id === 'out-due') e.target.dataset.touched = '1';
   if (e.target.id === 'out-proc' && S.outForm) { const f = readOutForm(), j = job(f.jobId); S.outForm = { ...f, finish: f.finish || (j ? finishFor(j, f.process) : '') }; render(); }
