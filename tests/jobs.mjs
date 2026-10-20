@@ -482,3 +482,15 @@ console.log('jobs: ok');
   assert.deepEqual(missingLineCodes(jobs, xo).map(f => [f.id, f.code]), [[11, '01-11-1696']], 'only lines that match and lack it; cancelled left alone');
   console.log('xero item codes: ok');
 }
+
+// partMatches: the Part box's list stays short however many Xero products there are.
+{
+  const { partMatches } = await import('../src/core/jobs.js');
+  const list = [{ part: 'BRK-1 bracket', from: 'customer' }, ...Array.from({ length: 8000 }, (_, i) => ({ part: `X${i} plate`, from: 'xero' })), { part: 'VFS01-11-1696 cover', from: 'xero' }];
+  const assert = (await import('node:assert')).strict;
+  assert.deepEqual(partMatches(list, '').map(x => x.part), ['BRK-1 bracket']);
+  assert.equal(partMatches(list, 'plate').length, 50);
+  assert.deepEqual(partMatches(list, 'vfs01-11').map(x => x.part), ['VFS01-11-1696 cover']);
+  assert.deepEqual(partMatches(list, '1696 COVER').map(x => x.part), ['VFS01-11-1696 cover']);
+  console.log('partMatches ok');
+}

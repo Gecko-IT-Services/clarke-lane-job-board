@@ -114,7 +114,7 @@ export const xero = async (route, body) => {
   if (route === 'contact') return { id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
-  if (route === 'items') return { total: fakeItems.length + 1, items: [...fakeItems, { code: 'EXA01-11-1234', name: 'Post', description: 'Post - Rear LH - Support (made up)', price: 42.5, sold: false }] };
+  if (route === 'items') return { total: fakeItems.length + 1, items: [...fakeItems, ...(new URLSearchParams(location.search).has('many') ? [...Array(8000)].map((_, i) => ({ code: `EXA0${i}-11-${i}`, description: `Made-up part ${i}`, price: 1 + i % 50, sold: false })) : []), { code: 'EXA01-11-1234', name: 'Post', description: 'Post - Rear LH - Support (made up)', price: 42.5, sold: false }] };
   if (route === 'po') { const no = 'PO-' + String(pos.length + 1).padStart(4, '0'), sup = body.contactId.endsWith('a1') ? 'Example Powder Coaters Ltd' : 'Example Steel Supplies';
     pos.push({ id: pos.length + 1, jobId: body.jobId, xeroId: 'x' + pos.length, no, supplier: sup, supplierId: body.contactId, account: body.accountCode || '', delivery: body.deliveryDate || null, lines: body.lines, net: body.lines.reduce((a, l) => a + l.qty * l.unit, 0), at: new Date().toISOString() });
     return { id: 'x', number: no, supplier: sup, recorded: true }; }
