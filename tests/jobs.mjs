@@ -419,3 +419,32 @@ console.log('jobs: ok');
   assert.equal(s.samePart[0].so, 'SO-4');
   console.log('copy a previous PO: ok');
 }
+
+// — Station order: placed jobs first at that station only; the rest keep the running order. —
+{
+  const { floorQueue, moveInStation } = await import('../src/core/jobs.js');
+  const J = (id, due, place = null, prio = null) => ({ id, so: 'SO-' + id, status: 'open', priority: prio,
+    lines: [{ id, qty: 1, price: 1, due }], despatches: [], procs: { Laser: { done: false, place }, Weld: { done: false } } });
+  const jobs = [J(1, '2026-10-21'), J(2, '2026-10-22'), J(3, '2026-10-23', 1), J(4, '2026-10-24')];
+  assert.deepEqual(floorQueue(jobs, 'Laser').map(j => j.id), [3, 1, 2, 4], 'placed at Laser first');
+  assert.deepEqual(floorQueue(jobs, 'Weld').map(j => j.id), [1, 2, 3, 4], 'other stations unchanged');
+  assert.deepEqual(floorQueue(jobs, 'all').map(j => j.id), [1, 2, 3, 4], 'running order unchanged');
+  const ids = moveInStation(floorQueue(jobs, 'Laser'), 'Laser', 4, 1);
+  assert.deepEqual(ids, [3, 4, 1, 2], 'job 4 second; the jobs it passed keep their places below it');
+  console.log('station order: ok');
+}
+
+// — Back-to-back PO lines: the order's parts, costed from the newest earlier PO line naming them. —
+{
+  const { backToBackLines } = await import('../src/core/jobs.js');
+  const j = { id: 9, lines: [{ id: 1, part: 'Hinge 40mm', qty: 20, due: '2026-11-02' }, { id: 2, part: 'Gas strut', qty: 4, due: '2026-10-30' }], despatches: [] };
+  const pos = [
+    { id: 1, supplierId: 'a', account: '5000', lines: [{ description: 'Hinge 40mm', unit: 1.2 }], at: '2026-09-01T00:00:00Z' },
+    { id: 2, supplierId: 'a', account: '5000', lines: [{ description: 'hinge 40mm (pack)', unit: 1.35 }], at: '2026-10-01T00:00:00Z' },
+  ];
+  const r = backToBackLines(j, pos);
+  assert.deepEqual(r.lines, [{ description: 'Hinge 40mm', qty: 20, unit: 1.35 }, { description: 'Gas strut', qty: 4, unit: null }], 'newest cost; unknown left blank');
+  assert.equal(r.supplierId, 'a'); assert.equal(r.account, '5000'); assert.equal(r.delivery, '2026-10-30'); assert.equal(r.costed, 1);
+  assert.equal(backToBackLines(j, [...pos, { id: 3, supplierId: 'b', lines: [{ description: 'Gas strut', unit: 9 }], at: '2026-10-02T00:00:00Z' }]).supplierId, null, 'two suppliers: pick by hand');
+  console.log('back-to-back: ok');
+}

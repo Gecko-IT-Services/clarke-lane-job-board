@@ -39,7 +39,7 @@ export async function loadJobs({ office }) {
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
     { id: l.id, lineNo: l.line_no, part: l.part, qty: l.qty, due: l.due_date, po: l.customer_po || '', price: office ? (price.get(l.id) ?? null) : null });
-  for (const p of procs.data) { const j = byJob.get(p.job_id); if (j) j.procs[p.process] = { done: !!p.done_at, by: p.done_by, at: p.done_at }; }
+  for (const p of procs.data) { const j = byJob.get(p.job_id); if (j) j.procs[p.process] = { done: !!p.done_at, by: p.done_by, at: p.done_at, place: p.place ?? null }; }
   const dById = new Map();
   for (const d of desps.data) {
     const o = { id: d.id, dn: d.dn_number, date: d.despatched_on, by: d.despatched_by, lines: {},
@@ -81,6 +81,12 @@ export async function updateJob(jobId, patch) {
 }
 
 /** The running order: these jobs hold a place, top first; every other job goes back to date order. */
+/** A station's own order: ids hold a place at that process, top first; the rest follow the running order. */
+export async function setStationOrder(process, ids) {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('set_station_order', { p_process: process, p_ids: ids });
+  if (error) fail('The station order was not saved', error);
+}
 export async function setRunningOrder(ids) {
   const sb = await getSupabase();
   const { error } = await sb.rpc('set_running_order', { p_ids: ids });

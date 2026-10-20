@@ -289,8 +289,15 @@ export function partsLeft(job) {
  *  station, only those that still need it. */
 export function floorQueue(jobs, station) {
   const open = jobs.filter(j => ['upcoming', 'current'].includes(stage(j))).sort(byRunningOrder);
-  return station === 'all' ? open : open.filter(j => j.procs[station] && !j.procs[station].done);
+  if (station === 'all') return open;
+  // A station's own order (Levi, 20 Oct): jobs placed there first, by place; the rest in the running order.
+  const at = j => j.procs[station].place ?? Infinity;
+  return open.filter(j => j.procs[station] && !j.procs[station].done).sort((a, b) => (at(a) === at(b) ? 0 : at(a) - at(b)));
 }
+/** Moves a job within one station's queue (list = floorQueue for that station) to index `to`;
+ *  returns the ids that must hold a place there, as moveInOrder does for the running order. */
+export const moveInStation = (list, station, id, to) =>
+  moveInOrder(list.map(j => ({ id: j.id, priority: j.procs[station]?.place ?? null })), id, to);
 
 /** Shop floor tiles: per station, how many jobs wait for it and how many of those are late. */
 export function floorStations(jobs, today) {
@@ -486,4 +493,28 @@ export function poSuggestions(job, jobs, pos) {
     (hit ? out.samePart : from && norm(from.customer) === cust ? out.sameCustomer : out.other).push({ ...p, so: from?.so || '', customer: from?.customer || '' });
   }
   return out;
+}
+
+/**
+ * Back-to-back PO lines for a job: one per part still to send (description = part, qty = left), each
+ * costed from the newest earlier PO line that names that part. supplierId/account come from those POs
+ * when they all agree; delivery = the earliest due date still open. pos as loadPurchaseOrders().
+ */
+export function backToBackLines(job, pos) {
+  const norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const newest = [...pos].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : b.id - a.id));
+  const open = job.lines.map(l => ({ l, left: left(job, l) })).filter(x => x.left > 0);
+  const use = open.length ? open : job.lines.map(l => ({ l, left: l.qty }));
+  const from = [];
+  const lines = use.map(({ l, left: qty }) => {
+    const part = norm(l.part);
+    for (const p of newest) {
+      const hit = part.length >= 3 && p.lines.find(x => { const d = norm(x.description); return d === part || d.includes(part); });
+      if (hit) { from.push(p); return { description: l.part, qty, unit: Number(hit.unit) }; }
+    }
+    return { description: l.part, qty, unit: null };
+  });
+  const one = (k) => { const v = [...new Set(from.map(p => p[k] ?? ''))]; return from.length && v.length === 1 ? v[0] : null; };
+  const dues = use.map(x => x.l.due).filter(Boolean).sort();
+  return { lines, supplierId: one('supplierId'), account: one('account'), delivery: dues[0] || '', costed: lines.filter(l => l.unit != null).length };
 }

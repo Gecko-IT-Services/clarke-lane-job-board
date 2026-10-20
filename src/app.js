@@ -20,8 +20,8 @@ import { postcodeOf } from './core/geo.js';
 import { dashboard, dispatchLists, partSuggestions, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
-  addWorkingDays, quoteStates, repeatLines, poSuggestions, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
-  byRunningOrder, partsLeft, moveInOrder, nextStep } from './core/jobs.js';
+  addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
+  byRunningOrder, partsLeft, moveInOrder, nextStep, floorQueue, moveInStation } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 
@@ -203,6 +203,24 @@ async function moveJob(id, how, visible) {
     else if (typeof how === 'number') toast(`${job(id).so} moved to number ${ids.indexOf(id) + 1}.`, undo);
     else toast(`${job(id).so} moved ${how}.`, undo);
   } catch (e) { S.jobs.forEach(j => { j.priority = before.get(j.id) ?? null; }); render(); toast(e.message, null, true); }
+}
+
+/** Station order: move a job at one station only (the shop floor screen, office). */
+async function moveAtStation(id, how) {
+  const st = S.station; if (!st || st === 'all') return;
+  const list = floorQueue(S.jobs, st), i = list.findIndex(j => j.id === id);
+  const ids = how === 'reset' ? [] : moveInStation(list, st, id, how === 'top' ? 0 : how === 'up' ? i - 1 : i + 1);
+  if (!ids) return;
+  const before = new Map(S.jobs.filter(j => j.procs[st]).map(j => [j.id, j.procs[st].place]));
+  const prevIds = [...before].filter(([, p]) => p != null).sort((a, b) => a[1] - b[1]).map(([k]) => k);
+  const put = m => S.jobs.forEach(j => { if (j.procs[st]) j.procs[st].place = m(j); });
+  put(j => { const n = ids.indexOf(j.id); return n < 0 ? null : n + 1; }); render();
+  const undo = async () => { put(j => before.get(j.id) ?? null); render();
+    try { await data.setStationOrder(st, prevIds); toast(`${st} order put back.`); } catch (e) { toast(e.message, null, true); reload(); } };
+  try {
+    await data.setStationOrder(st, ids);
+    toast(how === 'reset' ? `${st} follows the running order again.` : `${job(id).so} moved ${how === 'top' ? 'to the top' : how} at ${st}. Other stations are unchanged.`, undo);
+  } catch (e) { put(j => before.get(j.id) ?? null); render(); toast(e.message, null, true); }
 }
 
 /** Drag a job by its ⠿ grip to a new place in the list (mouse or touch). */
@@ -419,6 +437,7 @@ function collectForm() {
   n.lines = n.lines.map((l, i) => ({ ...l, part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i), po: v('of-lpo' + i) }));
   n.procs = [...document.querySelectorAll('input[name=of-p]:checked')].map(i => i.value);
   n.splitN = v('of-sn'); n.splitEvery = v('of-se'); n.splitFrom = v('of-sf');
+  if ($('of-b2b')) n.b2b = $('of-b2b').checked;
 }
 const lineNet = l => round2((Number(l.qty) || 0) * (Number(l.price) || 0));
 function formTotals(lines) {
@@ -464,6 +483,7 @@ function orderForm() {
     <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
+    ${amend ? '' : `<label class="b2b"><input type="checkbox" id="of-b2b" ${n.b2b ? 'checked' : ''}> <span><b>Back-to-back:</b> buy these parts in for this order. Once it is saved, the purchase order opens ready, with the same parts (no processes needed if nothing is made here).</span></label>`}
     <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button>
       <button class="btn link sm" type="button" data-booksave title="Save the contact, email and delivery address above to this customer's contact book (Sales orders › Customers)">Save contact and address to the contact book</button></div>
     <p class="note" id="of-msg"></p></form>`;
@@ -527,7 +547,7 @@ async function submitOrder() {
   if (bad) return msg('Every line needs a part, a whole-number quantity, a unit price (0 is allowed) and a due date.');
   const under = lines.find(l => l.sent && Number(l.qty) < l.sent);
   if (under) return msg(`"${under.part}" has ${under.sent} dispatched already, so its quantity cannot go below that.`);
-  if (!n.procs.length) return msg('Tick at least one process so the shop floor knows what the order needs.');
+  if (!n.procs.length && !n.b2b) return msg('Tick at least one process so the shop floor knows what the order needs (or tick Back-to-back if it is bought in and sent on).');
   if (n.mode === 'new' && n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
   const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due, customer_po: (l.po || '').trim() }));
   S.busy = true; render();
@@ -546,6 +566,7 @@ async function submitOrder() {
         due_date: lines.map(l => l.due).sort().pop(), processes: n.procs, lines: payloadLines });
       const who = n.customer.trim();
       S.form = null; keepInputs = false; await reload();
+      if (n.b2b && S.xero) { S.busy = false; render(); backToBackPo(j.id); return toast(`${j.so_number} created for ${who}. Here is its back-to-back purchase order: check the supplier and costs, then send it to Xero.`); }
       showDoc('soa', j.id);
       toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Not started. Press Job sheet to print one for the folder.`);
     }
@@ -861,7 +882,7 @@ function procButtons(j, focus) {
 }
 function renderFloor() {
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
-    kiosk: !!S.kiosk }, { esc, fmt, fmtTime, TICK });
+    kiosk: !!S.kiosk, canMove: office() }, { esc, fmt, fmtTime, TICK });
 }
 
 /* ---------- new orders: Levi's ordered quotes and Xero sales orders, as Sage-style rows ---------- */
@@ -1126,7 +1147,8 @@ function purchasePanel(j) {
     ${list.map(p => `<tr><td class="mono">${esc(p.no || 'draft')}</td><td style="text-align:left">${esc(p.supplier)}</td><td>${fmt(p.at.slice(0, 10))}</td><td>${gbp(p.net, 2)}</td>
       <td><a class="btn sm" href="${xeroPoLink(p.xeroId)}" target="_blank" rel="noopener">Open in ${XERO}</a></td></tr>`).join('')}</tbody></table>`
     : '<div class="note">Bought-in parts or outside work (painting, plating) for this order. Each one goes to Xero as a draft purchase order.</div>'}
-    ${j.status !== 'cancelled' ? `<div class="actions"><button class="btn" type="button" data-ponew="${j.id}">${icon('plus')}New purchase order</button></div>` : ''}</div>`;
+    ${j.status !== 'cancelled' ? `<div class="actions"><button class="btn" type="button" data-ponew="${j.id}">${icon('plus')}New purchase order</button>
+      <button class="btn" type="button" data-pob2b="${j.id}" title="A PO for this order's parts, with the supplier and costs from the last PO for them">${icon('repeat')}Back-to-back PO</button></div>` : ''}</div>`;
 }
 const blankPoLine = () => ({ description: '', qty: '1', unit: '' });
 function openPoForm(jobId) {
@@ -1174,6 +1196,18 @@ function showPoForm() {
         <span class="note" style="margin-left:auto">Net <b>${gbp(net, 2)}</b> + VAT as set in Xero</span></div>
       <div class="actions"><button class="btn pri" type="button" data-pocreate ${f.busy ? 'disabled' : ''}>${f.busy ? 'Sending to Xero…' : `Create draft PO in ${XERO}`}</button></div></div>`;
   $('doc').hidden = false; document.body.classList.add('doc-open');
+}
+/** Back-to-back (Mandy, 20 Oct): a PO for exactly this order's parts. Each part takes the cost from the
+ *  newest earlier PO line naming it; the supplier is the one on that PO when every costed part agrees. */
+function backToBackPo(jobId) {
+  const j = job(jobId); if (!j) return;
+  openPoForm(jobId); const f = S.poForm; if (!f) return;
+  const r = backToBackLines(j, S.pos || []);
+  f.lines = r.lines.map(l => ({ description: l.description, qty: String(l.qty), unit: l.unit == null ? '' : String(l.unit) }));
+  if (r.supplierId) f.contactId = r.supplierId;
+  if (r.account != null) { f.account = r.account === '5000' || r.account === '' ? r.account : 'other'; f.other = f.account === 'other' ? r.account : ''; }
+  f.delivery = r.delivery && r.delivery >= todayIso() ? r.delivery : '';   // never a delivery date already gone f.copied = `${j.so}, back-to-back${r.costed ? ` (costs for ${r.costed} of ${r.lines.length} part${r.lines.length === 1 ? '' : 's'} from earlier POs)` : ''}`;
+  showPoForm();
 }
 /** Fills the open PO form from an earlier PO: its supplier, account code and lines (kept as they were). */
 function copyPo(id) {
@@ -1605,6 +1639,7 @@ function onClick(e) {
   if ('jobsort' in d) { S.jobSort = S.jobSort === 'value' ? null : 'value'; return render(); }
   if ('edittarget' in d) { S.editTarget = d.edittarget !== 'close'; render(); if (S.editTarget) $('be-in')?.focus(); return; }
   if (d.move) { e.stopPropagation(); return moveJob(+d.job, d.move, boardVisible()); }
+  if (d.smove) { e.stopPropagation(); if (!office()) return; return moveAtStation(+d.job || 0, d.smove); }
   if (d.stage) { S.stage = d.stage; S.stageChosen = true; return render(); }
   if (d.station) { S.station = d.station; render(); window.scrollTo(0, 0); return; }
   if (d.stations) { S.station = null; render(); window.scrollTo(0, 0); return; }
@@ -1634,6 +1669,7 @@ function onClick(e) {
   if (d.jobsheet) return openJobSheet(+d.jobsheet);
   if (d.drawing) return showDrawing(+d.job, +d.drawing);
   if (d.ponew) return openPoForm(+d.ponew);
+  if (d.pob2b) return backToBackPo(+d.pob2b);
   if ('poadd' in d) { collectPo(); S.poForm.lines.push(blankPoLine()); return showPoForm(); }
   if (d.podel) { collectPo(); S.poForm.lines.splice(+d.podel, 1); return showPoForm(); }
   if ('pofill' in d) { collectPo(); const j = job(S.poForm.jobId); S.poForm.lines = [...S.poForm.lines.filter(l => l.description.trim()), ...j.lines.map(l => ({ description: l.part, qty: String(left(j, l) || l.qty), unit: '' }))]; return showPoForm(); }
