@@ -36,10 +36,10 @@ await step('pf', 'Customer to pay first? "New pro forma" makes PF-0001. Email it
 await step('sheet', 'Print the job sheet for the job folder: what to make, the processes to tick, and no prices.',
   `document.querySelector('[data-closedoc]').click(); await new Promise(r=>setTimeout(r,500)); document.querySelector('[data-jobsheet]').click(); await new Promise(r=>setTimeout(r,600)); document.querySelector('#doc .paper').scrollIntoView({block:'start'});`, 1200);
 // Break-even and target here are made up for the video (this repo is public): never Clarke Lane's real figures.
-await step('jobs', 'Jobs lists every open job, soonest due first. Click a due date to change it, drag ⠿ to bring a job forward. For Levi, the steel tube shows the month against break-even and target.',
+await step('jobs', 'Jobs lists every open job, soonest due first. Click a due date to change it, drag ⠿ to bring a job forward. For Levi: invoiced so far, work in progress (blue) and the gap to target.',
   `document.querySelector('[data-closedoc]').click(); document.querySelector('[data-close]')?.click(); await new Promise(r=>setTimeout(r,400)); document.querySelector('[data-tab="jobs"]').click();
    await new Promise(r=>setTimeout(r,500)); document.querySelector('[data-edittarget]')?.click(); await new Promise(r=>setTimeout(r,300));
-   if (document.getElementById('be-in')) { document.getElementById('be-in').value='50000'; document.getElementById('target-in').value='65000'; document.querySelector('[data-targetform]').requestSubmit(); }
+   if (document.getElementById('be-in')) { document.getElementById('be-in').value='8000'; document.getElementById('target-in').value='10000'; document.querySelector('[data-targetform]').requestSubmit(); }
    await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);`, 1500);
 await step('floor', 'The shop floor screen: tap your station to see the jobs waiting there, in the running order.',
   `document.querySelector('[data-tab="floor"]').click(); window.scrollTo(0,0);`, 1200);
@@ -51,7 +51,7 @@ await step('dn', 'Dispatch: choose what is going (all or part), press "Create di
   `document.querySelector('[data-desp]')?.click(); await new Promise(r=>setTimeout(r,700)); document.getElementById('mkdn')?.click();`, 1800);
 await step('xero', 'Once delivered, notes wait under "Waiting for Xero". Tick them and press "Send to Xero": one draft invoice per note, for exactly what was sent. Keith approves in Xero.',
   `document.querySelector('[data-closedoc]')?.click(); await new Promise(r=>setTimeout(r,300)); document.querySelector('[data-dispview="xero"]')?.click(); window.scrollTo(0,0);`, 1500);
-await step('home', 'Home, every morning: what is late, due this week and ready to go, invoicing to do, and (for Levi) the month so far, Xero invoices included, against break-even and target.',
+await step('home', 'Home, every morning: what is late, due this week and ready to go, invoicing to do, and (for Levi) the month: invoiced, work in progress and the gap to target.',
   `document.querySelector('[data-tab="home"]').click(); window.scrollTo(0,0);`, 2200);
 writeFileSync('frames.json', JSON.stringify(frames, null, 1));
 b.close();

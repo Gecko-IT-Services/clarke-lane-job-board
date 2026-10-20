@@ -9,11 +9,11 @@
  "Buying in parts, or outside work like painting? Press New purchase order. Pick the supplier from Xero, and the account. Materials, such as steel, are already set to five thousand. For anything else, type the code, or leave it for Keith. Add the lines and costs, and it goes to Xero as a draft P O, with the S O number on it.",
  "If the customer needs to pay first, press New pro forma. Email it, and Keith is copied in automatically. The customer pays quoting the P F number. Press Mark paid when the money arrives.",
  "Print the job sheet for the job folder. It shows what to make and the processes to tick, with no prices.",
- "Jobs lists every open job, soonest due first. Click a due date to change it, or drag a job to bring it forward. The shop floor follows this order. For Levi, the steel tube at the top fills as the month's work goes out, against break-even and target.",
+ "Jobs lists every open job, soonest due first. Click a due date to change it, or drag a job to bring it forward. The shop floor follows this order. For Levi, the top shows the month in three parts: what's been invoiced, the work in progress due by the month end, in blue, and the gap still to find to reach the target.",
  "This is the shop floor screen. Tap your station to see the jobs waiting there, in the order to do them.",
  "When a process is finished, tap its step, and it turns green. Press Drawing to see the drawing full screen. Tap a green step again to undo it.",
  "When every process is ticked, the job shows Ready to dispatch, and it appears on the Dispatch tab.",
  "On Dispatch, choose what's going, all of it or part, and press Create dispatch note. Then email it to the customer, or print it.",
  "Once it's delivered, the note waits under Waiting for Xero. Tick it and press Send to Xero. That makes one draft invoice for exactly what was sent, ready for Keith to approve.",
- "And every morning, start on Home. It shows what's late, what's due this week, what's ready to go, and the invoicing to do. For Levi, the tube shows the month so far, including anything invoiced in Xero outside the board, against break-even and target. That's the whole process."
+ "And every morning, start on Home. It shows what's late, what's due this week, what's ready to go, and the invoicing to do. For Levi, it shows the month too: invoiced, including anything raised in Xero outside the board, work in progress, and the gap to target. That's the whole process."
 ]
