@@ -36,7 +36,7 @@ function flow(office) {
 }
 
 /** The whole process as a short video (made from the practice board: made-up customers only; see dev/video). */
-const video = () => `<section class="hsec" id="help-video">${head(0, 'Watch: from order to invoice (about 3½ minutes, with sound)')}
+const video = () => `<section class="hsec" id="help-video">${head(0, 'Watch: from order to invoice (about 4 minutes, with sound)')}
     <figure class="hvideo"><video controls preload="none" playsinline poster="/help/walkthrough.jpg" src="/help/walkthrough.mp4"></video>
     <figcaption>Every step, spoken and captioned: the Xero changeover, making an order, drawings, purchase orders, pro forma, job sheet, Jobs, the shop floor, dispatch and Xero. Practice data only.</figcaption></figure>
   </section>`;
