@@ -518,3 +518,11 @@ export function backToBackLines(job, pos) {
   const dues = use.map(x => x.l.due).filter(Boolean).sort();
   return { lines, supplierId: one('supplierId'), account: one('account'), delivery: dues[0] || '', costed: lines.filter(l => l.unit != null).length };
 }
+
+/** Orders ticked on Sales orders (Levi, 20 Oct): how many, their order value and what is still to dispatch. */
+export function selectionTotals(jobs, ids) {
+  const picked = (jobs || []).filter(j => ids.has(j.id));
+  const sum = f => round2(picked.reduce((a, j) => a + (f(j) || 0), 0));
+  return { count: picked.length, value: sum(j => value(j)), remaining: sum(j => (j.status === 'cancelled' ? 0 : value(j, { remaining: true }))),
+    money: picked.every(j => j.lines.every(l => l.price != null)) };
+}

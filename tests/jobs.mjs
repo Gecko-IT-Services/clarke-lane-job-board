@@ -448,3 +448,16 @@ console.log('jobs: ok');
   assert.equal(backToBackLines(j, [...pos, { id: 3, supplierId: 'b', lines: [{ description: 'Gas strut', unit: 9 }], at: '2026-10-02T00:00:00Z' }]).supplierId, null, 'two suppliers: pick by hand');
   console.log('back-to-back: ok');
 }
+
+// — Ticked orders on Sales orders: count, order value, still to dispatch. —
+{
+  const { selectionTotals } = await import('../src/core/jobs.js');
+  const J = (id, status, lines, despatches = []) => ({ id, status, lines, despatches, procs: {} });
+  const jobs = [J(1, 'open', [{ id: 1, qty: 10, price: 5 }], [{ id: 1, date: '2026-10-01', lines: { 1: 4 } }]), J(2, 'open', [{ id: 2, qty: 2, price: 100 }]),
+    J(3, 'cancelled', [{ id: 3, qty: 1, price: 999 }]), J(4, 'open', [{ id: 4, qty: 1, price: 1 }])];
+  const t = selectionTotals(jobs, new Set([1, 2, 3]));
+  assert.deepEqual([t.count, t.value, t.remaining, t.money], [3, 1249, 230, true], 'cancelled counts in value, not in still to dispatch');
+  assert.equal(selectionTotals(jobs, new Set()).count, 0);
+  assert.equal(selectionTotals([J(5, 'open', [{ id: 5, qty: 1, price: null }])], new Set([5])).money, false);
+  console.log('selection totals: ok');
+}

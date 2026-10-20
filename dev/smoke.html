@@ -279,6 +279,10 @@ label.fl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight
 .pchecks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .partadd .row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px} @media (max-width:640px){.partadd .row3{grid-template-columns:1fr}} #v-parts .ref{display:block;font-size:12px;color:var(--muted)} #v-parts .hsec-h input[type=search]{margin-left:auto;min-width:260px}
 #v-parts tr[data-dropsugg].dropping td{background:var(--info-soft)} #v-parts .sugg{margin-top:8px} #v-parts .pfile{display:inline-flex;align-items:center;gap:6px} #v-parts .pfile svg{width:14px;height:14px;flex:none}
+#v-orders td.pick,#v-orders th.pick{width:34px;padding-right:0} #v-orders td.pick input,#v-orders th.pick input{width:18px;height:18px;cursor:pointer;margin:0}
+#v-orders tr.picked td{background:var(--info-soft)}
+.selbar{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;max-width:min(560px,calc(100vw - 32px));padding:12px 16px;border-radius:14px;background:var(--surface);border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.22);font-size:14px}
+.selbar b{font-weight:700} @media (max-width:640px){.selbar{left:16px;right:16px;bottom:12px}}
 .panel.drawings{transition:outline-color .15s,background .15s;outline:2px dashed transparent;outline-offset:-6px} .panel.drawings.dropping{outline-color:var(--info);background:var(--info-soft,rgba(37,87,167,.08))} .panel.drawings .droptip{margin-left:8px}
 .panel .hint{border:1px solid var(--line);border-left:4px solid var(--info);border-radius:10px;padding:10px 14px;margin-top:10px;display:flex;flex-direction:column;gap:6px} .panel .hint p{margin:0}
 .newjob .warn.debt{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center} button.chip{cursor:pointer;border:0;font:inherit}

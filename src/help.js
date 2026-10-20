@@ -178,7 +178,8 @@ function jobsBoard() {
       'A green row means every process is ticked: the job is ready to dispatch.',
       '<b>Job sheet</b> (open the job, or from the order acknowledgement): a printed copy for the job folder with the drawing. It has the parts, due dates and a box for each process, and no prices. Before printing, <b>What is this sheet for?</b> lets you set <b>To make</b> for each line, for example just this week\'s call-off for VFS or Wessex. It starts on the next delivery; <b>Everything outstanding</b> fills in the rest. This only changes the sheet, never the order. The board is still the live record, so tick processes there too.',
       'Click a row to open the whole order. From there: <b>Amend</b>, <b>Hold</b> / <b>Release</b>, <b>Cancel</b>, <b>Repeat order</b>, <b>Order acknowledgement</b> and <b>Dispatch…</b>.',
-      'Prices and values are on <b>Sales orders</b>; the shop floor never sees them.'])}
+      'Prices and values are on <b>Sales orders</b>; the shop floor never sees them.',
+      '<b>Adding orders up:</b> on <b>Sales orders</b>, tick the box at the start of each order (Shift-click to tick a run of them, or the box in the heading for every order shown). A panel in the corner keeps a running total: how many, their order value, and what is still to dispatch. <b>Clear</b> unticks them all.'])}
   </section>`;
 }
 
