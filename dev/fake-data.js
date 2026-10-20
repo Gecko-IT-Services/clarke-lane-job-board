@@ -79,9 +79,9 @@ export const xeroStatus = async () => sessionStorage.getItem('fakeXero') ? { ten
 export const xero = async (route, body) => {
   if (route === 'connect') { sessionStorage.setItem('fakeXero', '1'); return { url: location.pathname + '?xero=connected#xero' }; }
   if (route === 'month') return { from: body.from, to: body.to, creditsRead: true, invoices: [   // made-up figures
-    { id: 'xm1', number: 'INV-31901', reference: 'P31600', customer: 'Example Customer Ltd', date: body.from, net: 21500 },
-    { id: 'xm2', number: 'INV-31902', reference: 'Sage SO 9600', customer: 'Sample Works Ltd', date: body.from, net: 14250 },
-    { id: 'xm3', number: 'CN-0101', reference: '', customer: 'Sample Works Ltd', date: body.from, net: -350, credit: true }] };
+    { id: 'xm1', number: 'INV-31901', reference: 'P31600', customer: 'Example Customer Ltd', date: body.from, net: 2600 },
+    { id: 'xm2', number: 'INV-31902', reference: 'Sage SO 9600', customer: 'Sample Works Ltd', date: body.from, net: 1550 },
+    { id: 'xm3', number: 'CN-0101', reference: '', customer: 'Sample Works Ltd', date: body.from, net: -150, credit: true }] };
   if (route === 'read') return { organisation: 'Clarke Lane Engineering Ltd', highestSo: 9780, counterNext: 9783,
     quotes: [{ id: 'q1', number: 'SO-9776', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
       lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] }],
