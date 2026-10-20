@@ -17,6 +17,7 @@ import { renderWon } from './won.js';
 import { startWave, endWave } from './wave.js';
 import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
+import { renderTv } from './tv.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
@@ -371,7 +372,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
@@ -380,7 +381,7 @@ function renderTabs() {
   // Map lives under Dispatch and Customers under Sales orders (Philip: fewer tabs); their parent tab stays lit.
   const lit = { map: 'dispatch', customers: 'orders', parts: 'orders' }[S.tab] || S.tab;
   $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
-  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts'].includes(k)).map(([k, t]) => {
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -1004,6 +1005,20 @@ function outPanel(j) {
       ${r.backOn ? '' : `<button class="btn sm" type="button" data-outback="${r.id}">Back in</button> `}<button class="btn sm link" type="button" data-outedit="${r.id}">Change</button></p>`).join('')}
     ${can.map(p => `<button class="btn sm" type="button" data-sendout="${esc(p)}" data-job="${j.id}">Send out for ${esc(SHORT[p])}</button>`).join(' ')}</div>`;
 }
+/* ---------- the workshop TV: the whiteboard on a big screen, display only ---------- */
+function renderTvView() {
+  $('v-tv').innerHTML = renderTv({ jobs: S.jobs, outwork: S.outwork || [], today: todayIso(), now: new Date(), page: S.tvPage || 0 }, { esc, fmt });
+}
+// Next page every 15 seconds when there are more jobs than fit, and the clock.
+setInterval(() => { if (S.tab !== 'tv' || !S.me) return; S.tvPage = (S.tvPage || 0) + 1; renderTvView(); }, 15000);
+// Keep the TV's screen on while it shows the board (where the browser allows it).
+let tvLock = null;
+function tvAwake(on) {
+  if (on && !tvLock && navigator.wakeLock && !document.hidden) navigator.wakeLock.request('screen').then(l => { tvLock = l; l.addEventListener('release', () => { tvLock = null; }); }).catch(() => {});
+  if (!on && tvLock) { tvLock.release().catch(() => {}); tvLock = null; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.tab === 'tv') tvAwake(true); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.tab === 'tv') location.hash = '#floor'; });
 function renderFloor() {
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
     kiosk: !!S.kiosk, canMove: office(), outwork: S.outwork || [], outForm: S.outForm, canRemove: office() }, { esc, fmt, fmtTime, TICK });
@@ -1928,9 +1943,10 @@ function render() {
   if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
   if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero'].includes(S.tab)) S.tab = 'floor';
-  if (S.kiosk) { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
-  if (!office() && S.tab !== 'floor') S.tab = 'floor';   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
-  document.body.classList.toggle('kiosk-mode', !!S.kiosk);
+  if (S.kiosk && S.tab !== 'tv') { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
+  if (!office() && !['floor', 'tv'].includes(S.tab)) S.tab = 'floor';   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
+  document.body.classList.toggle('kiosk-mode', !!S.kiosk || S.tab === 'tv');
+  document.body.classList.toggle('tv-mode', S.tab === 'tv'); tvAwake(S.tab === 'tv');
   renderTabs();
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
@@ -1940,7 +1956,7 @@ function render() {
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
-    orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+    tv: renderTvView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor');
   renderDrawer();
   restoreInputs(kept);
@@ -2043,6 +2059,7 @@ function onClick(e) {
   if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
   if (d.outback) { e.stopPropagation(); return outBack(+d.outback); }
   if (d.outremove) return removeOut(+d.outremove);
+  if ('tvopen' in d) { location.hash = '#tv'; fullscreen(true); return; }
   if (d.outcancel) { S.outForm = null; render(); window.scrollTo(0, 0); return; }
   if ('jobsort' in d) { S.jobSort = S.jobSort === 'value' ? null : 'value'; return render(); }
   if ('edittarget' in d) { S.editTarget = d.edittarget !== 'close'; render(); if (S.editTarget) $('be-in')?.focus(); return; }

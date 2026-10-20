@@ -29,6 +29,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
       <div class="tiles">${tiles}${outTile}</div>
       <div class="kfoot"><button type="button" class="btn" data-station="all">All jobs <em>${floorQueue(jobs, 'all').length}</em></button>
         <button type="button" class="btn" data-kiosk="${kiosk ? 'off' : 'on'}" aria-pressed="${!!kiosk}">${kiosk ? 'Leave kiosk mode' : 'Kiosk mode'}</button>
+        <button type="button" class="btn" data-tvopen title="The whiteboard for the workshop TV: display only, updates by itself. Esc comes back here.">TV board</button>
         <span class="note">Updates by itself. Goes back to this screen after 2 minutes untouched.</span></div></div>`;
   }
 
