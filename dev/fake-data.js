@@ -93,7 +93,7 @@ export const xero = async (route, body) => {
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
   if (route === 'items') return { items: fakeItems };
   if (route === 'po') { const no = 'PO-' + String(pos.length + 1).padStart(4, '0'), sup = body.contactId.endsWith('a1') ? 'Example Powder Coaters Ltd' : 'Example Steel Supplies';
-    pos.push({ id: pos.length + 1, jobId: body.jobId, xeroId: 'x' + pos.length, no, supplier: sup, delivery: body.deliveryDate || null, lines: body.lines, net: body.lines.reduce((a, l) => a + l.qty * l.unit, 0), at: new Date().toISOString() });
+    pos.push({ id: pos.length + 1, jobId: body.jobId, xeroId: 'x' + pos.length, no, supplier: sup, supplierId: body.contactId, account: body.accountCode || '', delivery: body.deliveryDate || null, lines: body.lines, net: body.lines.reduce((a, l) => a + l.qty * l.unit, 0), at: new Date().toISOString() });
     return { id: 'x', number: no, supplier: sup, recorded: true }; }
   if (route === 'invoices') return { invoices: body.ids.map(id => ({ id, number: 'INV-0001', status: 'DRAFT' })) };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }

@@ -217,7 +217,7 @@ export async function loadPurchaseOrders() {
   const sb = await getSupabase();
   const { data, error } = await sb.from('purchase_orders').select('*').order('id');
   if (error) fail('Could not load the purchase orders', error);
-  return data.map(p => ({ id: p.id, jobId: p.job_id, xeroId: p.xero_id, no: p.po_number, supplier: p.supplier_name, delivery: p.delivery_date,
+  return data.map(p => ({ id: p.id, jobId: p.job_id, xeroId: p.xero_id, no: p.po_number, supplier: p.supplier_name, supplierId: p.supplier_id, account: p.account_code ?? '', delivery: p.delivery_date,
     lines: p.lines, net: Number(p.net), by: p.created_by, at: p.created_at }));
 }
 

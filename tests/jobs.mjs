@@ -397,3 +397,25 @@ console.log('jobs: ok');
   assert.equal(monthState({ dispatched: 12300, dueByEnd: 0 }, 20000, null).word, '£7.7k to break-even');
   console.log('month gauge words: ok');
 }
+
+// — Copy a previous PO: same parts first, then the same customer, newest first. —
+{
+  const { poSuggestions } = await import('../src/core/jobs.js');
+  const J = (id, customer, parts) => ({ id, so: 'SO-' + id, customer, lines: parts.map((part, i) => ({ id: id * 10 + i, part })) });
+  const jobs = [J(1, 'VFS (Southampton) Ltd', ['Valve Guard 2mm', 'Bracket A']), J(2, 'VFS (Southampton) Ltd', ['Cover plate']),
+    J(3, 'Wessex International', ['Panel']), J(4, 'VFS (Southampton) Ltd', ['Valve guard 2mm'])];
+  const pos = [
+    { id: 1, jobId: 1, lines: [{ description: 'Powder coat RAL 9005' }], at: '2026-10-01T10:00:00Z' },
+    { id: 2, jobId: 2, lines: [{ description: 'Zinc plate' }], at: '2026-10-05T10:00:00Z' },
+    { id: 3, jobId: 3, lines: [{ description: 'Steel 3mm for Bracket A' }], at: '2026-10-07T10:00:00Z' },
+    { id: 4, jobId: 3, lines: [{ description: 'Anodise' }], at: '2026-10-08T10:00:00Z' },
+    { id: 5, jobId: 4, lines: [{ description: 'Powder coat' }], at: '2026-10-09T10:00:00Z' },
+  ];
+  const s = poSuggestions(jobs[3], jobs, pos);
+  assert.deepEqual(s.samePart.map(p => p.id), [5, 1], 'same part (case and spacing ignored), newest first, own POs included');
+  assert.deepEqual(s.sameCustomer.map(p => p.id), [2]);
+  assert.deepEqual(s.other.map(p => p.id), [4, 3]);
+  assert.equal(poSuggestions(jobs[0], jobs, pos).samePart.map(p => p.id).join(), '5,3,1', 'a PO line naming one of the parts counts');
+  assert.equal(s.samePart[0].so, 'SO-4');
+  console.log('copy a previous PO: ok');
+}
