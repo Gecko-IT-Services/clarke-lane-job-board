@@ -6,7 +6,7 @@
  */
 import { boardLists, dashboard, byRunningOrder, needed, allDone, nextDue, value, lastDespatch, deliveryDates, left, monthProgress, SHORT } from './core/jobs.js';
 import { card } from './home.js';
-import { monthPanel } from './gauge.js';
+import { monthLine } from './gauge.js';
 import { icon } from './icons.js';
 
 export function renderBoard({ jobs, today, office, md = false, monthXero = { x: null, note: '' }, stageKey, search, anyPlaced, breakeven = null, target = null, editTarget = false, byValue = false }, h) {
@@ -69,7 +69,8 @@ export function renderBoard({ jobs, today, office, md = false, monthXero = { x: 
     ? ' <button type="button" class="btn link sm" data-move="reset">Put everything back in date order</button>' : ''}`;
 
   // This month against break-even and the ideal target (MD only). The figures are typed in on the board, never in the code.
-  const month = md && !done ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), xeroNote: monthXero.note, breakeven, target, edit: editTarget,
+  // This month (MD only), as one line: the full panel and its settings are on Home (Philip, 20 Oct).
+  const month = md && !done ? monthLine({ mp: monthProgress(jobs, today, monthXero.x), breakeven, target,
     name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   return { list, html: `<div class="home">
