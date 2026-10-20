@@ -9,6 +9,7 @@ import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
 import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding } from './core/parts.js';
+import { OUT_PROCESSES, outNow, outBoard, itemsFor, finishFor, defaultDueBack, suppliersUsed, checkSend } from './core/outwork.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { icon, XERO, MICROSOFT } from './icons.js';
@@ -127,6 +128,8 @@ async function reload() {
   try {
     [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() }),
       office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
+    // Work sent out (powder coat, plating): everyone, the shop floor included. A missing table just means none yet.
+    S.outwork = await data.loadOutwork().then(r => { S.outErr = null; return r; }).catch(e => { S.outErr = e.message; return S.outwork || []; });
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
       data.loadPurchaseOrders().catch(() => S.pos || [])]);
@@ -987,9 +990,67 @@ function procButtons(j, focus) {
   return needed(j).map(p => { const s = j.procs[p];
     return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"${j.status === 'held' && !office() ? ' disabled' : ''}><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
 }
+/** On the job's details: its sends to other companies, and Send out when one is due. */
+function outPanel(j) {
+  const rows = (S.outwork || []).filter(r => r.jobId === j.id).sort((a, b) => b.sentOn.localeCompare(a.sentOn) || b.id - a.id);
+  const can = OUT_PROCESSES.filter(p => j.procs[p] && !j.procs[p].done && !outNow(S.outwork, j.id, p));
+  if (!rows.length && !can.length) return '';
+  const today = todayIso();
+  return `<div class="outlist">${rows.map(r => `<p>${r.backOn ? '' : `<span class="chip ${r.dueBack && r.dueBack < today ? 'late' : 'soon'}">Out now</span> `}<b>${esc(SHORT[r.process])}</b> at ${esc(r.supplier)}${r.finish ? ` (${esc(r.finish)})` : ''}:
+      went ${fmt(r.sentOn)}${r.backOn ? `, back ${fmt(r.backOn)}` : r.dueBack ? `, due back ${fmt(r.dueBack)}` : ''}.
+      ${r.backOn ? '' : `<button class="btn sm" type="button" data-outback="${r.id}">Back in</button> `}<button class="btn sm link" type="button" data-outedit="${r.id}">Change</button></p>`).join('')}
+    ${can.map(p => `<button class="btn sm" type="button" data-sendout="${esc(p)}" data-job="${j.id}">Send out for ${esc(SHORT[p])}</button>`).join(' ')}</div>`;
+}
 function renderFloor() {
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
-    kiosk: !!S.kiosk, canMove: office() }, { esc, fmt, fmtTime, TICK });
+    kiosk: !!S.kiosk, canMove: office(), outwork: S.outwork || [], outForm: S.outForm, canRemove: office() }, { esc, fmt, fmtTime, TICK });
+}
+
+/* ---------- work sent out: powder coat and plating at another company (the whiteboard) ---------- */
+function sendOutForm(jobId, process) {
+  const j = job(jobId); if (!j) return;
+  const today = todayIso();
+  S.outForm = { jobId, process, supplier: suppliersUsed(S.outwork)[0] || '', items: itemsFor(j), finish: finishFor(j, process), sentOn: today, dueBack: defaultDueBack(today), note: '' };
+  S.tab = 'floor'; closeDoc(); S.open = null; render(); window.scrollTo(0, 0); $('out-sup')?.focus();
+}
+function editOut(id) {
+  const r = (S.outwork || []).find(x => x.id === id); if (!r) return;
+  S.outForm = { ...r, dueTouched: true }; S.tab = 'floor'; closeDoc(); S.open = null; render(); window.scrollTo(0, 0);
+}
+const readOutForm = () => ({ ...S.outForm, process: $('out-proc').value, supplier: $('out-sup').value.trim(), items: $('out-items').value.trim(), finish: $('out-fin').value.trim(),
+  sentOn: $('out-sent').value, dueBack: $('out-due').value, note: $('out-note').value.trim(), dueTouched: !!$('out-due').dataset.touched });
+async function saveOut() {
+  const f = readOutForm(), err = checkSend(f, todayIso());
+  if (err) { $('out-err').textContent = err; $('out-err').hidden = false; return; }
+  const btn = document.querySelector('#outf [type=submit]'); btn.disabled = true;
+  const j = job(f.jobId);
+  try {
+    if (f.id) await data.updateOutwork(f.id, { supplier: f.supplier, items: f.items, finish: f.finish, sentOn: f.sentOn, dueBack: f.dueBack, note: f.note });
+    else await data.sendOut({ ...f, by: S.me.name });
+    S.outForm = null; S.station = 'out';
+    toast(f.id ? `${j?.so || 'The send'} changed.` : `${j?.so || 'It'} is out at ${f.supplier}${f.dueBack ? `, due back ${fmt(f.dueBack)}` : ''}.`);
+    await reload(); window.scrollTo(0, 0);
+  } catch (e) { btn.disabled = false; $('out-err').textContent = e.message; $('out-err').hidden = false; }
+}
+/** Back from the other company: the row is closed and that process ticked done (Undo takes both back). */
+async function outBack(id) {
+  const r = (S.outwork || []).find(x => x.id === id), j = r && job(r.jobId); if (!r || !j) return;
+  const wasDone = !!j.procs[r.process]?.done, today = todayIso();
+  try {
+    await data.updateOutwork(id, { backOn: today < r.sentOn ? r.sentOn : today, backBy: S.me.name });
+    if (j.procs[r.process] && !wasDone) await data.setProcess(j.id, r.process, true, S.me.name);
+    toast(`${j.so} back from ${r.supplier}. ${SHORT[r.process]} ticked done.`, async () => {
+      try { await data.updateOutwork(id, { backOn: null }); if (!wasDone) await data.setProcess(j.id, r.process, false, S.me.name); } catch (e) { toast(e.message, null, true); }
+      reload();
+    });
+  } catch (e) { toast(e.message, null, true); }
+  reload();
+}
+async function removeOut(id) {
+  const r = (S.outwork || []).find(x => x.id === id), j = r && job(r.jobId);
+  if (!confirm(`Remove this send of ${j?.so || 'the job'} to ${r?.supplier || 'the company'}? Use it only for a mistake: it is no longer on the Sent out list.`)) return;
+  try { await data.deleteOutwork(id); S.outForm = null; toast('Removed.'); } catch (e) { toast(e.message, null, true); }
+  reload();
 }
 
 /* ---------- new orders: Levi's ordered quotes and Xero sales orders, as Sage-style rows ---------- */
@@ -1180,7 +1241,7 @@ function renderDrawer() {
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
     ${drawingsPanel(j)}
-    <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div></div>
+    <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div>${outPanel(j)}</div>
     <div class="panel"><h3>Dispatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
       ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>
         <td>${d.emailedAt ? fmt(d.emailedAt.slice(0, 10)) : '—'}</td><td>${d.deliveredOn ? fmt(d.deliveredOn) : '<span class="note">not yet</span>'}</td>
@@ -1737,11 +1798,31 @@ function showDoc(kind, jobId, despId) {
   $('doc').innerHTML = `<div class="docbar"><span>${kind === 'job' ? 'Print it for the job folder.' : kind === 'pfnew' ? 'Check it, then make the pro forma.' : sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>${pfBtns}
       ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">${icon('doc')}Job sheet</button>` : ''}
       ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${icon('mail')}${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
-      <button class="btn" type="button" data-print>${icon('print')}Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
+      ${['dn', 'soa', 'pf'].includes(kind) ? `<button class="btn" type="button" data-savedoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}" title="Save it as a PDF named ${esc(docName(kind, jobId, despId))}.pdf">${icon('doc')}Save PDF</button>` : ''}
+      <button class="btn" type="button" data-print data-name="${esc(docName(kind, jobId, despId))}">${icon('print')}Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
     ${kind === 'job' ? sheetEditor(j) : kind === 'pfnew' ? pfEditor(j) : ''}
     <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
   $('doc').hidden = false;
   document.body.classList.add('doc-open');
+}
+
+/** The file name a document is saved under (Philip, 20 Oct: they keep despatch notes, so the customer's name is in it). */
+function docName(kind, jobId, despId) {
+  const j = job(jobId); if (!j) return 'Document';
+  const no = kind === 'dn' ? j.despatches.find(x => x.id === despId)?.dn : kind === 'pf' ? (S.pfs || []).find(x => x.id === despId)?.pf : kind === 'job' ? 'Job sheet' : j.so;
+  const what = { dn: 'Delivery note', soa: 'Order acknowledgement', pf: 'Pro forma' }[kind];
+  return [j.customer, what, no, kind === 'soa' ? '' : j.so].filter(Boolean).join(' - ').replace(/[\\/:*?"<>|#%]+/g, '-');
+}
+/** Downloads the document as a PDF with that name. */
+async function saveDoc(kind, jobId, despId) {
+  const btn = document.querySelector('[data-savedoc]'), was = btn?.innerHTML; if (btn) { btn.disabled = true; btn.textContent = 'Making the PDF…'; }
+  try {
+    const b64 = await pdfBase64(docHtml(kind, jobId, despId));
+    const a = document.createElement('a'); a.href = 'data:application/pdf;base64,' + b64; a.download = docName(kind, jobId, despId) + '.pdf';
+    document.body.append(a); a.click(); a.remove();
+    toast(`Saved ${a.download} to your Downloads.`);
+  } catch (e) { toast(e.message, null, true); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = was; } }
 }
 
 /* ---------- emailing documents: an Outlook draft with the PDF attached, never sent by the board ---------- */
@@ -1854,6 +1935,7 @@ function render() {
   ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
+      sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor');
@@ -1880,7 +1962,7 @@ let idleT;
 function nudge() {
   clearTimeout(idleT);
   // The shared factory screen only: an office user's half-done drawer is never closed under them.
-  idleT = setTimeout(() => { if (S.tab !== 'floor' || (office() && !S.kiosk) || (S.station == null && S.open == null && $('doc').hidden)) return; closeDoc(); S.station = null; S.open = null; S.ask = null; render(); window.scrollTo(0, 0); }, 120000);
+  idleT = setTimeout(() => { if (S.tab !== 'floor' || (office() && !S.kiosk) || (S.station == null && S.open == null && !S.outForm && $('doc').hidden)) return; closeDoc(); S.station = null; S.open = null; S.ask = null; S.outForm = null; render(); window.scrollTo(0, 0); }, 120000);
 }
 ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, nudge, { passive: true }));
 nudge();
@@ -1954,6 +2036,11 @@ function onClick(e) {
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
+  if (d.sendout) { e.stopPropagation(); return sendOutForm(+d.job, d.sendout); }
+  if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
+  if (d.outback) { e.stopPropagation(); return outBack(+d.outback); }
+  if (d.outremove) return removeOut(+d.outremove);
+  if (d.outcancel) { S.outForm = null; render(); window.scrollTo(0, 0); return; }
   if ('jobsort' in d) { S.jobSort = S.jobSort === 'value' ? null : 'value'; return render(); }
   if ('edittarget' in d) { S.editTarget = d.edittarget !== 'close'; render(); if (S.editTarget) $('be-in')?.focus(); return; }
   if (d.move) { e.stopPropagation(); return moveJob(+d.job, d.move, boardVisible()); }
@@ -2028,7 +2115,12 @@ function onClick(e) {
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
   if ('despclose' in d) { S.desp = null; keepInputs = false; return render(); }
   if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; render(); return showDespForm(); }
-  if ('print' in d) return window.print();
+  if ('print' in d) {   // the browser's "Save as PDF" takes the page title as the file name
+    const was = document.title; if (d.name) document.title = d.name;
+    window.addEventListener('afterprint', () => { document.title = was; }, { once: true });
+    return window.print();
+  }
+  if (d.savedoc) return saveDoc(d.savedoc, +d.job, d.dnid ? +d.dnid : null);
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
   if (d.cancdn) { S.cancelDn = +d.cancdn; return render(); }
@@ -2098,6 +2190,9 @@ document.addEventListener('change', e => {
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
+  if (e.target.id === 'out-sent' && S.outForm && !$('out-due').dataset.touched && e.target.value) $('out-due').value = defaultDueBack(e.target.value);
+  if (e.target.id === 'out-due') e.target.dataset.touched = '1';
+  if (e.target.id === 'out-proc' && S.outForm) { const f = readOutForm(), j = job(f.jobId); S.outForm = { ...f, finish: f.finish || (j ? finishFor(j, f.process) : '') }; render(); }
   if (e.target.name === 'of-p' && S.form) S.form.procsTouched = true;
   // Same part made before: tick the processes it had then, until someone ticks by hand.
   if (/^of-part\d+$/.test(e.target.id) && S.form && !S.form.procsTouched && !S.form.spQuoteId && S.form.mode !== 'amend') {
@@ -2122,6 +2217,7 @@ document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('orderform' in f.dataset) return submitOrder();
   if ('partform' in f.dataset) return savePart(f);
+  if (f.id === 'outf') return saveOut();
   if ('pfsettings' in f.dataset) return savePfSettings();
   if ('targetform' in f.dataset) {
     const num = id => { const v = $(id).value.trim(); return v === '' ? null : Math.round(Number(v)); };

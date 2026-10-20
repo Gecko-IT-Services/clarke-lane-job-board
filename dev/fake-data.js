@@ -170,3 +170,11 @@ export const saveSite = async x => { if (x.main) book.sites.forEach(y => { if (y
 export const deleteSite = async id => { book.sites = book.sites.filter(x => x.id !== id); };
 // Xero Products and services for the Part box (made up).
 const fakeItems = [{ code: 'BR3', description: 'Bracket — 3mm S275', price: 12.1 }, { code: 'PL6', description: 'Base plate 6mm S275, 4 holes', price: 31.5 }, { code: 'GU2', description: 'Guard 2mm Zintec, powder coat RAL 9005', price: 18 }];
+
+// Work sent out: one job out at a made-up coater, a few days overdue.
+const outwork = [{ id: 1, jobId: 2, process: 'P/Coat Paint', supplier: 'Example Coaters Ltd', items: '5 × Cabinet', finish: 'RAL 7035', sentOn: '2026-10-12', dueBack: '2026-10-16', backOn: null, note: '', sentBy: 'Shop Floor', backBy: null }];
+let outNo = 2;
+export const loadOutwork = async () => structuredClone(outwork);
+export const sendOut = async f => { const id = outNo++; outwork.push({ id, ...f, supplier: f.supplier.trim(), dueBack: f.dueBack || null, backOn: null, sentBy: f.by, backBy: null }); return id; };
+export const updateOutwork = async (id, f) => { const r = outwork.find(x => x.id === id); Object.assign(r, f); if ('backOn' in f && !f.backOn) { r.backOn = null; r.backBy = null; } };
+export const deleteOutwork = async id => { if (role === 'floor') throw new Error('It was not removed. Only Levi and Mandy can remove a send.'); outwork.splice(outwork.findIndex(x => x.id === id), 1); };

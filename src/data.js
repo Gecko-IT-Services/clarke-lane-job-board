@@ -292,6 +292,38 @@ export async function loadPurchaseOrders() {
     lines: p.lines, net: Number(p.net), by: p.created_by, at: p.created_at }));
 }
 
+/* ---------- work sent out (powder coat, plating): anyone records it, Levi and Mandy delete ---------- */
+const outRow = r => ({ id: r.id, jobId: r.job_id, process: r.process, supplier: r.supplier, items: r.items, finish: r.finish, sentOn: r.sent_on,
+  dueBack: r.due_back, backOn: r.back_on, note: r.note, sentBy: r.sent_by, backBy: r.back_by });
+export async function loadOutwork() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('outwork').select('*').order('id');
+  if (error) fail('Could not load the work sent out', error);
+  return data.map(outRow);
+}
+export async function sendOut({ jobId, process, supplier, items, finish, sentOn, dueBack, note, by }) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('outwork').insert({ job_id: jobId, process, supplier: supplier.trim(), items: items || '', finish: finish || '',
+    sent_on: sentOn, due_back: dueBack || null, note: note || '', sent_by: by }).select('id').single();
+  if (error) fail('It was not saved as sent out', error);
+  return data.id;
+}
+export async function updateOutwork(id, f) {
+  const sb = await getSupabase();
+  const patch = {};
+  for (const [k, c] of [['supplier', 'supplier'], ['items', 'items'], ['finish', 'finish'], ['sentOn', 'sent_on'], ['dueBack', 'due_back'], ['note', 'note']]) if (k in f) patch[c] = f[k] === '' && k === 'dueBack' ? null : f[k];
+  if ('backOn' in f) { patch.back_on = f.backOn || null; patch.back_by = f.backOn ? f.backBy : null; }
+  const { error, count } = await sb.from('outwork').update(patch, { count: 'exact' }).eq('id', id);
+  if (error) fail('The change was not saved', error);
+  if (!count) throw new Error('The change was not saved. Try again.');
+}
+export async function deleteOutwork(id) {
+  const sb = await getSupabase();
+  const { error, count } = await sb.from('outwork').delete({ count: 'exact' }).eq('id', id);
+  if (error) fail('It was not removed', error);
+  if (!count) throw new Error('It was not removed. Only Levi and Mandy can remove a send.');
+}
+
 /* ---------- aged debt chases (office): a note of each chase email drafted ---------- */
 export async function loadChases() {
   const sb = await getSupabase();
@@ -479,7 +511,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

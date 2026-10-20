@@ -14,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
+export function renderHome({ jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -48,6 +48,9 @@ export function renderHome({ jobs, me, office, md = false, editTarget = false, m
       : card(debts.list.length ? 'bad' : 'ok', 'late', debts.list.length ? gbp(debts.list.reduce((a, c) => a + c.over, 0)) : 0,
         debts.list.length ? `Over 60 days · ${plural(debts.list.length, 'customer')}` : 'Over 60 days · nobody', debts.list.length > 0,
         'data-homeview="debts" title="Show the customers with invoices over 60 days"'),
+    // Work at other companies (powder coat, plating): opens the Sent out whiteboard on the Shop floor.
+    sentOut && (sentOut.out || sentOut.ready) ? card(sentOut.late ? 'bad' : 'info', 'truck', sentOut.out, sentOut.late ? `Sent out · ${sentOut.late} overdue back` : sentOut.ready ? `Sent out · ${sentOut.ready} ready to go` : 'Sent out to other companies',
+      sentOut.out > 0 || sentOut.ready > 0, 'data-gostation="out" title="Show what is at other companies for powder coat or plating"') : '',
   ].join('') : '';
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
