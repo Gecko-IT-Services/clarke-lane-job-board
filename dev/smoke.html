@@ -252,6 +252,28 @@ body.kiosk-mode #app > header.top,body.kiosk-mode #app > nav.tabs,body.kiosk-mod
 .kiosk .fstat{margin:0;font-size:18px;color:var(--muted)}
 .kiosk .fstat b{color:var(--ink)}
 .kiosk .allclear{margin:0;padding:24px;font-size:20px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:14px}
+/* Home: Today */
+.today{display:flex;flex-direction:column;gap:10px} .today .hsec-h .btn{margin-left:auto}
+.tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.tcard{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.tcard b{font-size:24px;font-variant-numeric:tabular-nums} .tcard span{color:var(--muted);font-size:13px}
+.tcard.t-bad{border-color:var(--bad);background:var(--bad-soft)} .tcard.t-warn{border-color:var(--warn);background:var(--warn-soft)} .tcard.t-info{border-color:var(--info);background:var(--info-soft)}
+.tcard:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+ul.tasks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px} ul.tasks li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+ul.tasks li.late{border-color:var(--bad)} ul.tasks label{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+.taskform{max-width:760px} .taskform .row3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
+/* Customer pages and enquiries */
+#v-customers .ctabs{margin:6px 0 14px;flex-wrap:wrap}
+#v-customers .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px} #v-customers .cwide{grid-column:1/-1}
+#v-customers .cfacts{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px} #v-customers .ctl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+#v-customers .cnote{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px} #v-customers .cnote input{flex:1;min-width:200px}
+#v-customers .cmail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px} #v-customers .cmail li{border-bottom:1px solid var(--line);padding-bottom:8px} #v-customers .cmail p{margin:4px 0}
+.enquiries{margin-bottom:16px} .enquiries h3 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
+.enquiries .elist tr[data-enqopen]{cursor:pointer} .enquiries .elist tr.open{background:var(--field)} .enquiries td small{display:block;color:var(--muted);font-size:12px}
+.enquiries .lines td,.enquiries .lines th{text-align:left} .enquiries .edetail td{background:var(--field)} .enquiries .edetail p{margin:0 0 6px}
+.enquiries .saibox{display:flex;flex-direction:column;gap:8px;max-width:760px;margin:8px 0} .enquiries .sinline{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+#v-sales .snewslist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 12px;margin:8px 0} #v-sales .snewslist label{font-size:14px}
+#v-sales .saipanel{border-color:var(--info)}
 /* Sales (Levi only) */
 #v-sales{display:flex;flex-direction:column;gap:18px} #v-sales .panel h3 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
 #v-sales .hcard b{display:block;font-size:22px} #v-sales .hcard span{color:var(--muted);font-size:13px} #v-sales .sline{margin:12px 0 0}
@@ -814,7 +836,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/core/sales.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

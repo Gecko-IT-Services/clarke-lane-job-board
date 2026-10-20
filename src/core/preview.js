@@ -17,6 +17,8 @@ const HINTS = [
   ['Plating / Anodising', /zinc|plat(ed|ing)|anodis|galv/i],
   ['Rolling', /\brol(l|led|ling)\b/i],
 ];
+/** The processes the words name, with no default (customer pages: what a customer has bought from us). */
+export const processHints = texts => { const all = texts.join(' '); return PROCESSES.filter(p => HINTS.some(([q, re]) => q === p && re.test(all))); };
 export function guessProcesses(texts) {
   const all = texts.join(' ');
   const hit = HINTS.filter(([, re]) => re.test(all)).map(([p]) => p);

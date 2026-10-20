@@ -114,12 +114,14 @@ export async function graphRaw(path, { method = 'GET', body, headers = {}, scope
   return res;
 }
 
-/** Graph call as the signed-in person. Used only to read Levi's quotes. */
-export async function graph(path, { headers = {}, method = 'GET', body, scopes = CONFIG.GRAPH_SCOPES } = {}) {
+/** Graph call as the signed-in person. quiet: never send the page to Microsoft to approve a permission (a
+ *  background check of a mailbox); throw an error with code CONSENT_REQUIRED instead. */
+export async function graph(path, { headers = {}, method = 'GET', body, scopes = CONFIG.GRAPH_SCOPES, quiet = false } = {}) {
   let token;
   try {
     token = (await msal.acquireTokenSilent({ scopes, account })).accessToken;
   } catch {
+    if (quiet) { const e = new Error('This needs a one-off Microsoft 365 permission that is not approved yet.'); e.code = 'CONSENT_REQUIRED'; throw e; }
     await msal.acquireTokenRedirect({ scopes, account });
     return new Promise(() => {});
   }
@@ -131,7 +133,7 @@ export async function graph(path, { headers = {}, method = 'GET', body, scopes =
     try { msg = (await res.json()).error?.message || msg; } catch { /* not JSON */ }
     const e = new Error(res.status === 403 && path.includes('/sites/')
       ? 'Your Microsoft account cannot open the Factory Jobs site in SharePoint, where the quotes are kept. Ask for read access to that site.'
-      : `SharePoint said: ${msg} (${res.status})`);
+      : `${path.includes('/sites/') ? 'SharePoint' : 'Microsoft 365'} said: ${msg} (${res.status})`);
     e.status = res.status;
     throw e;
   }
