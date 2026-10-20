@@ -21,7 +21,7 @@ import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists, partSuggestions, partMatches, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions, partMatches, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -483,7 +483,7 @@ function orderForm() {
     <div class="row3"><label class="fl">Customer order no. (PO)<input type="text" id="of-po" value="${esc(n.po)}"></label>
       <label class="fl">Contact<input type="text" id="of-contact" value="${esc(n.contact)}" list="of-people" autocomplete="off">
         <datalist id="of-people">${bookFor(n.customer).people.map(p => `<option value="${esc(p.name)}">${esc(ROLES[p.role])}${p.email ? ' · ' + esc(p.email) : ''}</option>`).join('')}</datalist></label>
-      <label class="fl">Contact email<input type="email" id="of-email" value="${esc(n.contactEmail)}"></label></div>
+      <label class="fl">Contact email<input type="text" inputmode="email" id="of-email" value="${esc(n.contactEmail)}" placeholder="Several? Separate with commas" autocomplete="off"></label></div>
     ${bookFor(n.customer).sites.length > 0 ? `<label class="fl">Saved delivery addresses<select class="f" id="of-site"><option value="">Choose one to fill in the address…</option>${bookFor(n.customer).sites.map(x => `<option value="${x.id}">${esc(x.label || x.address.split('\n')[0])}${x.main ? ' (usual)' : ''}</option>`).join('')}</select></label>` : ''}
     <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
       <label class="fl">Promised delivery (default for new lines)<input type="date" id="of-due" value="${esc(n.due)}"></label></div>
@@ -561,6 +561,9 @@ async function submitOrder() {
   const n = S.form, msg = t => { $('of-msg').textContent = t; };
   const lines = n.lines.filter(l => l.part.trim() || l.qty || l.price);
   if (!n.customer.trim()) return msg('Enter the customer.');
+  const mails = emailList(n.contactEmail);
+  if (mails.bad.length) return msg(`"${mails.bad[0]}" is not an email address. Put several addresses with a comma between them.`);
+  n.contactEmail = mails.ok.join(', ');
   if (!lines.length) return msg('Add at least one line.');
   const bad = lines.find(l => !l.part.trim() || !(Number(l.qty) > 0) || !Number.isInteger(Number(l.qty)) || l.price === '' || Number(l.price) < 0 || !l.due);
   if (bad) return msg('Every line needs a part, a whole-number quantity, a unit price (0 is allowed) and a due date.');
@@ -623,7 +626,7 @@ async function saveFormToBook() {
   const key = normName(n.customer), b = bookFor(n.customer);
   try {
     let did = [];
-    if ((n.contact.trim() || n.contactEmail.trim()) && !b.people.some(p => p.role === 'orders' && p.name === n.contact.trim() && p.email === n.contactEmail.trim())) {
+    if ((n.contact.trim() || n.contactEmail.trim()) && emailList(n.contactEmail).ok.length <= 1 && !b.people.some(p => p.role === 'orders' && p.name === n.contact.trim() && p.email === n.contactEmail.trim())) {
       await data.savePerson({ key, customer: n.customer.trim(), role: 'orders', name: n.contact.trim(), email: n.contactEmail.trim(), main: !b.people.some(p => p.role === 'orders') });
       did.push(`${n.contact.trim() || n.contactEmail.trim()} (orders)`);
     }

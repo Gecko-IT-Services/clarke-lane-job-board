@@ -43,7 +43,7 @@ export const updateJob = async (id, patch) => { if ('contact_email' in patch) fi
 let nextLine = 100;
 export const createJob = async p => {
   const id = jobs.length + 1, so = p.so_number || 'SO-97' + (82 + id);
-  jobs.push({ id, so, quote: p.quote_no, spQuoteId: p.sp_quote_id, xeroQuoteId: p.xero_quote_id, customer: p.customer, contactName: p.contact_name, contactEmail: '',
+  jobs.push({ id, so, quote: p.quote_no, spQuoteId: p.sp_quote_id, xeroQuoteId: p.xero_quote_id, customer: p.customer, contactName: p.contact_name, contactEmail: p.contact_email || '',
     po: p.customer_po, ordered: '2026-10-15', due: p.due_date, notes: p.notes, address: p.delivery_address, status: 'open',
     lines: p.lines.map((l, i) => ({ id: nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' })),
     procs: Object.fromEntries(p.processes.map(x => [x, { done: false }])), despatches: [] });

@@ -4,6 +4,7 @@
  */
 import { CONFIG } from './config.js';
 import { getSupabase, graph, graphRaw } from './auth.js';
+import { emailList } from './core/jobs.js';
 import { QUOTE_FIELDS, LINE_FIELDS, resolveColumns, quoteLookupColumn, toQuote, toLine } from './core/quotes.js';
 
 /** UK spelling on screen: the database names and older messages say despatch. */
@@ -153,11 +154,13 @@ export async function markAckEmailed(jobId) {
  * An Outlook draft in the signed-in person's mailbox with the PDF attached. Never sends:
  * the person checks it in Outlook and presses Send. Returns Outlook's link to the draft.
  */
+/** to and cc: one address, or several separated by commas or semicolons. */
 export async function draftEmail({ to, cc, subject, html, fileName, pdfBase64 }) {
+  const list = t => emailList(t).ok.map(address => ({ emailAddress: { address } }));
   const msg = await graph('/me/messages', { method: 'POST', scopes: CONFIG.MAIL_SCOPES, body: {
     subject, body: { contentType: 'HTML', content: html },
-    toRecipients: to ? [{ emailAddress: { address: to } }] : [],
-    ccRecipients: cc ? [{ emailAddress: { address: cc } }] : [],
+    toRecipients: list(to),
+    ccRecipients: list(cc),
     attachments: pdfBase64 ? [{ '@odata.type': '#microsoft.graph.fileAttachment', name: fileName, contentType: 'application/pdf', contentBytes: pdfBase64 }] : [],
   } });
   return msg.webLink;
