@@ -360,6 +360,7 @@ console.log('jobs: ok');
   assert.equal(p.end, '2026-10-31');
   assert.equal(p.dispatched, 40, 'only October notes, cancelled order left out');
   assert.equal(p.dueByEnd, 150, '5 left of line 1 (late) + job 2; November line left out');
+  assert.equal(p.dueLater, 100, 'the November line: on order, due after the month');
   assert.equal(monthProgress([j(4, { lines: [{ id: 5, qty: 1, price: null, due: '2026-10-20' }] })], '2026-10-16').dispatched, null, 'no money without prices');
   assert.equal(monthProgress([], '2026-02-10').end, '2026-02-28');
   assert.equal(Math.round(p.pace * 100), 55, 'Fri 16 Oct: 12 of 22 working days');
