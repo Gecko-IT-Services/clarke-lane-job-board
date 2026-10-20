@@ -112,6 +112,7 @@ let xorders = [];
 export const loadXeroOrders = async () => structuredClone(xorders);
 export const importXeroOrders = async qs => { let n = 0; for (const q of qs) if (!xorders.some(x => x.id === q.id)) { xorders.push({ ...q, importedAt: new Date().toISOString(), importedBy: 'levi@clarke-lane.co.uk', dismissed: false }); n++; } return n; };
 export const dismissXeroOrder = async (id, d) => { xorders.find(x => x.id === id).dismissed = d; };
+export const setStationOrder = async (p, ids) => { for (const j of jobs) if (j.procs[p]) { const n = ids.indexOf(j.id); j.procs[p].place = n < 0 ? null : n + 1; } };
 export const setRunningOrder = async ids => { for (const j of jobs) { const n = ids.indexOf(j.id); j.priority = n < 0 ? null : n + 1; } };
 jobs.push(
   { id: 3, so: 'SO-9783', quote: '', spQuoteId: null, customer: 'Fourth Example Ltd', contactName: '', contactEmail: '', po: 'PO-77', ordered: '2026-10-15', due: '2026-11-12', notes: '', address: '', status: 'open',
