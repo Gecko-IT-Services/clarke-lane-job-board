@@ -18,6 +18,8 @@ import { startWave, endWave } from './wave.js';
 import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
 import { renderTv } from './tv.js';
+import { renderMetal } from './metal.js';
+import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
@@ -134,6 +136,7 @@ async function reload() {
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
       data.loadPurchaseOrders().catch(() => S.pos || [])]);
+    if (office()) S.metal = await data.loadMetal().then(r => { S.metalErr = null; return r; }).catch(e => { S.metalErr = e.message; return S.metal || []; });
     if (office()) [S.chases, S.parts] = await Promise.all([data.loadChases().catch(() => S.chases || []), data.loadParts().catch(e => { S.partsErr = e.message; return S.parts || []; })]);
     S.error = null;
   } catch (e) { S.error = e.message; }
@@ -372,16 +375,16 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
   // Map lives under Dispatch and Customers under Sales orders (Philip: fewer tabs); their parent tab stays lit.
-  const lit = { map: 'dispatch', customers: 'orders', parts: 'orders' }[S.tab] || S.tab;
+  const lit = { map: 'dispatch', customers: 'orders', parts: 'orders', metal: 'orders' }[S.tab] || S.tab;
   $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
-  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv'].includes(k)).map(([k, t]) => {
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -1005,6 +1008,87 @@ function outPanel(j) {
       ${r.backOn ? '' : `<button class="btn sm" type="button" data-outback="${r.id}">Back in</button> `}<button class="btn sm link" type="button" data-outedit="${r.id}">Change</button></p>`).join('')}
     ${can.map(p => `<button class="btn sm" type="button" data-sendout="${esc(p)}" data-job="${j.id}">Send out for ${esc(SHORT[p])}</button>`).join(' ')}</div>`;
 }
+/* ---------- metal prices: ask several suppliers, compare, order from one (Levi and Mandy) ---------- */
+const blankMetal = () => ({ material: 'Aluminium', grade: '', form: 'Sheet', thickness: '', size: '', qty: '1', unit: 'sheets' });
+/** Suppliers asked before, newest first, with the email used last time. */
+function metalSuppliers() {
+  const seen = new Map();
+  for (const r of S.metal || []) for (const q of r.quotes) { const k = q.supplier.trim().toLowerCase(); if (!seen.has(k)) seen.set(k, { supplierId: q.supplierId, supplier: q.supplier, email: q.email }); }
+  return [...seen.values()];
+}
+function renderMetalView() {
+  if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
+  if (S.xero && S.bills === undefined) { S.bills = null; data.xero('bills').then(r => { S.bills = r.bills || []; }).catch(e => { S.bills = []; S.billsErr = e.message; }).then(() => { if (S.tab === 'metal') { if (S.rfqForm) collectRfq(); render(); } }); }
+  $('v-metal').innerHTML = renderMetal({ rfqs: S.metal || [], err: S.metalErr, form: S.rfqForm, open: S.rfqOpen, edit: S.mqEdit, jobs: S.jobs.filter(j => !j.preview), suppliers: metalSuppliers(),
+    xeroSuppliers: S.xc ? S.xc.contacts.filter(c => c.supplier) : (S.xero ? null : []), xeroErr: S.xero ? S.xcErr : 'Xero is not connected', bills: S.xero ? S.bills : [], billsErr: S.billsErr, q: S.msearch, poJob: S.rfqPoJob }, { esc, fmt, gbp });
+}
+function newRfq(jobId) {
+  S.rfqForm = { jobId: jobId || null, lines: [blankMetal()], note: '', needBy: '', picked: metalSuppliers().map(x => ({ ...x, on: true })) };
+  S.tab = 'metal'; closeDoc(); S.open = null; render(); window.scrollTo(0, 0);
+}
+function collectRfq() {
+  const f = S.rfqForm; if (!f || !$('rfqf')) return;
+  f.jobId = +$('rf-job').value || null; f.needBy = $('rf-need').value; f.note = $('rf-note').value.trim();
+  f.lines = f.lines.map((l, i) => ({ material: $('rf-m' + i).value, grade: $('rf-g' + i).value.trim(), form: $('rf-f' + i).value, thickness: $('rf-t' + i).value.trim(),
+    size: $('rf-s' + i).value.trim(), qty: $('rf-q' + i).value, unit: $('rf-u' + i).value }));
+  f.picked = f.picked.map((x, i) => ({ ...x, on: !!document.querySelector(`[data-rfpick="${i}"]`)?.checked, email: $('rf-e' + i)?.value.trim() ?? x.email }));
+}
+/** One Outlook draft per supplier; each is noted as asked once its draft exists. */
+async function draftRfqEmails(r, quotes) {
+  let made = 0;
+  for (const q of quotes) {
+    const { subject, html } = rfqEmail({ id: r.id, lines: r.lines, note: r.note, supplier: q.supplier, from: S.me.name, needBy: r.needBy ? fmtLong(r.needBy) : '' });
+    await data.draftEmail({ to: q.email, subject, html });
+    await data.markAsked(q.id); made++;
+  }
+  return made;
+}
+const mailErr = e => /Mail\.ReadWrite|consent|AADSTS65001/i.test(e.message) ? 'Emailing needs a one-off permission in Microsoft 365 (Mail.ReadWrite). Ask Gecko IT to grant it.' : e.message;
+async function saveRfq() {
+  collectRfq(); const f = S.rfqForm;
+  const lines = f.lines.map(l => ({ ...l, qty: Number(l.qty) })), chosen = f.picked.filter(x => x.on);
+  const err = checkRfq({ lines, suppliers: chosen });
+  if (err) { $('rf-err').textContent = err; $('rf-err').hidden = false; return; }
+  f.busy = true; render();
+  let id = null, made = 0;
+  try {
+    id = await data.createRfq({ jobId: f.jobId, lines, note: f.note, suppliers: chosen });
+    S.metal = await data.loadMetal();
+    const r = S.metal.find(x => x.id === id);
+    made = await draftRfqEmails({ ...r, needBy: f.needBy }, r.quotes);
+    S.rfqForm = null; S.rfqOpen = id;
+    toast(`${rfqRef(id)}: ${made} draft${made === 1 ? '' : 's'} in your Outlook Drafts. Check each one and press Send. Type the prices in here when they reply.`);
+  } catch (e) {
+    if (id) { S.rfqForm = null; S.rfqOpen = id; toast(`${rfqRef(id)} is saved, but ${made ? 'only ' + made + ' draft' + (made === 1 ? ' was' : 's were') + ' made' : 'no drafts were made'}: ${mailErr(e)} Use Email again on the others.`, null, true); }
+    else { f.busy = false; render(); $('rf-err').textContent = e.message; $('rf-err').hidden = false; return; }
+  }
+  await reload();
+}
+function findQuote(qid) { for (const r of S.metal || []) { const q = r.quotes.find(x => x.id === qid); if (q) return { r, q }; } return {}; }
+async function saveMetalQuote(qid) {
+  const { r } = findQuote(qid); if (!r) return;
+  const num = id => { const v = $(id)?.value.trim(); return v === '' || v == null ? null : Number(v); };
+  const prices = r.lines.map((_, i) => num('mq-p' + i)), carriage = num('mq-c'), leadDays = num('mq-l');
+  if ([...prices, carriage, leadDays].some(v => v != null && !(Number.isFinite(v) && v >= 0))) return toast('Prices, delivery and lead time must be numbers (0 or more).', null, true);
+  if (prices.every(v => v == null)) return toast('Type at least one price, or press Cancel.', null, true);
+  try { await data.saveQuote(qid, { prices, carriage, leadDays: leadDays == null ? null : Math.round(leadDays), validUntil: $('mq-v')?.value || null, note: $('mq-n')?.value.trim() || '', by: S.me.name }); S.mqEdit = null; toast('Prices saved.'); }
+  catch (e) { return toast(e.message, null, true); }
+  reload();
+}
+/** Order from one supplier: the PO form, filled in from their quote (account 5000, each line at their price). */
+function orderFromQuote(qid) {
+  const { r, q } = findQuote(qid); if (!r) return;
+  const jobId = r.jobId || +($('rf-pojob')?.value || 0);
+  if (!jobId) return toast('Choose the order this metal is for first: a purchase order goes against an order.', null, true);
+  if (!r.jobId) data.setRfq(r.id, { jobId }).catch(() => {});
+  openPoForm(jobId); const f = S.poForm; if (!f) return;
+  f.contactId = q.supplierId; f.account = '5000';
+  f.lines = r.lines.map((l, i) => ({ description: lineText(l), qty: String(l.qty), unit: String(q.prices[i]) }));
+  if (q.carriage > 0) f.lines.push({ description: 'Delivery', qty: '1', unit: String(q.carriage) });
+  f.copied = `${rfqRef(r.id)}, ${q.supplier}'s prices`; f.rfq = { id: r.id, supplier: q.supplier };
+  showPoForm();
+}
+
 /* ---------- the workshop TV: the whiteboard on a big screen, display only ---------- */
 function renderTvView() {
   $('v-tv').innerHTML = renderTv({ jobs: S.jobs, outwork: S.outwork || [], today: todayIso(), now: new Date(), page: S.tvPage || 0 }, { esc, fmt });
@@ -1544,7 +1628,8 @@ function purchasePanel(j) {
       <td><a class="btn sm" href="${xeroPoLink(p.xeroId)}" target="_blank" rel="noopener">Open in ${XERO}</a></td></tr>`).join('')}</tbody></table>`
     : '<div class="note">Bought-in parts or outside work (painting, plating) for this order. Each one goes to Xero as a draft purchase order.</div>'}
     ${j.status !== 'cancelled' ? `<div class="actions"><button class="btn" type="button" data-ponew="${j.id}">${icon('plus')}New purchase order</button>
-      <button class="btn" type="button" data-pob2b="${j.id}" title="A PO for this order's parts, with the supplier and costs from the last PO for them">${icon('repeat')}Back-to-back PO</button></div>` : ''}</div>`;
+      <button class="btn" type="button" data-pob2b="${j.id}" title="A PO for this order's parts, with the supplier and costs from the last PO for them">${icon('repeat')}Back-to-back PO</button>
+      <button class="btn" type="button" data-rfnew="${j.id}" title="Ask several suppliers for the metal for this order, and compare their prices">Ask for metal prices</button></div>` : ''}</div>`;
 }
 const blankPoLine = () => ({ description: '', qty: '1', unit: '' });
 function openPoForm(jobId) {
@@ -1602,7 +1687,8 @@ function backToBackPo(jobId) {
   f.lines = r.lines.map(l => ({ description: l.description, qty: String(l.qty), unit: l.unit == null ? '' : String(l.unit) }));
   if (r.supplierId) f.contactId = r.supplierId;
   if (r.account != null) { f.account = r.account === '5000' || r.account === '' ? r.account : 'other'; f.other = f.account === 'other' ? r.account : ''; }
-  f.delivery = r.delivery && r.delivery >= todayIso() ? r.delivery : '';   // never a delivery date already gone f.copied = `${j.so}, back-to-back${r.costed ? ` (costs for ${r.costed} of ${r.lines.length} part${r.lines.length === 1 ? '' : 's'} from earlier POs)` : ''}`;
+  f.delivery = r.delivery && r.delivery >= todayIso() ? r.delivery : '';   // never a delivery date already gone
+  f.copied = `${j.so}, back-to-back${r.costed ? ` (costs for ${r.costed} of ${r.lines.length} part${r.lines.length === 1 ? '' : 's'} from earlier POs)` : ''}`;
   showPoForm();
 }
 /** Fills the open PO form from an earlier PO: its supplier, account code and lines (kept as they were). */
@@ -1626,6 +1712,7 @@ async function createPo() {
   f.busy = true; showPoForm();
   try {
     const r = await data.xero('po', { jobId: f.jobId, contactId: f.contactId, deliveryDate: f.delivery, accountCode, lines, key: f.key });
+    if (f.rfq) await data.setRfq(f.rfq.id, { status: 'ordered', orderedFrom: f.rfq.supplier, orderedPo: r.number || '' }).catch(() => {});
     S.poForm = null; closeDoc(); await reload();
     toast(`${r.number || 'Draft purchase order'} for ${r.supplier || 'the supplier'} is in Xero as a draft, referenced ${j.so}.${r.recorded ? '' : ' It could not be listed on the board: refresh the page.'}`);
   } catch (e) { f.busy = false; showPoForm(); toast(e.message, null, true); }
@@ -1942,7 +2029,7 @@ function render() {
   $('preview-bar').hidden = !PREVIEW.on;
   if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
-  if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero'].includes(S.tab)) S.tab = 'floor';
+  if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero', 'metal'].includes(S.tab)) S.tab = 'floor';
   if (S.kiosk && S.tab !== 'tv') { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
   if (!office() && !['floor', 'tv'].includes(S.tab)) S.tab = 'floor';   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
   document.body.classList.toggle('kiosk-mode', !!S.kiosk || S.tab === 'tv');
@@ -1956,7 +2043,7 @@ function render() {
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
-    tv: renderTvView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+    tv: renderTvView, metal: renderMetalView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor');
   renderDrawer();
   restoreInputs(kept);
@@ -2023,7 +2110,7 @@ function onClick(e) {
     if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
     return;
   }
-  const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open]'); if (!t) return;
+  const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen]'); if (!t) return;
   const d = t.dataset;
   if ('goback' in d) return history.back();
   if ('preview' in d) return enterPreview();
@@ -2059,6 +2146,17 @@ function onClick(e) {
   if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
   if (d.outback) { e.stopPropagation(); return outBack(+d.outback); }
   if (d.outremove) return removeOut(+d.outremove);
+  if ('rfnew' in d) return newRfq(d.rfnew ? +d.rfnew : null);
+  if ('rfcancel' in d) { S.rfqForm = null; return render(); }
+  if ('rfadd' in d) { collectRfq(); const last = S.rfqForm.lines.at(-1); S.rfqForm.lines.push({ ...blankMetal(), material: last.material, grade: last.grade, form: last.form, unit: last.unit }); return render(); }
+  if (d.rfdel) { collectRfq(); S.rfqForm.lines.splice(+d.rfdel, 1); return render(); }
+  if (d.rfopen) { S.rfqOpen = S.rfqOpen === +d.rfopen ? null : +d.rfopen; S.mqEdit = null; return render(); }
+  if (d.mqedit) { S.mqEdit = +d.mqedit; render(); $('mq-p0')?.focus(); return; }
+  if ('mqcancel' in d) { S.mqEdit = null; return render(); }
+  if (d.mqsave) return saveMetalQuote(+d.mqsave);
+  if (d.rforder) return orderFromQuote(+d.rforder);
+  if (d.rfmail) { const { r, q } = findQuote(+d.rfmail); if (!q) return; draftRfqEmails(r, [q]).then(() => { toast(`Draft to ${q.supplier} is in your Outlook Drafts. Check it and press Send.`); reload(); }).catch(e => toast(mailErr(e), null, true)); return; }
+  if (d.rfclose) { if (!confirm(`Close ${rfqRef(+d.rfclose)} without ordering? Its prices are kept for the price history.`)) return; data.setRfq(+d.rfclose, { status: 'closed' }).then(reload).catch(e => toast(e.message, null, true)); return; }
   if ('tvopen' in d) { location.hash = '#tv'; fullscreen(true); return; }
   if (d.outcancel) { S.outForm = null; render(); window.scrollTo(0, 0); return; }
   if ('jobsort' in d) { S.jobSort = S.jobSort === 'value' ? null : 'value'; return render(); }
@@ -2170,6 +2268,7 @@ document.addEventListener('input', e => {
     return;
   }
   if (e.target.id === 'pcheck-q') { S.pcheck = { q: e.target.value }; const pos = e.target.selectionStart; render(); const el = $('pcheck-q'); el?.focus(); el?.setSelectionRange(pos, pos); return; }
+  if (e.target.id === 'msearch') { S.msearch = e.target.value; const pos = e.target.selectionStart; if (S.rfqForm) collectRfq(); renderMetalView(); const el = $('msearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'psearch') { S.psearch = e.target.value; const pos = e.target.selectionStart; renderParts(); const el = $('psearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (['search', 'osearch', 'dsearch'].includes(e.target.id)) {
@@ -2209,6 +2308,18 @@ document.addEventListener('change', e => {
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
+  if (e.target.dataset.rfpick !== undefined && S.rfqForm) { collectRfq(); render(); return; }
+  if (e.target.id === 'rf-copy' && S.rfqForm && e.target.value) { collectRfq(); const from = (S.metal || []).find(r => r.id === +e.target.value); if (from) S.rfqForm.lines = structuredClone(from.lines).map(l => ({ ...l, qty: String(l.qty) })); return render(); }
+  if (e.target.id === 'rf-pojob') { S.rfqPoJob = +e.target.value || null; return; }
+  if (e.target.id === 'rf-addx' && S.rfqForm && e.target.value) {
+    collectRfq(); const c = S.xc?.contacts.find(x => x.id === e.target.value); if (!c) return;
+    const row = { supplierId: c.id, supplier: c.name, email: '', on: true }; S.rfqForm.picked.push(row); render();
+    data.xero('contact', { id: c.id }).then(x => {   // their email from Xero, into the box (unless one is typed already)
+      const i = S.rfqForm?.picked.findIndex(y => y.supplierId === c.id), el = $('rf-e' + i);
+      if (x.email && i >= 0 && !S.rfqForm.picked[i].email && el && !el.value) { el.value = x.email; S.rfqForm.picked[i].email = x.email; }
+    }).catch(() => {});
+    return;
+  }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
   // Promised delivery changed (Mandy, 20 Oct: changing it on an amend did nothing): the lines still on the old
   // date and not fully dispatched follow it, so Next due moves too. Lines on other dates keep theirs.
@@ -2249,6 +2360,7 @@ document.addEventListener('submit', async e => {
   if ('orderform' in f.dataset) return submitOrder();
   if ('partform' in f.dataset) return savePart(f);
   if (f.id === 'outf') return saveOut();
+  if (f.id === 'rfqf') return saveRfq();
   if ('pfsettings' in f.dataset) return savePfSettings();
   if ('targetform' in f.dataset) {
     const num = id => { const v = $(id).value.trim(); return v === '' ? null : Math.round(Number(v)); };

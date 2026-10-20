@@ -56,7 +56,7 @@ export function renderSalesOrders({ jobs, md = false, today, view, search, form,
     <button class="btn sm" type="button" data-pickclear>Clear</button></aside>` : '';
   return `<div class="home">
     <div class="hhead"><div><h2>Sales orders</h2><p class="sub">Every order, with what has been dispatched and invoiced. Click one to open it.</p></div>
-      ${form ? '' : `<div class="hbtns"><button class="btn" type="button" data-tab="customers" title="Contact book: buyers, goods in and delivery addresses">Customers</button><button class="btn" type="button" data-tab="parts" title="Repeat parts and their drawings">Parts</button><button class="btn pri" type="button" data-neworder>${icon('plus')}New order</button></div>`}</div>
+      ${form ? '' : `<div class="hbtns"><button class="btn" type="button" data-tab="customers" title="Contact book: buyers, goods in and delivery addresses">Customers</button><button class="btn" type="button" data-tab="parts" title="Repeat parts and their drawings">Parts</button><button class="btn" type="button" data-tab="metal" title="Ask several suppliers for metal prices and compare them">Metal prices</button><button class="btn pri" type="button" data-neworder>${icon('plus')}New order</button></div>`}</div>
     ${form || ''}
     <div class="hcards">${cards}</div>
     <section><div class="hsec-h"><h3>${q ? 'Search results' : V.title}</h3><span class="note">${q ? `${orders(list.length)} found` : V.sub}</span>${seg}${find}</div>${table}<p class="note">Tick orders to see their total in the corner.</p></section>

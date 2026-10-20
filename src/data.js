@@ -327,6 +327,48 @@ export async function deleteOutwork(id) {
   if (!count) throw new Error('It was not removed. Only Levi and Mandy can remove a send.');
 }
 
+/* ---------- metal prices (office): enquiries to several suppliers and the prices they gave ---------- */
+export async function loadMetal() {
+  const sb = await getSupabase();
+  const [r, q] = await Promise.all([sb.from('metal_rfqs').select('*').order('id', { ascending: false }), sb.from('metal_quotes').select('*').order('id')]);
+  for (const x of [r, q]) if (x.error) fail('Could not load the metal prices', x.error);
+  const quotes = q.data.map(x => ({ id: x.id, rfqId: x.rfq_id, supplierId: x.supplier_id, supplier: x.supplier, email: x.email, askedAt: x.asked_at,
+    prices: x.prices, carriage: x.carriage == null ? null : Number(x.carriage), leadDays: x.lead_days, validUntil: x.valid_until, note: x.note, enteredBy: x.entered_by, enteredAt: x.entered_at }));
+  return r.data.map(x => ({ id: x.id, jobId: x.job_id, lines: x.lines, note: x.note, status: x.status, orderedFrom: x.ordered_from, orderedPo: x.ordered_po,
+    by: x.created_by, createdAt: x.created_at, quotes: quotes.filter(y => y.rfqId === x.id) }));
+}
+/** The enquiry and one row per supplier asked. Returns its id. */
+export async function createRfq({ jobId, lines, note, suppliers }) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('metal_rfqs').insert({ job_id: jobId || null, lines, note: note || '' }).select('id').single();
+  if (error) fail('The enquiry was not saved', error);
+  const { error: e2 } = await sb.from('metal_quotes').insert(suppliers.map(x => ({ rfq_id: data.id, supplier_id: x.supplierId || '', supplier: x.supplier.trim(), email: x.email.trim() })));
+  if (e2) fail('The suppliers were not saved on the enquiry', e2);
+  return data.id;
+}
+export async function markAsked(quoteId) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('metal_quotes').update({ asked_at: new Date().toISOString() }).eq('id', quoteId);
+  if (error) fail('Could not note the email', error);
+}
+export async function saveQuote(quoteId, { prices, carriage, leadDays, validUntil, note, by }) {
+  const sb = await getSupabase();
+  const { error, count } = await sb.from('metal_quotes').update({ prices, carriage, lead_days: leadDays, valid_until: validUntil || null, note: note || '',
+    entered_by: by, entered_at: new Date().toISOString() }, { count: 'exact' }).eq('id', quoteId);
+  if (error) fail('The prices were not saved', error);
+  if (!count) throw new Error('The prices were not saved. Try again.');
+}
+export async function setRfq(id, patch) {
+  const sb = await getSupabase();
+  const row = {};
+  if ('status' in patch) row.status = patch.status;
+  if ('orderedFrom' in patch) row.ordered_from = patch.orderedFrom;
+  if ('orderedPo' in patch) row.ordered_po = patch.orderedPo;
+  if ('jobId' in patch) row.job_id = patch.jobId;
+  const { error } = await sb.from('metal_rfqs').update(row).eq('id', id);
+  if (error) fail('The enquiry was not updated', error);
+}
+
 /* ---------- aged debt chases (office): a note of each chase email drafted ---------- */
 export async function loadChases() {
   const sb = await getSupabase();
@@ -514,7 +556,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

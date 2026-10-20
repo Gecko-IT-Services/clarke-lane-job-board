@@ -8,6 +8,7 @@
 //   POST contact   office only → one contact's details (contact person, email, delivery address)
 //   POST items     office only → Products and services that are sold (description, code, sales price)
 //   POST send      office only → one DRAFT sales invoice per despatch (never approved or sent)
+//   POST bills     office only → the last 12 months' supplier bills, materials lines (account 5000) only. Read only.
 //   POST disconnect office only
 //
 // Secrets (Supabase › Edge Functions › Secrets): XERO_CLIENT_ID, XERO_CLIENT_SECRET.
@@ -335,6 +336,21 @@ async function debts() {
     contactId: x.Contact?.ContactID || '', customer: x.Contact?.Name || '', date: xDate(x.DateString || x.Date),
     due: xDate(x.DueDateString || x.DueDate), total: Number(x.Total || 0), owed: Number(x.AmountDue || 0) })) };
 }
+/** Metal prices (20 Oct): what suppliers actually charged for materials, from approved and paid bills in the
+ *  last 12 months, lines on account 5000 only. Read only. */
+async function bills() {
+  const s = await session();
+  const from = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10).split('-').map(Number).join(',');
+  const where = encodeURIComponent(`Type=="ACCPAY" AND Date>=DateTime(${from})`);
+  const list = await allPages(s, `Invoices?where=${where}&Statuses=AUTHORISED,PAID`, 'Invoices');
+  const out = [];
+  for (const x of list) for (const l of (x.LineItems || [])) {
+    if (String(l.AccountCode || '') !== '5000' || !l.Description) continue;
+    out.push({ number: x.InvoiceNumber || x.Reference || '', supplier: x.Contact?.Name || '', date: xDate(x.DateString || x.Date),
+      description: l.Description, qty: Number(l.Quantity || 0), unit: Number(l.UnitAmount || 0), amount: Number(l.LineAmount || 0) });
+  }
+  return { bills: out, from: xDate(new Date(Date.now() - 365 * 864e5).toISOString()) };
+}
 /** Xero's pay-online page for each invoice (for a chase email), up to 15 at a time. Read only. */
 async function onlineLinks(ids: unknown) {
   const want = (Array.isArray(ids) ? ids : []).filter(i => /^[0-9a-f-]{36}$/i.test(String(i))).slice(0, 15);
@@ -386,6 +402,7 @@ Deno.serve(async req => {
       return cors(req, json(await monthSales(b.from, b.to)));
     }
     if (route === 'debts') return cors(req, json(await debts()));
+    if (route === 'bills') return cors(req, json(await bills()));
     if (route === 'online') return cors(req, json(await onlineLinks((await req.json().catch(() => ({}))).ids)));
     if (route === 'invoices') return cors(req, json(await invoiceStatus((await req.json().catch(() => ({}))).ids)));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
