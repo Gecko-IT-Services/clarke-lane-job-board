@@ -36,9 +36,9 @@ function flow(office) {
 }
 
 /** The whole process as a short video (made from the practice board: made-up customers only; see dev/video). */
-const video = () => `<section class="hsec" id="help-video">${head(0, 'Watch: from order to invoice (about 4 minutes, with sound)')}
-    <figure class="hvideo"><video controls preload="none" playsinline poster="/help/walkthrough.jpg" src="/help/walkthrough.mp4"></video>
-    <figcaption>Every step, spoken and captioned: the Xero changeover, making an order, drawings, purchase orders, pro forma, job sheet, Jobs, the shop floor, dispatch and Xero. Practice data only.</figcaption></figure>
+const video = () => `<section class="hsec" id="help-video">${head(0, 'Watch: from order to invoice (about 5 minutes, with sound)')}
+    <figure class="hvideo"><video controls preload="none" playsinline poster="/help/walkthrough.jpg?v=1020b" src="/help/walkthrough.mp4?v=1020b"></video>
+    <figcaption>Every step, spoken and captioned: the Xero changeover, making an order, drawings and what they need, purchase orders, pro forma, job sheet, ticking orders for a total, Parts, Jobs, the shop floor, powder coat sent out, dispatch and saving notes, Xero and aged debt. Practice data only.</figcaption></figure>
   </section>`;
 
 /** Changeover day: bring Xero's open sales orders across once, then the board is where orders are raised. */
