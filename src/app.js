@@ -377,7 +377,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['sales', 'Sales'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'Sales'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // Sales last (Levi, 20 Oct)   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
