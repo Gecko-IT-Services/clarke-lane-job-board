@@ -526,3 +526,27 @@ export function selectionTotals(jobs, ids) {
   return { count: picked.length, value: sum(j => value(j)), remaining: sum(j => (j.status === 'cancelled' ? 0 : value(j, { remaining: true }))),
     money: picked.every(j => j.lines.every(l => l.price != null)) };
 }
+
+/** A Xero line as an order line's part text: the item code (often the customer's part number) in front of
+ *  the description, unless the description already has it (Mandy, 20 Oct: VFS 01-11-1696). */
+export function xeroLinePart(l) {
+  const code = String(l.code || '').trim(), d = String(l.description || '').trim();
+  return !code ? d : !d ? code : d.toUpperCase().includes(code.toUpperCase()) ? d : `${code} ${d}`;
+}
+/**
+ * Orders already made from a Xero import whose lines lack that Xero line's item code: [{ id (job line), code, so, part }].
+ * A job line matches a Xero line when its text is the Xero description (ignoring case and spacing).
+ */
+export function missingLineCodes(jobs, xeroOrders) {
+  const norm = t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const byId = new Map((xeroOrders || []).map(q => [q.id, q]));
+  const out = [];
+  for (const j of jobs || []) {
+    const q = j.xeroQuoteId && byId.get(j.xeroQuoteId); if (!q || j.status === 'cancelled') continue;
+    for (const l of j.lines) {
+      const x = (q.lines || []).find(y => String(y.code || '').trim().length >= 3 && norm(y.description) && norm(y.description) === norm(l.part));
+      if (x && !String(l.part).toUpperCase().includes(String(x.code).trim().toUpperCase())) out.push({ id: l.id, code: String(x.code).trim(), so: j.so, part: l.part });
+    }
+  }
+  return out;
+}

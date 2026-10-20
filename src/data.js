@@ -396,6 +396,21 @@ export async function importXeroOrders(orders) {
   if (error) fail('The import was not saved', error);
   return data.length;
 }
+/** Refreshes the saved lines of imported orders (e.g. to carry Xero's item codes), leaving everything else alone. */
+export async function refreshXeroLines(orders) {
+  const sb = await getSupabase();
+  for (const q of orders) {
+    const { error } = await sb.from('xero_orders').update({ lines: q.lines || [] }).eq('xero_id', q.id);
+    if (error) fail('The imported lines were not refreshed', error);
+  }
+}
+/** Puts Xero's item code in front of order lines' part text: [{ id, code }]. Returns how many lines changed. */
+export async function addLineCodes(lines) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('add_line_codes', { p_lines: lines.map(l => ({ id: l.id, code: l.code })) });
+  if (error) fail('The part numbers were not added', error);
+  return data;
+}
 export async function dismissXeroOrder(xeroId, dismiss, by) {
   const sb = await getSupabase();
   const { error } = await sb.from('xero_orders').update(dismiss ? { dismissed_at: new Date().toISOString(), dismissed_by: by || '' } : { dismissed_at: null, dismissed_by: null }).eq('xero_id', xeroId);

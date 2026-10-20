@@ -461,3 +461,18 @@ console.log('jobs: ok');
   assert.equal(selectionTotals([J(5, 'open', [{ id: 5, qty: 1, price: null }])], new Set([5])).money, false);
   console.log('selection totals: ok');
 }
+
+// — Xero item codes: in front of the line text, and orders already made that lack them. —
+{
+  const { xeroLinePart, missingLineCodes } = await import('../src/core/jobs.js');
+  assert.equal(xeroLinePart({ code: '01-11-1696', description: 'Bracket, 2mm' }), '01-11-1696 Bracket, 2mm');
+  assert.equal(xeroLinePart({ code: '01-11-1696', description: 'Bracket 01-11-1696' }), 'Bracket 01-11-1696', 'not twice');
+  assert.equal(xeroLinePart({ code: '', description: 'Frame' }), 'Frame');
+  assert.equal(xeroLinePart({ code: 'AB-123', description: '' }), 'AB-123');
+  const xo = [{ id: 'q1', lines: [{ code: '01-11-1696', description: 'Bracket, 2mm' }, { code: '', description: 'Carriage' }] }];
+  const jobs = [{ id: 1, so: 'SO-9735', status: 'open', xeroQuoteId: 'q1', lines: [{ id: 11, part: 'bracket,  2mm' }, { id: 12, part: 'Carriage' }, { id: 13, part: 'Extra' }] },
+    { id: 2, so: 'SO-9736', status: 'open', xeroQuoteId: 'q1', lines: [{ id: 21, part: '01-11-1696 Bracket, 2mm' }] },
+    { id: 3, so: 'SO-9737', status: 'cancelled', xeroQuoteId: 'q1', lines: [{ id: 31, part: 'Bracket, 2mm' }] }];
+  assert.deepEqual(missingLineCodes(jobs, xo).map(f => [f.id, f.code]), [[11, '01-11-1696']], 'only lines that match and lack it; cancelled left alone');
+  console.log('xero item codes: ok');
+}

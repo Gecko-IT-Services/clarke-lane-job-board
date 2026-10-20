@@ -23,7 +23,7 @@ import { postcodeOf } from './core/geo.js';
 import { dashboard, dispatchLists, partSuggestions, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
-  addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
+  addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
   byRunningOrder, partsLeft, moveInOrder, nextStep, floorQueue, moveInStation } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
@@ -855,8 +855,14 @@ async function importFromXero() {
     S.xeroRead = await data.xero('read'); S.xeroReadAt = new Date();
     const fresh = S.xeroRead.quotes.filter(q => openSo(q) && !onBoard(q));
     const added = await data.importXeroOrders(fresh);
+    // Imports saved before item codes were read: refresh their lines so the codes (part numbers) come through.
+    const kept = new Set((S.xeroOrders || []).map(q => q.id));
+    const old = S.xeroRead.quotes.filter(q => kept.has(q.id) && (q.lines || []).some(l => l.code));
+    if (old.length) await data.refreshXeroLines(old);
     await reload();
-    toast(added ? `${added} sales order${added === 1 ? '' : 's'} brought in from Xero. They are on Won quotes.` : 'Nothing new: every open sales order in Xero is already here.');
+    const fix = missingLineCodes(S.jobs, S.xeroOrders);
+    toast((added ? `${added} sales order${added === 1 ? '' : 's'} brought in from Xero. They are on Won quotes.` : 'Nothing new: every open sales order in Xero is already here.')
+      + (fix.length ? ` ${fix.length} line${fix.length === 1 ? '' : 's'} on orders already made are missing Xero's item code: see the Xero tab.` : ''));
   } catch (e) { S.xeroErr = e.message; }
   xeroReading = false; render();
 }
@@ -915,18 +921,34 @@ function renderXero() {
       ${last ? `<p><b>Imported ${imported.length} sales order${imported.length === 1 ? '' : 's'}</b>, last on ${fmtLong(last.importedAt)} by ${esc(last.importedBy)}. ${waiting.length} still waiting on Won quotes.</p>` : '<p class="note">Not imported yet.</p>'}
       <div class="actions"><button class="btn ${last ? '' : 'pri'}" type="button" data-xero="import" ${busy}>${icon('download')}${xeroReading ? 'Reading Xero…' : last ? 'Import again (adds only new ones)' : 'Import open sales orders'}</button></div>
       ${r ? `<p class="note">The highest SO number in Xero is <b>${r.highestSo ? 'SO-' + r.highestSo : 'none'}</b>, so the next order made on the board will be <b>SO-${r.counterNext ?? '…'}</b>. The board always keeps its numbers past Xero's.</p>` : ''}</div>`;
+  // Orders already made from an import whose lines lack Xero's item code (often the customer's part number).
+  const fix = x ? missingLineCodes(S.jobs, S.xeroOrders) : [];
+  const fixPanel = fix.length ? `<div class="panel"><h3>Part numbers to add from Xero</h3>
+      <p>${fix.length} line${fix.length === 1 ? '' : 's'} on ${new Set(fix.map(f => f.so)).size} order${new Set(fix.map(f => f.so)).size === 1 ? '' : 's'} made from Xero ${fix.length === 1 ? 'is' : 'are'} missing the item code that line has in Xero, which is usually the customer's part number. For example:
+        ${fix.slice(0, 4).map(f => `<b>${esc(f.so)}</b>: <span class="mono">${esc(f.code)}</span> ${esc(f.part)}`).join(' · ')}${fix.length > 4 ? ' …' : ''}</p>
+      <p class="note">Adding them puts the code in front of each line's description, so Parts can find it, drawings attach, and the invoice shows it. Nothing else on the orders changes.</p>
+      <div class="actions"><button class="btn pri" type="button" data-addcodes>Add the part numbers to ${fix.length} line${fix.length === 1 ? '' : 's'}</button></div></div>` : '';
   $('v-xero').innerHTML = `<div class="sec-h"><h2 class="xhead">${XERO}</h2><span class="sub">Clarke Lane's Xero, through the board's own connection.</span>
       <span class="right"><span class="chip ${x ? 'ok' : ''}">${x ? icon('link') + 'Connected' : 'Not connected'}</span></span></div>
     ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
     <div class="panel"><h3>Connection</h3>${head}</div>
-    ${importPanel}`;
+    ${importPanel}${fixPanel}`;
+}
+async function addMissingCodes() {
+  const fix = missingLineCodes(S.jobs, S.xeroOrders); if (!fix.length) return;
+  try {
+    const n = await data.addLineCodes(fix); await reload();
+    for (const so of new Set(fix.map(f => f.so))) { const j = S.jobs.find(x => x.so === so); if (j) await linkPartDrawings(j.id, true); }
+    toast(`Part numbers added to ${n} line${n === 1 ? '' : 's'}. They now show on Parts › Found on your orders, and drawings in Parts attach to them.`);
+  } catch (e) { toast(e.message, null, true); }
+  render();
 }
 function makeJobFromXero(id) {
   const q = (S.xeroOrders || []).find(x => x.id === id); if (!q) return;
   const due = q.expiry && q.expiry >= todayIso() ? q.expiry : addWorkingDays(todayIso(), 10);
   openOrderForm({ from: `Xero ${q.number}`, so: q.number.toUpperCase().replace(/^SO(\d)/, 'SO-$1'), customer: q.customer, po: q.reference,
     due, xeroQuoteId: q.id,
-    lines: q.lines.filter(l => l.qty > 0).map(l => ({ part: l.description, qty: String(l.qty), price: String(l.unit), due })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine(due)]) });
+    lines: q.lines.filter(l => l.qty > 0).map(l => ({ part: xeroLinePart(l), qty: String(l.qty), price: String(l.unit), due })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine(due)]) });
 }
 
 /* ---------- shop floor: the touch screen in the factory. Same rows as the job board, bigger boxes. ---------- */
@@ -973,7 +995,7 @@ function wonDetail(r) {
   }
   if (r.kind === 'xero') {
     const x = (S.xeroOrders || []).find(o => o.id === r.xeroId);
-    return x ? tbl(['Description', 'Qty', 'Unit price', 'Net'], x.lines.map(l => `<tr><td>${esc(l.description)}</td><td class="num">${l.qty}</td><td class="num">${gbp(l.unit, 2)}</td><td class="num">${gbp(l.amount, 2)}</td></tr>`))
+    return x ? tbl(['Description', 'Qty', 'Unit price', 'Net'], x.lines.map(l => `<tr><td>${esc(xeroLinePart(l))}</td><td class="num">${l.qty}</td><td class="num">${gbp(l.unit, 2)}</td><td class="num">${gbp(l.amount, 2)}</td></tr>`))
       : '<p class="note">The lines are not available.</p>';
   }
   const got = S.qlines.get(r.spId);
@@ -1949,6 +1971,7 @@ function onClick(e) {
   if (d.pickall != null) { e.stopPropagation(); const ids = d.pickall.split(',').filter(Boolean).map(Number), sel = S.sel || (S.sel = new Set());
     const all = ids.every(x => sel.has(x)); ids.forEach(x => (all ? sel.delete(x) : sel.add(x))); return render(); }
   if ('pickclear' in d) { S.sel = new Set(); S.lastPick = null; return render(); }
+  if ('addcodes' in d) return addMissingCodes();
   if (d.chase) return chaseDebt(d.chase);
   if (d.hintadd) return addHinted(+d.hintadd);
   if (d.keeppart) return keepForPart(+d.keeppart);
