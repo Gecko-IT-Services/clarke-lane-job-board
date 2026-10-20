@@ -7,6 +7,7 @@ import * as realData from './data.js';
 import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
+import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { icon, XERO, MICROSOFT } from './icons.js';
@@ -484,7 +485,7 @@ function orderForm() {
     ${(() => { const ps = formParts(n), c = k => ps.filter(x => x.from === k).length;
       return `<datalist id="of-parts">${ps.map(x => `<option value="${esc(x.part)}">${x.from === 'xero' ? `Xero${x.code ? ' ' + esc(x.code) : ''}` : x.from === 'customer' ? `${esc(x.so)}, ${fmt(x.date)}` : `ordered by others, ${esc(x.so)}`}${x.price != null ? ' · ' + gbp(x.price, 2) : ''}</option>`).join('')}</datalist>
       <p class="note">Parts list: ${c('customer')} from this customer's orders, ${c('board')} from other orders${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Picking one fills in its price; change it if needed.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
-    <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : ''}</div>
+    <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : n.procNote ? '. ' + esc(n.procNote) : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
     ${amend ? '' : `<label class="b2b"><input type="checkbox" id="of-b2b" ${n.b2b ? 'checked' : ''}> <span><b>Back-to-back:</b> buy these parts in for this order. Once it is saved, the purchase order opens ready, with the same parts (no processes needed if nothing is made here).</span></label>`}
@@ -1150,8 +1151,9 @@ function drawingsPanel(j) {
   const up = S.uploading?.jobId === j.id ? `<p class="note">Uploading ${esc(S.uploading.name)} to SharePoint… ${Math.round(S.uploading.pct * 100)}%</p>` : '';
   return `<div class="panel"><h3>Drawings</h3>${j.files.length ? `<ul class="files">${j.files.map(f => `<li>
       <button type="button" class="btn" data-drawing="${f.id}" data-job="${j.id}">${icon('doc')}${esc(f.name)}</button><span class="note">${kb(f.size)} · ${fmt(f.at.slice(0, 10))}</span>
+      ${office() && /\.pdf$/i.test(f.name) ? `<button type="button" class="btn link sm" data-readdrawing="${f.id}" data-job="${j.id}" title="Read the drawing for the processes it suggests">Check processes</button>` : ''}
       ${office() ? `<button type="button" class="btn link sm" data-rmdrawing="${f.id}" title="Takes it off this job. The file stays in SharePoint.">Remove</button>` : ''}</li>`).join('')}</ul>`
-    : `<div class="note">${office() ? 'No drawings yet. Attach the drawing so the shop floor can see it.' : 'No drawings on this job.'}</div>`}${up}
+    : `<div class="note">${office() ? 'No drawings yet. Attach the drawing so the shop floor can see it.' : 'No drawings on this job.'}</div>`}${up}${office() ? hintBox(j) : ''}
     ${office() ? `<label class="btn"${S.uploading ? ' aria-disabled="true"' : ''}>${icon('plus')}Attach drawings<input type="file" class="sr" data-attach="${j.id}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.dxf,.dwg,.step,.stp,.doc,.docx,.xls,.xlsx"${S.uploading ? ' disabled' : ''}></label>
       <p class="note">Saved in SharePoint: Factory Jobs › Documents › Job drawings › ${esc(j.so)}.</p>` : ''}</div>`;
 }
@@ -1165,6 +1167,57 @@ async function attachDrawings(jobId, files) {
     } catch (e) { toast(e.message, null, true); break; }
   }
   S.uploading = null; await reload();
+  // Read the PDFs just attached for the processes they suggest (the office checks and adds them).
+  const pdf = [...files].reverse().find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+  if (pdf && office()) readDrawingFile(jobId, pdf.name, pdf);
+}
+
+/* ---------- reading a drawing: the PDF's text, in the browser (pdf.js), into suggested processes ---------- */
+let pdfReader = null;
+function loadPdfJs() {
+  pdfReader ??= new Promise((ok, bad) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); };
+    s.onerror = () => { pdfReader = null; bad(new Error('Could not load the PDF reader. Check the internet connection.')); };
+    document.head.appendChild(s);
+  });
+  return pdfReader;
+}
+async function pdfText(blob) {
+  const lib = await loadPdfJs();
+  const doc = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+  const out = [];
+  for (let i = 1; i <= Math.min(doc.numPages, 6); i++) out.push((await (await doc.getPage(i)).getTextContent()).items.map(x => x.str).join(' '));
+  return out.join(' \n ');
+}
+async function readDrawingFile(jobId, name, blob) {
+  S.hints = { ...(S.hints || {}), [jobId]: { name, busy: true } }; render();
+  try { S.hints[jobId] = { name, reading: readDrawing(await pdfText(blob)) }; }
+  catch (e) { S.hints[jobId] = { name, err: e.message }; }
+  render();
+}
+async function addHinted(jobId) {
+  const j = job(jobId), h = S.hints?.[jobId]; if (!j || !h?.reading) return;
+  const add = toAdd(h.reading, j.procs); if (!add.length) return;
+  try { await data.setJobProcesses(jobId, add, []); toast(`${add.join(', ')} added to ${j.so}.`); delete S.hints[jobId]; }
+  catch (e) { toast(e.message, null, true); }
+  reload();
+}
+function hintBox(j) {
+  const h = S.hints?.[j.id]; if (!h) return '';
+  if (h.busy) return `<p class="note">Reading ${esc(h.name)}…</p>`;
+  if (h.err) return `<div class="warn">Could not read ${esc(h.name)}: ${esc(h.err)}</div>`;
+  const r = h.reading;
+  if (!r.readable) return `<div class="warn hint">${esc(h.name)} has no text the board can read (a scan, or text drawn as lines), so check the processes by eye. <button class="btn link sm" type="button" data-hintclose="${j.id}">OK</button></div>`;
+  const add = toAdd(r, j.procs);
+  const facts = [r.facts.part && `Part ${r.facts.part}`, r.facts.material && `Material ${r.facts.material}`, r.facts.thickness, r.facts.finish && `Finish ${r.facts.finish}`].filter(Boolean);
+  return `<div class="hint"><b>From the drawing ${esc(h.name)}</b>${facts.length ? `<p class="note">${esc(facts.join(' · '))}</p>` : ''}
+    ${add.length ? `<p>It looks like this order also needs: ${add.map(p => `<b>${esc(p)}</b> <span class="note">("${esc(r.why[p])}")</span>`).join(', ')}.</p>`
+      : `<p class="note">The processes on the order already cover what the drawing says${r.suggest.length ? ` (${esc(r.suggest.join(', '))})` : ''}.</p>`}
+    ${r.flags.length ? `<p class="bad">Not one of the nine processes: ${esc(r.flags.join('; '))}. Bought in, or done another way?</p>` : ''}
+    <p class="note">Bends that are only drawn, not written, can't be read: check Fold by eye.</p>
+    <div class="actions">${add.length ? `<button class="btn sm pri" type="button" data-hintadd="${j.id}">Add ${esc(add.join(', '))}</button>` : ''}<button class="btn sm" type="button" data-hintclose="${j.id}">${add.length ? 'Not needed' : 'OK'}</button></div></div>`;
 }
 async function removeDrawingFrom(id) {
   const j = S.jobs.find(x => x.files.some(f => f.id === id)), f = j?.files.find(x => x.id === id);
@@ -1726,6 +1779,11 @@ function onClick(e) {
   if (d.ponew) return openPoForm(+d.ponew);
   if (d.pob2b) return backToBackPo(+d.pob2b);
   if (d.chase) return chaseDebt(d.chase);
+  if (d.hintadd) return addHinted(+d.hintadd);
+  if (d.hintclose) { delete S.hints[+d.hintclose]; return render(); }
+  if (d.readdrawing) { const j = job(+d.job), f = j?.files.find(x => x.id === +d.readdrawing); if (!f) return;
+    S.hints = { ...(S.hints || {}), [j.id]: { name: f.name, busy: true } }; render();
+    return data.drawingBlob(f).then(b => readDrawingFile(j.id, f.name, b), e => { S.hints[j.id] = { name: f.name, err: e.message }; render(); }); }
   if ('poadd' in d) { collectPo(); S.poForm.lines.push(blankPoLine()); return showPoForm(); }
   if (d.podel) { collectPo(); S.poForm.lines.splice(+d.podel, 1); return showPoForm(); }
   if ('pofill' in d) { collectPo(); const j = job(S.poForm.jobId); S.poForm.lines = [...S.poForm.lines.filter(l => l.description.trim()), ...j.lines.map(l => ({ description: l.part, qty: String(left(j, l) || l.qty), unit: '' }))]; return showPoForm(); }
@@ -1799,6 +1857,17 @@ document.addEventListener('change', e => {
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.id === 'of-cust') customerPicked(e.target.value.trim());
+  if (e.target.name === 'of-p' && S.form) S.form.procsTouched = true;
+  // Same part made before: tick the processes it had then, until someone ticks by hand.
+  if (/^of-part\d+$/.test(e.target.id) && S.form && !S.form.procsTouched && !S.form.spQuoteId && S.form.mode !== 'amend') {
+    collectForm(); const n = S.form;
+    const hits = n.lines.map(l => processesFromHistory(S.jobs, l.part)).filter(Boolean);
+    if (hits.length) {
+      n.procs = PROCESSES.filter(p => n.procs.includes(p) || hits.some(h => h.processes.includes(p)));
+      n.procNote = `Ticked as on ${[...new Set(hits.map(h => h.so))].join(', ')} (the same part made before); check them.`;
+      keepInputs = false; render();
+    }
+  }
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
   if (e.target.dataset.attach) { const fs = [...e.target.files]; e.target.value = ''; attachDrawings(+e.target.dataset.attach, fs); return; }
