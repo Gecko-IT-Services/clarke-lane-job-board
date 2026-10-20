@@ -14,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ jobs, me, office, md = false, monthXero = { x: null, note: '' }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
+export function renderHome({ jobs, me, office, md = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -43,6 +43,11 @@ export function renderHome({ jobs, me, office, md = false, monthXero = { x: null
       : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
       : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
         'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
+    // Aged debt (Levi and Mandy): customers with invoices over 60 days and past due in Xero.
+    debts.off ? '' : !debts.list ? card('info', 'late', '—', debts.err ? 'Over 60 days · could not check Xero' : 'Over 60 days · checking Xero…', false, debts.err ? `title="${esc(debts.err)}"` : '')
+      : card(debts.list.length ? 'bad' : 'ok', 'late', debts.list.length ? gbp(debts.list.reduce((a, c) => a + c.over, 0)) : 0,
+        debts.list.length ? `Over 60 days · ${plural(debts.list.length, 'customer')}` : 'Over 60 days · nobody', debts.list.length > 0,
+        'data-homeview="debts" title="Show the customers with invoices over 60 days"'),
   ].join('') : '';
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
@@ -98,7 +103,14 @@ export function renderHome({ jobs, me, office, md = false, monthXero = { x: null
   const draftRow = r => `<tr data-open="${r.job.id}"><td>${who(r.job.customer, r.d.dn)}</td><td>Sent ${fmt((r.d.xero.at || '').slice(0, 10))}</td>
     <td class="mono">${esc(r.number || 'Draft')}</td><td><span class="chip soon">${r.status === 'SUBMITTED' ? 'Awaiting approval' : 'Draft'}</span></td>${money(despatchValue(r.job, r.d))}
     <td class="act"><a class="btn sm" href="${xeroLink(r.d.xero.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a></td></tr>`;
+  const chased = c => { const ch = (debts.chases || []).find(x => x.customer === c.customer);
+    return ch ? `<span class="chip ok">Chased ${fmt(ch.at.slice(0, 10))} · ${esc(ch.by.split(' ')[0])}</span>` : '<span class="chip soon">Not chased</span>'; };
+  const debtRow = c => `<tr><td>${who(c.customer, `${c.invoices.length} invoice${c.invoices.length === 1 ? '' : 's'} over 60 days`)}</td>
+    <td>${fmt(c.oldest.date)} <span class="chip late">${c.oldest.age} days</span></td><td class="mono">${esc(c.oldest.number)}</td><td>${chased(c)}</td>${money(c.over)}
+    <td class="act"><button class="btn sm" type="button" data-chase="${esc(c.key)}">Draft a chase email</button> <a class="btn sm" href="${xeroLink(c.oldest.id)}" target="_blank" rel="noopener" title="Open the oldest invoice in Xero">${XERO}</a></td></tr>`;
   const DRILL = {
+    debts: { title: 'Over 60 days', sub: 'customers with invoices more than 60 days old and past due in Xero · most owed first · the chase email is an Outlook draft, copied to Keith',
+      list: (debts.list || []).map(debtRow), empty: 'Nobody has invoices over 60 days.', cols: ['Customer', 'Oldest invoice', 'Invoice', 'Chased'] },
     late: { title: 'Running late', sub: 'worst first', list: d.late.map(r => ROW.late(r)), empty: 'Nothing is late.' },
     soon: { title: 'Due in the next 7 days', sub: 'soonest first', list: d.soon.map(j => jobRow(j, until(j) + heldChip(j), j.status === 'open' && allDone(j) ? dispatchBtn(j) : openBtn(j))), empty: 'Nothing due in the next 7 days.' },
     ready: { title: 'Ready to dispatch', sub: 'every process ticked', list: d.ready.map(j => ROW.ready({ job: j })), empty: 'Nothing ready yet.' },

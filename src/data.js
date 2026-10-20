@@ -158,7 +158,7 @@ export async function draftEmail({ to, cc, subject, html, fileName, pdfBase64 })
     subject, body: { contentType: 'HTML', content: html },
     toRecipients: to ? [{ emailAddress: { address: to } }] : [],
     ccRecipients: cc ? [{ emailAddress: { address: cc } }] : [],
-    attachments: [{ '@odata.type': '#microsoft.graph.fileAttachment', name: fileName, contentType: 'application/pdf', contentBytes: pdfBase64 }],
+    attachments: pdfBase64 ? [{ '@odata.type': '#microsoft.graph.fileAttachment', name: fileName, contentType: 'application/pdf', contentBytes: pdfBase64 }] : [],
   } });
   return msg.webLink;
 }
@@ -225,6 +225,20 @@ export async function loadPurchaseOrders() {
   if (error) fail('Could not load the purchase orders', error);
   return data.map(p => ({ id: p.id, jobId: p.job_id, xeroId: p.xero_id, no: p.po_number, supplier: p.supplier_name, supplierId: p.supplier_id, account: p.account_code ?? '', delivery: p.delivery_date,
     lines: p.lines, net: Number(p.net), by: p.created_by, at: p.created_at }));
+}
+
+/* ---------- aged debt chases (office): a note of each chase email drafted ---------- */
+export async function loadChases() {
+  const sb = await getSupabase();
+  const since = new Date(Date.now() - 90 * 864e5).toISOString();
+  const { data, error } = await sb.from('debt_chases').select('*').gte('chased_at', since).order('chased_at', { ascending: false });
+  if (error) fail('Could not load the payment chases', error);
+  return data.map(c => ({ id: c.id, customer: c.customer, contactId: c.contact_id, invoices: c.invoices, owed: Number(c.owed), by: c.chased_by, at: c.chased_at }));
+}
+export async function addChase({ customer, contactId, invoices, owed, by }) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('debt_chases').insert({ customer, contact_id: contactId || '', invoices, owed, chased_by: by });
+  if (error) fail('The chase was not noted', error);
 }
 
 /* ---------- pro formas (office) ---------- */

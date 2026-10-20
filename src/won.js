@@ -10,7 +10,7 @@ import { icon } from './icons.js';
 
 const days = n => `${n} day${n === 1 ? '' : 's'}`;
 
-export function renderWon({ rows, md = false, today, view, reading, error, converting, open, detail }, h) {
+export function renderWon({ debtNote = () => null, rows, md = false, today, view, reading, error, converting, open, detail }, h) {
   const { esc, fmt, gbp } = h;
   const w = wonQuotes(rows, today);
   const oldTone = w.oldest ? quoteAgeTone(w.oldest.age) : '';
@@ -27,7 +27,9 @@ export function renderWon({ rows, md = false, today, view, reading, error, conve
       'data-wondrill="month" title="Show everything won this month"'),
   ].join('');
 
-  const who = r => `<b>${esc(r.customer)}</b><span class="ref mono">${esc(r.ref)} · ${r.kind === 'xero' ? 'Xero import' : 'quote'}</span>`;
+  const owes = r => { const d = r.state === 'waiting' && debtNote(r.customer);
+    return d ? ` <button type="button" class="chip late" data-chase="${esc(d.key)}" title="Invoices over 60 days in Xero: click to draft a chase email">${gbp(d.over)} over 60 days</button>` : ''; };
+  const who = r => `<b>${esc(r.customer)}</b>${owes(r)}<span class="ref mono">${esc(r.ref)} · ${r.kind === 'xero' ? 'Xero import' : 'quote'}</span>`;
   const won = r => `${r.date ? fmt(r.date) : '—'}${r.age != null ? ` <span class="chip ${quoteAgeTone(r.age)}">${days(r.age)}</span>` : ''}`;
   const act = r => {
     if (r.state === 'job') return `<button class="btn sm" type="button" data-open="${r.jobId}">Open ${esc(r.so)}</button>`;

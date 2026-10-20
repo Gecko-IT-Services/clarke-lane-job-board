@@ -6,6 +6,7 @@ import * as auth from './auth.js';
 import * as realData from './data.js';
 import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
+import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { icon, XERO, MICROSOFT } from './icons.js';
@@ -127,11 +128,13 @@ async function reload() {
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
       data.loadPurchaseOrders().catch(() => S.pos || [])]);
+    if (office()) S.chases = await data.loadChases().catch(() => S.chases || []);
     S.error = null;
   } catch (e) { S.error = e.message; }
   render();
   loadInvoiceStatus();
   loadMonthSales();
+  loadDebts();
 }
 async function loadQuotes() {
   S.quotesErr = null;
@@ -459,6 +462,7 @@ function orderForm() {
       ${amend ? '' : `<datalist id="xero-customers">${(S.xc?.contacts || []).map(c => `<option value="${esc(c.name)}"></option>`).join('')}</datalist><span class="note" id="of-custnote">${customerNote(n)}</span>`}</label>
       ${amend ? `<label class="fl">Order number<input type="text" value="${esc(n.so)}" disabled></label>`
         : `<label class="fl">Order number<input type="text" id="of-so" value="${esc(n.so)}" placeholder="Blank = next SO number"></label>`}</div>
+    ${amend ? '' : debtWarn(n.customer)}
     ${n.repeatOf ? `<div class="warn">Copied from ${esc(n.repeatOf)}. Prices are as they were on that order: check they are still right. The delivery dates have moved forward, keeping their spacing.</div>` : ''}
     ${amend ? '' : '<p class="note">Leave the order number blank for a new order. For one that already has a number, type it: SO-9726 raised in Xero, SAGE-9701 carried over from Sage.</p>'}
     <div class="row3"><label class="fl">Customer order no. (PO)<input type="text" id="of-po" value="${esc(n.po)}"></label>
@@ -742,6 +746,7 @@ async function loadXeroStatus() {
   render();
   loadInvoiceStatus();
   loadMonthSales();
+  loadDebts();
 }
 /** Xero's status for the invoices the board made, for Home's "In Xero, not approved" card. Approved,
  *  paid or voided ones are remembered on this computer and never asked about again; the rest are asked
@@ -781,6 +786,55 @@ async function loadMonthSales(force = false) {
   } catch (e) { S.monthXErr = e.message; }
   monthAsking = false;
   render();
+}
+/** Aged debt (Levi and Mandy): Xero's unpaid invoices, asked at most every 15 minutes, kept for this tab. */
+let debtAsking = false;
+async function loadDebts(force = false) {
+  if (!S.xero || !office() || debtAsking || PREVIEW.on) return;
+  try { const kept = JSON.parse(sessionStorage.getItem('clj.debts') || 'null');
+    if (!force && kept && Date.now() - kept.at < 15 * 60e3) { S.debtInv = kept.v; S.debtErr = null; return render(); } } catch { /* ask again */ }
+  debtAsking = true;
+  try {
+    S.debtInv = (await data.xero('debts')).invoices || []; S.debtErr = null;
+    try { sessionStorage.setItem('clj.debts', JSON.stringify({ at: Date.now(), v: S.debtInv })); } catch { /* asked again next time */ }
+  } catch (e) { S.debtErr = e.message; }
+  debtAsking = false;
+  render();
+}
+const debts = () => (S.debtInv ? agedDebt(S.debtInv, todayIso()) : null);
+/** The aged-debt entry for a customer as named on an order or quote: by their Xero contact, else by name. */
+function debtOf(name) {
+  const list = debts(); if (!list || !name) return null;
+  const c = contactFor(name);
+  return (c && list.find(d => d.contactId === c.id)) || debtFor(list, name);
+}
+/** The warning shown on a new order (and its quote) for a customer with invoices over 60 days. */
+function debtWarn(name, where = 'form') {
+  const d = debtOf(name); if (!d) return '';
+  const ch = recentChase(S.chases, d.customer, todayIso());
+  const inv = d.invoices.length;
+  return `<div class="warn debt"><b>${esc(d.customer)} owes ${gbp(d.over, 2)} on ${inv} invoice${inv === 1 ? '' : 's'} over ${DEBT_DAYS} days</b>
+    (oldest ${esc(d.oldest.number)}, ${d.oldest.age} days). ${where === 'form' ? 'You can still create the order; check with Levi if it should wait.' : ''}
+    ${ch ? `<span class="chip ok">Chased ${fmt(ch.at.slice(0, 10))} by ${esc(ch.by)}</span>` : ''}
+    <button class="btn sm" type="button" data-chase="${esc(d.key)}">Draft a chase email</button></div>`;
+}
+/** A chase email for one customer's invoices over 60 days, as an Outlook draft (never sent), copied to Keith. */
+async function chaseDebt(key) {
+  const d = (debts() || []).find(x => x.key === key); if (!d) return;
+  if (S.chasing) return; S.chasing = key; toast(`Writing the chase email for ${d.customer}…`);
+  try {
+    const book = mainPerson(d.customer, 'accounts');
+    let to = book?.email || '', person = book?.name || '';
+    if (!to && d.contactId) { try { const c = await data.xero('contact', { id: d.contactId }); to = c.email || ''; person = person || c.person || ''; } catch { /* the draft just has no To */ } }
+    const links = (await data.xero('online', { ids: d.invoices.map(x => x.id) }).catch(() => ({ links: {} }))).links || {};
+    const { subject, html } = chaseEmail({ debt: d, person, links, from: S.me.name });
+    const cc = S.officeSet?.accounts_email || '';
+    await data.draftEmail({ to, cc, subject, html });
+    await data.addChase({ customer: d.customer, contactId: d.contactId, invoices: d.invoices.map(x => ({ number: x.number, owed: x.owed })), owed: d.over, by: S.me.name }).catch(() => {});
+    S.chases = await data.loadChases().catch(() => S.chases);
+    toast(`Chase email for ${d.customer} is in your Outlook Drafts${to ? ` to ${to}` : ' (no email address found: add one)'}${cc ? `, copied to ${cc}` : ''}. Check it and press Send.`);
+  } catch (e) { toast(e.message, null, true); }
+  S.chasing = null; render();
 }
 const monthXero = () => (!S.xero || PREVIEW.on ? { x: null, note: '' } : S.monthX ? { x: S.monthX, note: '' } : { x: null, note: S.monthXErr || 'checking' });
 
@@ -900,7 +954,7 @@ function inboxRows() {
   return rows.sort((p, q) => ((q.date || '') < (p.date || '') ? -1 : (q.date || '') > (p.date || '') ? 1 : p.ref < q.ref ? 1 : -1));
 }
 function renderQuotes() {
-  $('v-quotes').innerHTML = renderWon({ rows: inboxRows(), md: md(), today: todayIso(), view: S.wonView, reading: !S.quotesRaw && !S.quotesErr,
+  $('v-quotes').innerHTML = renderWon({ debtNote: name => { const d = debtOf(name); return d ? { over: d.over, key: d.key } : null; }, rows: inboxRows(), md: md(), today: todayIso(), view: S.wonView, reading: !S.quotesRaw && !S.quotesErr,
     error: S.quotesErr, converting: S.conv?.spId, open: S.wonOpen, detail: wonDetail }, { esc, fmt, gbp });
 }
 /* What is on a won quote: its lines from the quote calculator, the Xero sales order, or the order it became. */
@@ -1534,7 +1588,8 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
+  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(),
+      debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
@@ -1670,6 +1725,7 @@ function onClick(e) {
   if (d.drawing) return showDrawing(+d.job, +d.drawing);
   if (d.ponew) return openPoForm(+d.ponew);
   if (d.pob2b) return backToBackPo(+d.pob2b);
+  if (d.chase) return chaseDebt(d.chase);
   if ('poadd' in d) { collectPo(); S.poForm.lines.push(blankPoLine()); return showPoForm(); }
   if (d.podel) { collectPo(); S.poForm.lines.splice(+d.podel, 1); return showPoForm(); }
   if ('pofill' in d) { collectPo(); const j = job(S.poForm.jobId); S.poForm.lines = [...S.poForm.lines.filter(l => l.description.trim()), ...j.lines.map(l => ({ description: l.part, qty: String(left(j, l) || l.qty), unit: '' }))]; return showPoForm(); }

@@ -55,6 +55,9 @@ let dismissed = [];
 export const loadDismissed = async () => [...dismissed];
 const pfs = []; let pfNo = 1; const office = {}; const pos = [];
 export const loadPurchaseOrders = async () => structuredClone(pos);
+const chases = [];
+export const loadChases = async () => structuredClone(chases);
+export const addChase = async c => { chases.unshift({ id: chases.length + 1, ...c, at: new Date().toISOString() }); };
 export const loadProformas = async () => structuredClone(pfs);
 export const createProforma = async (jobId, lines) => { const j = find(jobId);
   const ls = lines.filter(l => l.qty > 0).map(l => { const x = j.lines.find(y => y.id === l.job_line_id); return { job_line_id: x.id, part: x.part, qty: l.qty, unit_price: x.price, net: Math.round(l.qty * x.price * 100) / 100 }; });
@@ -78,6 +81,12 @@ export const setJobDue = async (jobId, from, to) => { const j = find(jobId); let
 export const xeroStatus = async () => sessionStorage.getItem('fakeXero') ? { tenant_name: 'Clarke Lane Engineering Ltd', connected_by: 'levi@clarke-lane.co.uk', connected_at: '2026-10-15T09:00:00Z' } : null;
 export const xero = async (route, body) => {
   if (route === 'connect') { sessionStorage.setItem('fakeXero', '1'); return { url: location.pathname + '?xero=connected#xero' }; }
+  if (route === 'debts') return { invoices: [   // made-up customers and figures
+    { id: 'd1', number: 'INV-30811', reference: 'PO 4471', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-07-14', due: '2026-08-31', total: 1840, owed: 1840 },
+    { id: 'd2', number: 'INV-30902', reference: '', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-08-04', due: '2026-09-30', total: 655.2, owed: 655.2 },
+    { id: 'd3', number: 'INV-30950', reference: 'P-77', contactId: 'cx2', customer: 'Fourth Example Ltd', date: '2026-08-12', due: '2026-09-30', total: 420, owed: 210 },
+    { id: 'd4', number: 'INV-31990', reference: '', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-10-02', due: '2026-11-30', total: 300, owed: 300 }] };
+  if (route === 'online') return { links: { d1: 'https://in.xero.com/example' } };
   if (route === 'month') return { from: body.from, to: body.to, creditsRead: true, invoices: [   // made-up figures
     { id: 'xm1', number: 'INV-31901', reference: 'P31600', customer: 'Example Customer Ltd', date: body.from, net: 2600 },
     { id: 'xm2', number: 'INV-31902', reference: 'Sage SO 9600', customer: 'Sample Works Ltd', date: body.from, net: 1550 },
@@ -107,7 +116,7 @@ export const markDespatch = async (id, what, receivedBy) => { for (const j of jo
   if (what === 'undelivered') { d.deliveredOn = null; d.receivedBy = ''; } } };
 export const markAckEmailed = async id => { find(id).ackEmailedAt = new Date().toISOString(); };
 export let lastDraft = null;
-export const draftEmail = async m => { lastDraft = { ...m, pdfBytes: Math.round(m.pdfBase64.length * 0.75) }; window.__lastDraft = lastDraft; return null; };
+export const draftEmail = async m => { lastDraft = { ...m, pdfBytes: Math.round((m.pdfBase64 || "").length * 0.75) }; window.__lastDraft = lastDraft; return null; };
 let xorders = [];
 export const loadXeroOrders = async () => structuredClone(xorders);
 export const importXeroOrders = async qs => { let n = 0; for (const q of qs) if (!xorders.some(x => x.id === q.id)) { xorders.push({ ...q, importedAt: new Date().toISOString(), importedBy: 'levi@clarke-lane.co.uk', dismissed: false }); n++; } return n; };
