@@ -1149,12 +1149,13 @@ function renderDrawer() {
 const kb = n => n == null ? '' : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 function drawingsPanel(j) {
   const up = S.uploading?.jobId === j.id ? `<p class="note">Uploading ${esc(S.uploading.name)} to SharePoint… ${Math.round(S.uploading.pct * 100)}%</p>` : '';
-  return `<div class="panel"><h3>Drawings</h3>${j.files.length ? `<ul class="files">${j.files.map(f => `<li>
+  return `<div class="panel drawings"${office() ? ` data-dropjob="${j.id}"` : ''}><h3>Drawings</h3>${j.files.length ? `<ul class="files">${j.files.map(f => `<li>
       <button type="button" class="btn" data-drawing="${f.id}" data-job="${j.id}">${icon('doc')}${esc(f.name)}</button><span class="note">${kb(f.size)} · ${fmt(f.at.slice(0, 10))}</span>
       ${office() && /\.pdf$/i.test(f.name) ? `<button type="button" class="btn link sm" data-readdrawing="${f.id}" data-job="${j.id}" title="Read the drawing for the processes it suggests">Check processes</button>` : ''}
       ${office() ? `<button type="button" class="btn link sm" data-rmdrawing="${f.id}" title="Takes it off this job. The file stays in SharePoint.">Remove</button>` : ''}</li>`).join('')}</ul>`
     : `<div class="note">${office() ? 'No drawings yet. Attach the drawing so the shop floor can see it.' : 'No drawings on this job.'}</div>`}${up}${office() ? hintBox(j) : ''}
     ${office() ? `<label class="btn"${S.uploading ? ' aria-disabled="true"' : ''}>${icon('plus')}Attach drawings<input type="file" class="sr" data-attach="${j.id}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.dxf,.dwg,.step,.stp,.doc,.docx,.xls,.xlsx"${S.uploading ? ' disabled' : ''}></label>
+      <span class="note droptip">or drag PDF drawings here</span>
       <p class="note">Saved in SharePoint: Factory Jobs › Documents › Job drawings › ${esc(j.so)}.</p>` : ''}</div>`;
 }
 async function attachDrawings(jobId, files) {
@@ -1171,6 +1172,24 @@ async function attachDrawings(jobId, files) {
   const pdf = [...files].reverse().find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
   if (pdf && office()) readDrawingFile(jobId, pdf.name, pdf);
 }
+
+/* Drag and drop drawings onto an order's Drawings section (Philip, 20 Oct), office only. */
+const dropZone = e => (office() && e.dataTransfer?.types?.includes('Files') ? e.target.closest?.('[data-dropjob]') : null);
+let dropOver = null;
+document.addEventListener('dragover', e => {
+  const z = dropZone(e); if (!z) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+  if (dropOver !== z) { dropOver?.classList.remove('dropping'); z.classList.add('dropping'); dropOver = z; }
+});
+document.addEventListener('dragleave', e => { if (dropOver && !dropOver.contains(e.relatedTarget)) { dropOver.classList.remove('dropping'); dropOver = null; } });
+document.addEventListener('drop', e => {
+  const z = dropZone(e); dropOver?.classList.remove('dropping'); dropOver = null;
+  if (!z) { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); return; }   // a file dropped elsewhere must not open in the tab
+  e.preventDefault();
+  if (S.uploading) return toast('Wait for the drawing being uploaded to finish.', null, true);
+  const files = [...e.dataTransfer.files]; if (files.length) attachDrawings(+z.dataset.dropjob, files);
+});
+window.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files') && !dropZone(e)) e.preventDefault(); });
 
 /* ---------- reading a drawing: the PDF's text, in the browser (pdf.js), into suggested processes ---------- */
 let pdfReader = null;

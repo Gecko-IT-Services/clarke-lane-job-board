@@ -277,6 +277,7 @@ body.viewing #doc{padding:0;background:var(--bg)} body.viewing #doc .docbar{posi
 .pfset{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-width:560px} .pfset textarea,.pfset input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit}
 label.fl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
 .pchecks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.panel.drawings{transition:outline-color .15s,background .15s;outline:2px dashed transparent;outline-offset:-6px} .panel.drawings.dropping{outline-color:var(--info);background:var(--info-soft,rgba(37,87,167,.08))} .panel.drawings .droptip{margin-left:8px}
 .panel .hint{border:1px solid var(--line);border-left:4px solid var(--info);border-radius:10px;padding:10px 14px;margin-top:10px;display:flex;flex-direction:column;gap:6px} .panel .hint p{margin:0}
 .newjob .warn.debt{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center} button.chip{cursor:pointer;border:0;font:inherit}
 .newjob .b2b{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;cursor:pointer} .newjob .b2b input{margin-top:3px}
