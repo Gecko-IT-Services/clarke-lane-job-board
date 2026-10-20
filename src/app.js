@@ -8,7 +8,7 @@ import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
-import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart } from './core/parts.js';
+import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding } from './core/parts.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { icon, XERO, MICROSOFT } from './icons.js';
@@ -1213,8 +1213,19 @@ function renderParts() {
       <div class="actions"><button type="button" class="btn sm" data-partdel="${p.id}">Remove this part</button></div></div></td></tr>`; };
   const row = p => { const cur = currentFile(p), open = S.partOpen === p.id;
     return `<tr class="${open ? 'open' : ''}" data-partopen="${p.id}" style="cursor:pointer"><td><b class="mono">${esc(p.partNo)}</b>${p.description ? `<span class="ref">${esc(p.description)}</span>` : ''}</td>
-      <td>${esc(p.customer)}</td><td>${cur ? `${icon('doc')} ${esc(cur.name)}${p.files.length > 1 ? ` <span class="note">+${p.files.length - 1} older</span>` : ''}` : '<span class="chip soon">No drawing</span>'}</td>
+      <td>${esc(p.customer)}</td><td>${cur ? `<span class="pfile">${icon('doc')}${esc(cur.name)}</span>${p.files.length > 1 ? ` <span class="note">+${p.files.length - 1} older</span>` : ''}` : '<span class="chip soon">No drawing</span>'}</td>
       <td>${ordersForPart(S.jobs, p).length}</td><td class="act"><button class="btn sm" type="button" data-partopen="${p.id}">${open ? 'Close' : 'Open'}</button></td></tr>${open ? detail(p) : ''}`; };
+  const sugg = suggestedParts(S.jobs, S.parts).filter(s => !q || `${s.partNo} ${s.customer} ${s.description}`.toLowerCase().includes(q));
+  const shown = S.suggAll ? sugg : sugg.slice(0, 25);
+  const suggRow = s => `<tr data-dropsugg="${esc(suggKey(s))}"><td><b class="mono">${esc(s.partNo)}</b>${s.description ? `<span class="ref">${esc(s.description)}</span>` : ''}</td><td>${esc(s.customer)}</td>
+    <td>${s.orders.slice(0, 4).map(j => `<button type="button" class="btn link sm" data-open="${j.id}">${esc(j.so)}</button>`).join(' ')}${s.orders.length > 4 ? ` <span class="note">+${s.orders.length - 4}</span>` : ''}</td>
+    <td class="act"><label class="btn sm pri">${icon('plus')}Attach drawing<input type="file" class="sr" data-suggattach="${esc(suggKey(s))}" accept=".pdf,.png,.jpg,.jpeg,.dxf,.dwg,.step,.stp"></label>
+      <button class="btn sm" type="button" data-suggadd="${esc(suggKey(s))}" title="Add the part now, drawing later">Add</button></td></tr>`;
+  const suggSec = sugg.length ? `<section class="sugg"><div class="hsec-h"><h3>Found on your orders: ${sugg.length} part number${sugg.length === 1 ? '' : 's'} not in Parts yet</h3>
+      <span class="note">drag a drawing onto a row, or press Attach drawing: that adds the part and puts the drawing on its open orders too</span></div>
+    <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Part</th><th>Customer</th><th>On orders</th><th class="act"><span class="sr">Action</span></th></tr></thead><tbody>${shown.map(suggRow).join('')}</tbody></table></div>
+    ${sugg.length > shown.length ? `<p class="note"><button type="button" class="btn link sm" data-suggall>Show all ${sugg.length}</button></p>` : ''}
+    <p class="note">Spotted from the order lines: codes like UL-PR-10448 or 361200245. Something that is not a part number? Just leave it.</p></section>` : '';
   $('v-parts').innerHTML = `<div class="home">
     <div class="hhead"><div><h2>Parts</h2><p class="sub">Customers' repeat parts and their drawings. A new order that names one of these part numbers gets its drawing attached automatically.</p></div>
       <div class="hbtns"><button class="btn" type="button" data-tab="orders">Sales orders</button><button class="btn pri" type="button" data-partadd="open">${icon('plus')}Add a part</button></div></div>
@@ -1223,7 +1234,27 @@ function renderParts() {
     <section><div class="hsec-h"><h3>${(S.parts || []).length} part${(S.parts || []).length === 1 ? '' : 's'}</h3><span class="note">by customer</span>
       <input type="search" id="psearch" placeholder="Search part number, customer or description" aria-label="Search parts" value="${esc(S.psearch || '')}"></div>
     ${parts.length ? `<div class="tbl-wrap"><table class="lines home"><thead><tr><th>Part</th><th>Customer</th><th>Current drawing</th><th>Orders</th><th class="act"><span class="sr">Open</span></th></tr></thead><tbody>${parts.map(row).join('')}</tbody></table></div>`
-      : `<div class="tbl-wrap"><p class="allclear">${q ? 'No parts match.' : 'No parts yet. Press Add a part, or press Keep for this part when a drawing is attached to an order.'}</p></div>`}</section></div>`;
+      : `<div class="tbl-wrap"><p class="allclear">${q ? 'No parts match.' : 'No parts yet. Attach drawings to the part numbers found on your orders below, press Add a part, or press Keep for this part when a drawing is attached to an order.'}</p></div>`}</section>
+    ${suggSec}</div>`;
+}
+/** A part's drawing is new or changed: attach it to the open orders already naming the part. Returns how many. */
+async function catchUpOrders(partId) {
+  const p = (S.parts || []).find(x => x.id === partId); if (!p) return 0;
+  const todo = openOrdersNeeding(S.jobs, p, j => onBoardStage(j) && j.status !== 'cancelled');
+  let n = 0;
+  for (const j of todo) { try { await data.linkPartFile(j.id, currentFile(p)); n++; } catch { /* the others still go */ } }
+  return n;
+}
+const suggKey = s => `${s.customerKey}|${normPartNo(s.partNo)}`;
+/** A suggested part (from the orders): add it, with a drawing if one was dropped or picked. */
+async function addSuggested(key, file) {
+  const s = suggestedParts(S.jobs, S.parts).find(x => suggKey(x) === key); if (!s) return;
+  try {
+    const id = await data.addPart({ customer: s.customer, customerKey: s.customerKey, partNo: s.partNo, description: s.description });
+    S.parts = await data.loadParts();
+    if (file) await attachPartDrawing(id, file);
+    else { toast(`${s.partNo} added to Parts. Drop its drawing on it when you have it.`); render(); }
+  } catch (e) { toast(e.message, null, true); }
 }
 async function savePart(f) {
   const customer = $('pa-cust').value.trim(), partNo = $('pa-no').value.trim(), description = $('pa-desc').value.trim();
@@ -1237,9 +1268,16 @@ async function savePart(f) {
 async function attachPartDrawing(partId, file) {
   const p = (S.parts || []).find(x => x.id === partId); if (!p || !file) return;
   S.uploading = { partId, name: file.name, pct: 0 }; render();
-  try { await data.uploadPartDrawing(p, file, x => { S.uploading.pct = x; render(); }); toast(`${file.name} is now the current drawing for ${p.partNo}.`); }
+  let ok = false;
+  try { await data.uploadPartDrawing(p, file, x => { S.uploading.pct = x; render(); }); ok = true; }
   catch (e) { toast(e.message, null, true); }
-  S.uploading = null; S.parts = await data.loadParts().catch(() => S.parts); render();
+  S.uploading = null; S.parts = await data.loadParts().catch(() => S.parts);
+  if (ok) {
+    const n = await catchUpOrders(p.id);
+    toast(`${file.name} is now the current drawing for ${p.partNo}${n ? `, and is attached to ${n} open order${n === 1 ? '' : 's'} naming it` : ''}.`);
+    if (n) await reload();
+  }
+  render();
 }
 async function removePartDrawing(fileId) {
   const x = partOfFile(fileId); if (!x) return;
@@ -1264,13 +1302,14 @@ async function keepForPart(jobId) {
     const pfId = await data.addPartFile(id, f);
     await data.markJobFileFromPart(f.id, pfId).catch(() => {});
     S.parts = await data.loadParts();
-    toast(`${f.name} kept for ${partNo}${p ? ' as its current drawing' : ' (new part)'}. New orders for ${j.customer} naming ${partNo} will get it.`);
+    const n = await catchUpOrders(id);
+    toast(`${f.name} kept for ${partNo}${p ? ' as its current drawing' : ' (new part)'}. New orders for ${j.customer} naming ${partNo} will get it${n ? `; it is also on ${n} other open order${n === 1 ? '' : 's'} now` : ''}.`);
     h.kept = true; await reload();
   } catch (e) { toast(e.message, null, true); }
 }
 
 /* Drag and drop drawings onto an order's Drawings section (Philip, 20 Oct), office only. */
-const dropZone = e => (office() && e.dataTransfer?.types?.includes('Files') ? e.target.closest?.('[data-dropjob],[data-droppart]') : null);
+const dropZone = e => (office() && e.dataTransfer?.types?.includes('Files') ? e.target.closest?.('[data-dropjob],[data-droppart],[data-dropsugg]') : null);
 let dropOver = null;
 document.addEventListener('dragover', e => {
   const z = dropZone(e); if (!z) return;
@@ -1285,6 +1324,7 @@ document.addEventListener('drop', e => {
   if (S.uploading) return toast('Wait for the drawing being uploaded to finish.', null, true);
   const files = [...e.dataTransfer.files]; if (!files.length) return;
   if (z.dataset.droppart) return attachPartDrawing(+z.dataset.droppart, files[0]);
+  if (z.dataset.dropsugg) return addSuggested(z.dataset.dropsugg, files[0]);
   attachDrawings(+z.dataset.dropjob, files);
 });
 window.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files') && !dropZone(e)) e.preventDefault(); });
@@ -1903,6 +1943,8 @@ function onClick(e) {
   if (d.chase) return chaseDebt(d.chase);
   if (d.hintadd) return addHinted(+d.hintadd);
   if (d.keeppart) return keepForPart(+d.keeppart);
+  if (d.suggadd) return addSuggested(d.suggadd, null);
+  if ('suggall' in d) { S.suggAll = true; return render(); }
   if (d.partadd) { S.partAdd = d.partadd === 'open' ? {} : null; render(); if (S.partAdd) $('pa-cust')?.focus(); return; }
   if (d.partopen) { e.stopPropagation(); S.partOpen = S.partOpen === +d.partopen ? null : +d.partopen; return render(); }
   if (d.partview) { const x = partOfFile(+d.partview); if (!x) return; const w = window.open('', '_blank');
@@ -2000,6 +2042,7 @@ document.addEventListener('change', e => {
   }
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
+  if (e.target.dataset.suggattach) { const fl = e.target.files[0]; e.target.value = ''; if (fl) addSuggested(e.target.dataset.suggattach, fl); return; }
   if (e.target.dataset.partattach) { const fl = e.target.files[0]; e.target.value = ''; attachPartDrawing(+e.target.dataset.partattach, fl); return; }
   if (e.target.dataset.attach) { const fs = [...e.target.files]; e.target.value = ''; attachDrawings(+e.target.dataset.attach, fs); return; }
   if (e.target.dataset.setdue) { setDue(+e.target.dataset.setdue, e.target.dataset.from, e.target.value); return; }

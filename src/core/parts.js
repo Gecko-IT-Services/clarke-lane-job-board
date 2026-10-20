@@ -42,3 +42,50 @@ export const findPart = (parts, customer, partNo) =>
 export const ordersForPart = (jobs, part) =>
   (jobs || []).filter(j => normName(j.customer) === part.customerKey && j.lines.some(l => namesPart(l.part, part.partNo)))
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || b.id - a.id);
+
+/**
+ * Things in a line's text that look like part numbers: a run of letters, digits and - / . with at least one
+ * digit and either a letter-and-digit mix with a separator (UL-PR-10448, 3/SP1006/30065) or 6+ digits
+ * (361200245). Sizes, threads, colours and quantities (2.5mm, M8, RAL9005, x40, 300N) are not part numbers.
+ */
+const NOT_PART = /^(?:\d+(?:\.\d+)?(?:MM|CM|M|KG|G|N|NM|DEG|°)|M\d+(?:X[\d.]+)?|RAL-?\d{4}|X\d+|\d+X\d+(?:X\d+)?|SO-?\d+|PO-?\d+|DN-?\d+|PF-?\d+|INV-?\d+|Q-?\d+|\d{1,2}[/.]\d{1,2}[/.]\d{2,4}|REV-?\w{1,3}|ISS-?\w{1,3}|S\d{3}(?:JR|J0|J2|MC)?|DC0\d|DX5\dD?|CR\d|HR\d|EN\d{1,3}[A-Z]?|AISI-?\d{3}L?|\d{4}-[HT]\d{1,2}|[HT]\d{1,2}|GR-?\d+)$/;   // material grades, not parts
+export function partNumbersIn(text) {
+  const out = [];
+  for (const raw of String(text || '').toUpperCase().match(/[A-Z0-9][A-Z0-9\-/.]*[A-Z0-9]/g) || []) {
+    const t = raw.replace(/\.$/, '');
+    if (t.length < 4 || !/\d/.test(t) || NOT_PART.test(t)) continue;
+    const mixed = /[A-Z]/.test(t) && /[-/]/.test(t) && /\d{2,}/.test(t);
+    const longDigits = /^\d{6,}$/.test(t.replace(/[-/.]/g, '')) && !/[.]/.test(t);
+    const code = /^[A-Z]{1,4}\d{3,}[A-Z]?$/.test(t);   // e.g. BRK7731, AB12345
+    if (mixed || longDigits || code) out.push(t);
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * Part numbers on the board's orders that are not in Parts yet, per customer, most-ordered first:
+ * [{ customer, customerKey, partNo, description, orders: [job] }]. description: the line text without the number.
+ */
+export function suggestedParts(jobs, parts) {
+  const by = new Map();
+  for (const j of jobs || []) {
+    if (j.status === 'cancelled' || j.preview) continue;
+    const key = normName(j.customer);
+    for (const l of j.lines) for (const no of partNumbersIn(l.part)) {
+      if (findPart(parts, j.customer, no)) continue;
+      const k = key + '|' + normPartNo(no);
+      const s = by.get(k) || { customer: j.customer, customerKey: key, partNo: no, description: '', orders: [] };
+      if (!s.orders.includes(j)) s.orders.push(j);
+      if (!s.description) s.description = l.part.replace(new RegExp(no.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'), 'i'), '').replace(/\s{2,}/g, ' ').replace(/^[\s,:\-–]+|[\s,:\-–]+$/g, '');
+      by.set(k, s);
+    }
+  }
+  return [...by.values()].sort((a, b) => b.orders.length - a.orders.length || a.customer.localeCompare(b.customer) || a.partNo.localeCompare(b.partNo));
+}
+
+/** Open orders (not cancelled, something still to send) that name a part and do not have its current drawing. */
+export function openOrdersNeeding(jobs, part, isOpen) {
+  const f = currentFile(part); if (!f) return [];
+  return (jobs || []).filter(j => isOpen(j) && normName(j.customer) === part.customerKey && j.lines.some(l => namesPart(l.part, part.partNo))
+    && !(j.files || []).some(x => x.itemId === f.itemId));
+}
