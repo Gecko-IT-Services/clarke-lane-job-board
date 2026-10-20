@@ -251,6 +251,19 @@ body.kiosk-mode #app > header.top,body.kiosk-mode #app > nav.tabs,body.kiosk-mod
 .kiosk .fstat{margin:0;font-size:18px;color:var(--muted)}
 .kiosk .fstat b{color:var(--ink)}
 .kiosk .allclear{margin:0;padding:24px;font-size:20px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:14px}
+/* Sent out (powder coat, plating at other companies) */
+.kiosk .outline{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:18px;color:var(--muted)} .kiosk .outline .tag{margin:0} .kiosk .outline b{color:var(--bad)}
+.kiosk .outline .btn{min-height:52px;font-size:17px;padding:0 18px;border-radius:12px}
+.kiosk .ogroup{display:flex;flex-direction:column;gap:12px}
+.kiosk .ogroup h3{font-family:var(--display);font-size:28px;font-weight:600;letter-spacing:-.02em;margin:6px 0 0} .kiosk .ogroup h3 small{font:500 17px var(--body);color:var(--muted);margin-left:8px}
+.kiosk .orow .side .tag{margin:0}
+.kiosk .oback{font-size:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.kiosk .oform{display:flex;flex-direction:column;gap:16px;max-width:760px;background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:22px 24px}
+.kiosk .oform .fl{font-size:17px} .kiosk .oform :is(input,select,textarea){font-size:20px;min-height:56px;padding:10px 14px;border-radius:12px}
+.kiosk .oform .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.kiosk .oform .kfoot .btn{min-height:60px;font-size:19px;padding:0 26px;border-radius:12px}
+.outlist{margin-top:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start} .outlist p{margin:0}
+@media (max-width:640px){ .kiosk .oform .row2{grid-template-columns:1fr} }
 .kiosk .allclear.ok{color:var(--ok);font-weight:600}
 @media (max-width:1000px){ .kiosk .tiles{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:640px){ .kiosk .tiles{grid-template-columns:minmax(0,1fr)} .kiosk .tile{min-height:110px} .kiosk .kbar h2{font-size:32px}
@@ -752,7 +765,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;
