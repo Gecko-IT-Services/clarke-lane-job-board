@@ -117,8 +117,8 @@ export function customerBase(invoices, today) {
     c.invoices.push(x);
     for (const l of x.lines || []) {
       const name = String(l.description || '').split('\n')[0].trim(); if (!name || /^(carriage|delivery|postage)/i.test(name)) continue;
-      const ik = name.toLowerCase(), it = c.items.get(ik) || { item: name, code: l.code || '', times: 0, qty: 0, last: '' };
-      it.times++; it.qty += Number(l.qty) || 0; if (x.date > it.last) it.last = x.date; c.items.set(ik, it);
+      const ik = name.toLowerCase(), it = c.items.get(ik) || { item: name, code: l.code || '', times: 0, qty: 0, last: '', dates: [] };
+      it.times++; it.qty += Number(l.qty) || 0; if (x.date > it.last) it.last = x.date; it.dates.push(x.date); c.items.set(ik, it);
     }
     by.set(k, c);
   }
@@ -131,9 +131,9 @@ export function customerBase(invoices, today) {
     // Quiet: a regular customer (3+ orders) whose silence is well past their usual gap and over 6 weeks.
     const quiet = dates.length >= 3 && usual != null && since > Math.max(42, usual * 2);
     const lapsed = dates.length >= 2 && since > 180;
-    const items = [...c.items.values()].sort((a, b) => b.times - a.times || b.last.localeCompare(a.last)).slice(0, 6);
+    const allItems = [...c.items.values()].sort((a, b) => b.times - a.times || b.last.localeCompare(a.last)), items = allItems.slice(0, 6);
     return { key: c.key, customer: c.customer, contactId: c.contactId, orders: dates.length, first: dates[0] || null, last, since, usual: usual == null ? null : Math.round(usual),
-      yearNet, prevNet, quiet, lapsed, items, worth: r2(Math.max(yearNet, prevNet)) };
+      yearNet, prevNet, quiet, lapsed, items, allItems, invoices: c.invoices, worth: r2(Math.max(yearNet, prevNet)) };
   }).sort((a, b) => b.worth - a.worth);
 }
 

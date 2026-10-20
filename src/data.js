@@ -340,6 +340,13 @@ export async function loadSales() {
   return { follow: Object.fromEntries(f.data.map(x => [x.sp_quote_id, { state: x.state, lostReason: x.lost_reason, nextOn: x.next_on, note: x.note, updatedAt: x.updated_at }])),
     actions: a.data.map(x => ({ id: x.id, spId: x.sp_quote_id, customer: x.customer, kind: x.kind, note: x.note, by: x.created_by, at: x.created_at })) };
 }
+/** Calls, notes and emails logged about customers (office). */
+export async function loadActions() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('sales_actions').select('*').order('created_at', { ascending: false }).limit(3000);
+  if (error) fail('Could not load the notes', error);
+  return data.map(x => ({ id: x.id, spId: x.sp_quote_id, customer: x.customer, kind: x.kind, note: x.note, by: x.created_by, at: x.created_at }));
+}
 export async function setFollow(q, patch) {
   const sb = await getSupabase();
   const row = { sp_quote_id: q.spId, quote_no: q.quoteNo, customer: q.customer, updated_at: new Date().toISOString() };
@@ -359,17 +366,127 @@ export async function logSalesEmail({ customer, kind }) {
   const sb = await getSupabase();
   await sb.from('sales_emails').insert({ customer, kind, ai: false });
 }
-export async function salesAi(facts) {
+export async function salesAi(facts, kind = 'checkin', extra = {}) {
   const sb = await getSupabase();
   const { data: { session } } = await sb.auth.getSession();
   let res;
   try {
     res = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/sales-ai`, { method: 'POST',
-      headers: { Authorization: `Bearer ${session?.access_token}`, apikey: CONFIG.SUPABASE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ facts }) });
+      headers: { Authorization: `Bearer ${session?.access_token}`, apikey: CONFIG.SUPABASE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ facts, kind, ...extra }) });
   } catch { throw new Error('Could not reach the AI email writer. Check the internet connection and try again.'); }
   const out = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(out.error || `The AI email writer failed (${res.status}).`);
   return out;
+}
+
+/* ---------- customers, enquiries and tasks (office) ---------- */
+export async function loadStaff() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('staff').select('email, name, role');
+  if (error) fail('Could not read the staff list', error);
+  return data;
+}
+const taskRow = t => ({ id: t.id, title: t.title, customer: t.customer, customerKey: t.customer_key, dueOn: t.due_on, assignedTo: t.assigned_to, source: t.source, sourceRef: t.source_ref,
+  note: t.note, doneAt: t.done_at, doneBy: t.done_by, by: t.created_by, createdAt: t.created_at });
+export async function loadTasks() {
+  const sb = await getSupabase();
+  const since = new Date(Date.now() - 120 * 864e5).toISOString();
+  const { data, error } = await sb.from('tasks').select('*').or(`done_at.is.null,done_at.gte.${since}`).order('due_on');
+  if (error) fail('Could not load the tasks', error);
+  return data.map(taskRow);
+}
+export async function addTask(t) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('tasks').insert({ title: t.title.trim(), customer: t.customer || '', customer_key: t.customerKey || '', due_on: t.dueOn, assigned_to: t.assignedTo,
+    source: t.source || '', source_ref: String(t.sourceRef || ''), note: t.note || '' });
+  if (error) fail('The task was not saved', error);
+}
+export async function setTask(id, patch, by) {
+  const sb = await getSupabase();
+  const row = {};
+  if ('done' in patch) { row.done_at = patch.done ? new Date().toISOString() : null; row.done_by = patch.done ? by : null; }
+  if ('dueOn' in patch) row.due_on = patch.dueOn;
+  if ('assignedTo' in patch) row.assigned_to = patch.assignedTo;
+  if ('title' in patch) row.title = patch.title;
+  const { error } = await sb.from('tasks').update(row).eq('id', id);
+  if (error) fail('The task was not updated', error);
+}
+export async function deleteTask(id) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('tasks').delete().eq('id', id);
+  if (error) fail('The task was not removed', error);
+}
+const enqRow = e => ({ id: e.id, messageId: e.message_id, graphId: e.graph_id, mailbox: e.mailbox, receivedAt: e.received_at, fromName: e.from_name, fromEmail: e.from_email, subject: e.subject,
+  webLink: e.web_link, kind: e.kind, summary: e.summary, company: e.company, person: e.person, phone: e.phone, wants: e.wants, hasDrawings: e.has_drawings, customerKey: e.customer_key,
+  status: e.status, handledBy: e.handled_by, handledAt: e.handled_at, error: e.error });
+export async function loadEnquiries() {
+  const sb = await getSupabase();
+  const since = new Date(Date.now() - 180 * 864e5).toISOString();
+  const { data, error } = await sb.from('enquiries').select('*').gte('received_at', since).order('received_at', { ascending: false });
+  if (error) fail('Could not load the enquiries', error);
+  return data.map(enqRow);
+}
+/** Claims a message for reading: the first person to insert it reads it; returns its id, or null if someone has it. */
+export async function claimEnquiry(m) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('enquiries').upsert({ message_id: m.messageId, graph_id: m.graphId, mailbox: m.mailbox, received_at: m.receivedAt, from_name: m.fromName,
+    from_email: m.fromEmail, subject: m.subject, web_link: m.webLink }, { onConflict: 'message_id', ignoreDuplicates: true }).select('id');
+  if (error) fail('Could not note the email', error);
+  return data?.[0]?.id ?? null;
+}
+export async function setEnquiry(id, p) {
+  const sb = await getSupabase();
+  const row = {};
+  for (const [k, c] of [['kind', 'kind'], ['summary', 'summary'], ['company', 'company'], ['person', 'person'], ['phone', 'phone'], ['wants', 'wants'], ['hasDrawings', 'has_drawings'],
+    ['customerKey', 'customer_key'], ['status', 'status'], ['error', 'error']]) if (k in p) row[c] = p[k];
+  if ('status' in p) { row.handled_by = p.by || null; row.handled_at = p.status === 'new' ? null : new Date().toISOString(); }
+  const { error } = await sb.from('enquiries').update(row).eq('id', id);
+  if (error) fail('The enquiry was not updated', error);
+}
+export async function loadInsight(key) {
+  const sb = await getSupabase();
+  const { data } = await sb.from('customer_insights').select('*').eq('customer_key', key).maybeSingle();
+  return data ? { summary: data.summary, nextStep: data.next_step, at: data.created_at } : null;
+}
+export async function saveInsight(key, customer, x, model) {
+  const sb = await getSupabase();
+  await sb.from('customer_insights').upsert({ customer_key: key, customer, summary: x.summary, next_step: x.nextStep || '', model: model || '', created_at: new Date().toISOString() });
+}
+const MAIL_SELECT = 'id,internetMessageId,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,webLink,hasAttachments';
+const boxPath = box => box === 'me' ? '/me' : `/users/${encodeURIComponent(box)}`;
+const boxScopes = box => box === 'me' ? CONFIG.MAIL_SCOPES : CONFIG.SHARED_MAIL_SCOPES;
+/** The newest messages in a shared mailbox's inbox since a date, with their text (for enquiries). Never asks to approve. */
+export async function inboxMessages(mailbox, sinceIso) {
+  const r = await graph(`${boxPath(mailbox)}/mailFolders/inbox/messages?$filter=${encodeURIComponent(`receivedDateTime ge ${sinceIso}`)}&$orderby=receivedDateTime desc&$top=30&$select=${MAIL_SELECT},body`,
+    { scopes: boxScopes(mailbox), quiet: true, headers: { Prefer: 'outlook.body-content-type="text"' } });
+  return (r.value || []).map(m => ({ graphId: m.id, messageId: m.internetMessageId || m.id, subject: m.subject || '', fromEmail: m.from?.emailAddress?.address || '', fromName: m.from?.emailAddress?.name || '',
+    receivedAt: m.receivedDateTime, text: m.body?.content || m.bodyPreview || '', webLink: m.webLink || '', hasAttachments: !!m.hasAttachments }));
+}
+export async function attachmentNames(mailbox, graphId) {
+  const r = await graph(`${boxPath(mailbox)}/messages/${encodeURIComponent(graphId)}/attachments?$select=name`, { scopes: boxScopes(mailbox), quiet: true });
+  return (r.value || []).map(a => a.name).filter(Boolean).slice(0, 15);
+}
+/**
+ * A customer's emails in each mailbox (yours, colleagues' and info@), searched by their domains or addresses.
+ * Returns { messages, noAccess: [mailbox], consent: bool, errors }. Read only; nothing is stored.
+ */
+export async function searchMail(boxes, terms) {
+  const messages = [], noAccess = new Set(), errors = new Set(); let consent = false;
+  await Promise.all(boxes.flatMap(box => terms.map(async term => {
+    try {
+      const r = await graph(`${boxPath(box)}/messages?$search=${encodeURIComponent(`"${term}"`)}&$top=25&$select=${MAIL_SELECT}`, { scopes: boxScopes(box), quiet: true });
+      for (const m of r.value || []) messages.push({ id: m.id, mailbox: box, subject: m.subject || '(no subject)', from: m.from?.emailAddress?.address || '', fromName: m.from?.emailAddress?.name || '',
+        to: [...(m.toRecipients || []), ...(m.ccRecipients || [])].map(x => x.emailAddress?.address || ''), at: m.receivedDateTime, preview: m.bodyPreview || '', webLink: m.webLink || '',
+        internetMessageId: m.internetMessageId || m.id });
+    } catch (e) {
+      if (e.code === 'CONSENT_REQUIRED') consent = true;
+      else if (/403|404|denied|ErrorAccessDenied|MailboxNotEnabled|ResourceNotFound|not found/i.test(e.message)) noAccess.add(box);
+      else errors.add(e.message);
+    }
+  })));
+  const seen = new Set();
+  return { messages: messages.filter(m => !seen.has(m.internetMessageId) && seen.add(m.internetMessageId)).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60),
+    noAccess: [...noAccess], consent, errors: [...errors] };
 }
 
 /* ---------- metal prices (office): enquiries to several suppliers and the prices they gave ---------- */
@@ -601,7 +718,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes', 'quote_follow', 'sales_actions']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes', 'quote_follow', 'sales_actions', 'tasks', 'enquiries']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

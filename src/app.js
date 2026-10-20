@@ -20,7 +20,9 @@ import { renderShopFloor, clockHtml } from './floor.js';
 import { renderTv } from './tv.js';
 import { renderMetal } from './metal.js';
 import { renderSales } from './sales.js';
-import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml } from './core/sales.js';
+import { renderToday, taskForm, renderEnquiries, renderCustomerPage } from './customer.js';
+import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
+import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
@@ -138,6 +140,9 @@ async function reload() {
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
       data.loadPurchaseOrders().catch(() => S.pos || [])]);
+    if (office()) [S.tasks, S.enq, S.staff] = await Promise.all([data.loadTasks().catch(e => { S.tasksErr = e.message; return S.tasks || []; }),
+      data.loadEnquiries().catch(e => { S.enqErr = e.message; return S.enq || []; }), S.staff ? S.staff : data.loadStaff().catch(() => [])]);
+    if (office()) S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
     if (office()) S.metal = await data.loadMetal().then(r => { S.metalErr = null; return r; }).catch(e => { S.metalErr = e.message; return S.metal || []; });
     if (office()) [S.chases, S.parts] = await Promise.all([data.loadChases().catch(() => S.chases || []), data.loadParts().catch(e => { S.partsErr = e.message; return S.parts || []; })]);
     S.error = null;
@@ -146,6 +151,7 @@ async function reload() {
   loadInvoiceStatus();
   loadMonthSales();
   loadDebts();
+  if (office() && !S.enqStarted) { S.enqStarted = true; syncEnquiries(); }   // info@: then every 15 minutes
 }
 async function loadQuotes() {
   S.quotesErr = null;
@@ -377,7 +383,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['sales', 'Sales'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'Sales'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // Sales last (Levi, 20 Oct)   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
@@ -650,6 +656,8 @@ function renderCustomers() {
   const names = new Map();
   for (const x of [...S.book.people, ...S.book.sites]) names.set(x.key, x.customer);
   for (const j of S.jobs) if (!j.preview && !names.has(normName(j.customer))) names.set(normName(j.customer), j.customer);
+  for (const x of S.hist?.invoices || []) if (x.customer && !names.has(normName(x.customer))) names.set(normName(x.customer), x.customer);
+  for (const q of S.salesQ || []) if (q.customer && !names.has(normName(q.customer))) names.set(normName(q.customer), q.customer);
   if (S.cust && !names.has(S.cust) && S.custName) names.set(S.cust, S.custName);
   const list = [...names.entries()].filter(([, n]) => !q || n.toLowerCase().includes(q)).sort((a, b) => a[1].localeCompare(b[1]));
   const sel = S.cust && names.has(S.cust) ? S.cust : null, name = sel ? names.get(sel) : '';
@@ -674,6 +682,7 @@ function renderCustomers() {
         <div class="actions"><button class="btn pri sm" type="submit">${ed.id ? 'Save' : 'Add'}</button><button class="btn sm" type="button" data-bookcancel>Cancel</button></div></form>` : '';
     main = `<div class="sec-h"><h3 style="font-size:28px">${esc(name)}</h3>
         <span class="note">${xc ? `Invoiced in Xero to <b>${esc(xc.name)}</b>.` : S.xc ? 'Not matched to a Xero contact yet.' : ''}</span></div>
+      ${customerPageHtml(sel, name)}${(S.ctab || 'overview') !== 'contacts' ? '' : `
       <div class="panel"><h3>People</h3>
         <p class="note">Who operations deal with. The <b>main Orders / buyer</b> contact fills in new orders and gets the order acknowledgement; the <b>main Goods in / deliveries</b> contact gets delivery notes. Xero's contact is only used when nobody is set here.</p>
         ${b.people.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Role</th><th style="text-align:left">Name</th><th style="text-align:left">Email</th><th style="text-align:left">Phone</th><th style="text-align:left">Notes</th><th></th></tr></thead><tbody>
@@ -687,15 +696,16 @@ function renderCustomers() {
             <td style="text-align:left">${esc(x.contact)}</td><td style="text-align:left">${esc(x.phone)}</td>
             <td style="white-space:nowrap"><button class="btn sm" type="button" data-editsite="${x.id}">Edit</button> <button class="btn link sm" type="button" data-delsite="${x.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No delivery addresses yet.</div>'}
         ${sform || '<div class="actions"><button class="btn sm" type="button" data-addsite>Add a delivery address</button></div>'}</div>
-      ${orders.length ? `<div class="panel"><h3>Open orders <span class="note">${orders.length}</span></h3><div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${orders.map(j => `<button class="btn sm" type="button" data-open="${j.id}">${esc(j.so)} · due ${fmt(nextDue(j))}</button>`).join('')}</div></div>` : ''}`;
+      `}${(S.ctab || 'overview') === 'contacts' && orders.length ? `<div class="panel"><h3>Open orders <span class="note">${orders.length}</span></h3><div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${orders.map(j => `<button class="btn sm" type="button" data-open="${j.id}">${esc(j.so)} · due ${fmt(nextDue(j))}</button>`).join('')}</div></div>` : ''}`;
   }
-  $('v-customers').innerHTML = `<p class="crumb"><a href="#orders" data-tab="orders">← Sales orders</a></p><div class="sec-h"><h2>Customers</h2><span class="sub">The board's own contact book: who to deal with and where to deliver. Xero is not changed.</span></div>
-    <div class="cbook"><div class="clist"><input type="search" id="csearch" placeholder="Find a customer" value="${esc(S.csearch || '')}">
+  $('v-customers').innerHTML = `<p class="crumb"><a href="#orders" data-tab="orders">← Sales orders</a></p><div class="sec-h"><h2>Customers</h2><span class="sub">Every customer: orders, invoices, quotes, emails, tasks and notes, and who to deal with. Xero and the quote calculator are not changed.</span></div>
+    ${enquiriesHtml()}<div class="cbook"><div class="clist"><input type="search" id="csearch" placeholder="Find a customer" value="${esc(S.csearch || '')}">
         <div class="citems">${items || '<div class="note">No customers yet.</div>'}</div>
         <form class="addcust" data-addcust><input type="text" id="newcust" list="xero-customers2" placeholder="Add a customer (from Xero or new)" autocomplete="off">
           <datalist id="xero-customers2">${(S.xc?.contacts || []).map(c => `<option value="${esc(c.name)}"></option>`).join('')}</datalist><button class="btn sm" type="submit">Open</button></form></div>
       <div class="cmain">${main}</div></div>`;
   if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
+  ensureHistory(); ensureQuotes();
 }
 async function saveBookForm(kind) {
   const v = id => $(id)?.value ?? '', name = S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer || '';
@@ -1010,6 +1020,195 @@ function outPanel(j) {
       ${r.backOn ? '' : `<button class="btn sm" type="button" data-outback="${r.id}">Back in</button> `}<button class="btn sm link" type="button" data-outedit="${r.id}">Change</button></p>`).join('')}
     ${can.map(p => `<button class="btn sm" type="button" data-sendout="${esc(p)}" data-job="${j.id}">Send out for ${esc(SHORT[p])}</button>`).join(' ')}</div>`;
 }
+/* ---------- customers as a CRM: history, quotes, emails, tasks, enquiries (Levi and Mandy) ---------- */
+const DEFAULT_ENQUIRY_MAILBOX = 'info@clarke-lane.co.uk';
+const enquiryMailbox = () => String(S.officeSet?.enquiry_mailbox || DEFAULT_ENQUIRY_MAILBOX);
+const ownDomain = () => domainOf(S.me?.email || '');
+/** Xero's sales invoices (24 months), read once per visit: customer pages, Sales and Home's list. */
+function ensureHistory(fresh) {
+  if (!S.xero || PREVIEW.on || S.histLoading || (S.hist && !fresh)) return;
+  S.histLoading = true;
+  data.xero('history').then(r => { S.hist = r; S.histErr = null; }).catch(e => { S.histErr = e.message; S.hist = S.hist || { invoices: [] }; })
+    .then(() => { S.histLoading = false; if (['sales', 'customers', 'home'].includes(S.tab)) render(); });
+}
+/** Every quote in the quote calculator (read only), for customer pages and Sales. */
+function ensureQuotes(fresh) {
+  if (S.salesQLoading || (S.salesQ && !fresh) || S.salesErr) return;
+  S.salesQLoading = true;
+  data.allQuotes().then(q => { S.salesQ = q; }).catch(e => { S.salesErr = e.message; }).then(() => { S.salesQLoading = false; if (['sales', 'customers', 'home'].includes(S.tab)) render(); });
+}
+const staffList = () => S.staff || [];
+function customerIdx() {
+  const entries = [...S.book.people.map(p => ({ key: p.key, customer: p.customer, email: p.email })),
+    ...S.jobs.filter(j => !j.preview).map(j => ({ key: normName(j.customer), customer: j.customer, email: j.contactEmail })),
+    ...(S.salesQ || []).map(q => ({ key: normName(q.customer), customer: q.customer, email: q.contactEmail }))];
+  return customerIndex(entries);
+}
+
+/** Reads new emails in the enquiries mailbox: each one not seen before is sorted by AI and kept as one row. */
+let enqSyncing = false;
+async function syncEnquiries(manual) {
+  if (!office() || PREVIEW.on || enqSyncing) return;
+  enqSyncing = true; S.enqState = S.enqState === 'ok' ? 'ok' : 'reading';
+  const mailbox = enquiryMailbox();
+  try {
+    const known = new Set((S.enq || []).map(e => e.messageId));
+    const last = (S.enq || []).reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), '');
+    const since = new Date(Math.max(Date.now() - 14 * 864e5, last ? Date.parse(last) - 36e5 : 0)).toISOString();
+    const msgs = (await data.inboxMessages(mailbox, since)).filter(m => !known.has(m.messageId) && worthReading({ from: m.fromEmail }, ownDomain()));
+    let read = 0;
+    for (const m of msgs.slice(0, 8)) {
+      const attachments = m.hasAttachments ? await data.attachmentNames(mailbox, m.graphId).catch(() => []) : [];
+      const x = await data.salesAi({ from: m.fromEmail, fromName: m.fromName, subject: m.subject, text: plainText(m.text), attachments }, 'enquiry');
+      const id = await data.claimEnquiry({ ...m, mailbox });
+      if (id) { await data.setEnquiry(id, { kind: x.kind, summary: x.summary || '', company: x.company || '', person: x.person || m.fromName, phone: x.phone || '', wants: x.wants || '', hasDrawings: !!x.hasDrawings || attachments.some(a => /\.(pdf|dxf|dwg|step|stp|igs)$/i.test(a)), customerKey: whoIs(customerIdx(), m.fromEmail)?.key || '' }); read++; }
+    }
+    S.enqState = 'ok';
+    if (read || manual) { S.enq = await data.loadEnquiries(); if (manual) toast(read ? `${read} new email${read === 1 ? '' : 's'} read.` : 'Nothing new in the mailbox.'); }
+  } catch (e) {
+    S.enqState = e.code === 'CONSENT_REQUIRED' ? 'consent' : /403|denied|not found|404/i.test(e.message) ? 'noaccess' : 'error:' + e.message;
+    if (manual) toast(e.message, null, true);
+  }
+  enqSyncing = false; if (['customers', 'sales', 'home'].includes(S.tab)) render();
+}
+setInterval(() => { if (!document.hidden && S.me && office()) syncEnquiries(); }, 15 * 60e3);
+function enquiriesHtml() {
+  if (!office()) return '';
+  return renderEnquiries({ list: enquiryList(S.enq || [], new Date().toISOString()), funnel: enquiryFunnel(S.enq || [], todayIso()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
+    open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply }, { esc, fmt, fmtTime });
+}
+async function replyEnquiry(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e) return;
+  S.enqBusy = id; render();
+  try {
+    const d = await data.salesAi({ from: e.fromEmail, fromName: e.person || e.fromName, subject: e.subject, company: e.company, wants: e.wants, summary: e.summary, hasDrawings: e.hasDrawings }, 'reply');
+    S.enqReply = { id, draft: { subject: d.subject, greeting: d.greeting, paragraphs: d.paragraphs || [] } };
+  } catch (x) { toast(x.message, null, true); }
+  S.enqBusy = null; render();
+}
+async function sendEnquiryReply(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e) return;
+  const subject = $('er-subj').value.trim(), parts = $('er-body').value.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  if (!subject || !parts.length) return toast('The reply needs a subject and some text.', null, true);
+  try {
+    const link = await data.draftEmail({ to: e.fromEmail, subject, html: aiEmailHtml({ greeting: parts[0], paragraphs: parts.slice(1) }, S.me.name) });
+    await data.setEnquiry(id, { status: 'replied', by: S.me.email });
+    if (e.customerKey) data.addSalesAction({ customer: e.company || e.fromName, kind: 'email', note: `Reply to enquiry: ${e.wants || e.subject}` }).catch(() => {});
+    S.enqReply = null; S.enq = await data.loadEnquiries();
+    toast(`The reply to ${e.fromName || e.fromEmail} is in your Outlook Drafts. Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (x) { toast(mailErr(x), null, true); }
+  render();
+}
+async function enquiryToCustomer(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e) return;
+  const name = (prompt('Customer name', e.company || e.fromName || '') || '').trim(); if (!name) return;
+  const key = normName(name);
+  try {
+    await data.savePerson({ key, customer: name, role: 'orders', name: e.person || e.fromName, email: e.fromEmail, phone: e.phone, notes: 'From an enquiry', main: !bookFor(name).people.some(p => p.role === 'orders') });
+    await data.setEnquiry(id, { customerKey: key });
+    await reload(); openCustomer(key, name);
+    toast(`${name} added to Customers with ${e.person || e.fromName} as the orders contact.`);
+  } catch (x) { toast(x.message, null, true); }
+}
+function openCustomer(key, name, tab = 'overview') { S.tab = 'customers'; S.cust = key; S.custName = name || S.custName; S.ctab = tab; S.bookEdit = null; closeDoc(); S.open = null; render(); window.scrollTo(0, 0); }
+
+/** A customer's page: everything the board knows about them, from its own records, Xero and the quote calculator. */
+function customerPageHtml(key, name) {
+  const today = todayIso(), base = S.hist ? customerBase(S.hist.invoices, today) : [], c = base.find(x => x.key === key) || null;
+  const F = S.salesF || { follow: {}, actions: [] };
+  const quotes = (S.salesQ || []).filter(q => normName(q.customer) === key).map(q => ({ ...q, value: quoteValue(q), lost: F.follow?.[q.spId]?.state === 'lost' ? (F.follow[q.spId].lostReason || 'yes') : null }))
+    .sort((a, b) => (b.quoteDate || '').localeCompare(a.quoteDate || ''));
+  const openQ = md() && S.salesQ ? salesModel().open.filter(q => normName(q.customer) === key) : quotes.filter(q => q.status !== 'Ordered' && !q.lost);
+  const stageOf = new Map(openQ.map(q => [q.spId, q.stage]));
+  const jobs = S.jobs.filter(j => !j.preview && normName(j.customer) === key).sort((a, b) => (b.ordered || '').localeCompare(a.ordered || ''));
+  const invoices = (S.hist?.invoices || []).filter(x => normName(x.customer) === key).sort((a, b) => b.date.localeCompare(a.date));
+  const tasks = (S.tasks || []).filter(t => t.customerKey === key || normName(t.customer) === key);
+  const actions = (S.salesActs || F.actions || []).filter(a => normName(a.customer) === key);
+  const prompts = [];
+  if (c) {
+    for (const r of reordersDue([c], today)) prompts.push(`Usually orders <b>${esc(r.item)}</b> every ${r.every} days; last ${esc(fmt(r.last))} (${r.since} days ago).`);
+    for (const m of couldBuyMore([c], S.jobs)) prompts.push(`Has never had ${esc(m.missing.join(' or '))} from us: worth asking whether they get it done elsewhere.`);
+    if (c.quiet) prompts.push(`Usually orders every ${c.usual} days; nothing for ${c.since}.`);
+  }
+  const tab = S.ctab || 'overview';
+  if (tab === 'emails' && !S.cmail?.[key]) setTimeout(() => loadCustomerMail(key), 0);
+  if (tab === 'overview' && md() && S.insight?.[key] === undefined) { S.insight = { ...(S.insight || {}), [key]: null }; data.loadInsight(key).then(x => { S.insight[key] = x; render(); }).catch(() => {}); }
+  const m = S.cmail?.[key];
+  return renderCustomerPage({ tab, c, md: md(), office: office(), today, staff: staffList(), jobs, invoices, tasks, timeline: timeline({ key, jobs, invoices, quotes, actions, tasks, enquiries: S.enq || [] }),
+    quotes: quotes.map(q => ({ ...q, stage: stageOf.get(q.spId) })), openQuotes: openQ, openOrders: jobs.filter(j => ['upcoming', 'current'].includes(stage(j))).length,
+    insight: S.insight?.[key] || null, insightBusy: S.insightBusy === key, prompts, statusChips, jobValue: j => value(j),
+    quotesState: S.salesErr ? `<div class="err">The quote calculator could not be read: ${esc(S.salesErr)}</div>` : !S.salesQ ? '<p class="note">Reading the quote calculator…</p>' : '',
+    histNote: !S.xero ? '<p class="note">Xero is not connected.</p>' : S.histErr ? `<div class="err">Xero's invoices could not be read: ${esc(S.histErr)}</div>` : !S.hist ? '<p class="note">Reading Xero…</p>' : '',
+    mail: m ? { ...m, messages: (m.messages || []).map(x => ({ ...x, out: domainOf(x.from) === ownDomain(), box: x.mailbox === 'me' ? 'your mailbox' : x.mailbox })) } : null }, { esc, fmt, gbp });
+}
+async function loadCustomerMail(key) {
+  const emails = [...S.book.people.filter(p => p.key === key).map(p => p.email), ...S.jobs.filter(j => normName(j.customer) === key).map(j => j.contactEmail),
+    ...(S.salesQ || []).filter(q => normName(q.customer) === key).map(q => q.contactEmail), ...(S.enq || []).filter(e => e.customerKey === key).map(e => e.fromEmail)];
+  const terms = mailTerms(emails, ownDomain());
+  S.cmail = { ...(S.cmail || {}), [key]: { state: terms.length ? 'loading' : 'none', terms } }; render();
+  if (!terms.length) return;
+  const boxes = ['me', enquiryMailbox(), ...staffList().filter(s => ['md', 'office'].includes(s.role) && s.email !== S.me.email && domainOf(s.email) === ownDomain()).map(s => s.email)];
+  const r = await data.searchMail([...new Set(boxes)], terms);
+  S.cmail[key] = { state: 'ok', terms, ...r }; if (S.tab === 'customers') render();
+}
+async function writeInsight(key, name) {
+  const today = todayIso(), c = (S.hist ? customerBase(S.hist.invoices, today) : []).find(x => x.key === key);
+  if (!c) return toast('There are no Xero invoices for this customer yet, so there is nothing to summarise.', null, true);
+  S.insightBusy = key; render();
+  try {
+    const facts = { ...customerFacts(c, { openQuotes: (S.salesQ ? salesModel().open : []).filter(q => normName(q.customer) === key), from: S.me.name }),
+      trend: trendWords(c), quotesWon: (S.salesQ || []).filter(q => normName(q.customer) === key && q.status === 'Ordered').length,
+      quotesNotWon: (S.salesQ || []).filter(q => normName(q.customer) === key && q.status !== 'Ordered').length,
+      recentNotes: (S.salesF?.actions || []).filter(a => normName(a.customer) === key && a.note).slice(0, 6).map(a => ({ date: a.at.slice(0, 10), kind: a.kind, note: a.note })),
+      openTasks: (S.tasks || []).filter(t => !t.doneAt && t.customerKey === key).map(t => t.title) };
+    const r = await data.salesAi(facts, 'summary');
+    const x = { summary: r.summary, nextStep: r.nextStep, at: new Date().toISOString() };
+    await data.saveInsight(key, name, x, r.model).catch(() => {});
+    S.insight = { ...(S.insight || {}), [key]: x };
+  } catch (e) { toast(e.message, null, true); }
+  S.insightBusy = null; render();
+}
+
+/* Tasks: one form for Home, a customer, an enquiry or an email. */
+function openTaskForm(src) {
+  const today = todayIso(), f = { dueOn: plusDays(today, 1), assignedTo: S.me.email, title: '', customer: '' };
+  if (src === 'cust' && S.cust) Object.assign(f, { customer: S.custName || [...S.book.people].find(p => p.key === S.cust)?.customer || (S.hist?.invoices || []).find(x => normName(x.customer) === S.cust)?.customer || S.cust });
+  if (src?.startsWith('enquiry:')) { const e = (S.enq || []).find(x => x.id === +src.slice(8)); if (e) Object.assign(f, { title: `Quote for ${e.company || e.fromName}: ${e.wants || e.subject}`.slice(0, 200), customer: e.company || '', source: 'enquiry', sourceRef: e.id, dueOn: today }); }
+  if (src?.startsWith('email:')) { const m = Object.values(S.cmail || {}).flatMap(x => x.messages || []).find(x => x.id === src.slice(6)); if (m) Object.assign(f, { title: `Reply to: ${m.subject}`.slice(0, 200), customer: S.custName || '', source: 'email', sourceRef: m.internetMessageId }); }
+  S.taskForm = f;
+  const names = [...new Set([...S.book.people.map(p => p.customer), ...S.jobs.map(j => j.customer), ...(S.hist?.invoices || []).map(x => x.customer)])].filter(Boolean).sort();
+  $('doc').innerHTML = `<div class="docbar"><span>Tasks show on Home for the person they are for.</span><button class="btn" type="button" data-taskcancel>Close</button></div>${taskForm(f, { staff: staffList(), customers: names }, { esc })}`;
+  $('doc').hidden = false; document.body.classList.add('doc-open'); $('tk-title')?.focus();
+}
+async function saveTask() {
+  const f = S.taskForm, title = $('tk-title').value.trim(), customer = $('tk-cust').value.trim(), dueOn = $('tk-due').value, assignedTo = $('tk-who').value;
+  if (!title || !dueOn) { $('tk-err').textContent = 'Say what needs doing and when.'; $('tk-err').hidden = false; return; }
+  try {
+    await data.addTask({ title, customer, customerKey: customer ? normName(customer) : '', dueOn, assignedTo, source: f.source, sourceRef: f.sourceRef });
+    S.taskForm = null; closeDoc(); S.tasks = await data.loadTasks();
+    toast(`Task saved for ${(staffList().find(x => x.email === assignedTo)?.name || assignedTo).split(' ')[0]}, due ${fmt(dueOn)}.`);
+  } catch (e) { $('tk-err').textContent = e.message; $('tk-err').hidden = false; return; }
+  render();
+}
+async function toggleTask(id, done) {
+  const t = (S.tasks || []).find(x => x.id === id); if (!t) return;
+  try {
+    await data.setTask(id, { done }, S.me.email); S.tasks = await data.loadTasks();
+    if (done) toast(`Done: ${t.title}`, async () => { await data.setTask(id, { done: false }, S.me.email); S.tasks = await data.loadTasks(); render(); });
+  } catch (e) { toast(e.message, null, true); }
+  render();
+}
+/** Home's Today panel: enquiries waiting, my tasks, and for Levi the sales prompts. */
+function todayHtml() {
+  if (!office()) return '';
+  const today = todayIso(), tasks = taskGroups(S.tasks || [], today, S.me.email);
+  let chase = [], reorders = [], quiet = [];
+  if (md()) { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { const base = customerBase(S.hist.invoices, today); reorders = reordersDue(base, today); quiet = quietCustomers(base); } }
+  const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };
+  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt });
+}
+
 /* ---------- sales (Levi only): quotes to chase, the month against his target, customers gone quiet ---------- */
 async function loadSalesData(fresh) {
   if (S.salesLoading) return; S.salesLoading = true; S.salesErr = null;
@@ -1018,7 +1217,7 @@ async function loadSalesData(fresh) {
     S.salesQ = qs; S.salesF = f;
   } catch (e) { S.salesErr = e.message; }
   S.salesLoading = false;
-  if (S.xero && (fresh || !S.hist)) data.xero('history').then(r => { S.hist = r; S.histErr = null; }).catch(e => { S.histErr = e.message; S.hist = { invoices: [] }; }).then(() => { if (S.tab === 'sales') render(); });
+  ensureHistory(fresh);
   if (S.tab === 'sales') render();
 }
 /** Everything the Sales screen shows, worked out from the quotes, follow-ups, orders and Xero. */
@@ -1035,7 +1234,8 @@ function renderSalesView() {
   if (!S.salesQ && !S.salesErr && !S.salesLoading) loadSalesData();
   if (!S.salesQ) { $('v-sales').innerHTML = renderSales({ loading: !S.salesErr, err: S.salesErr }, { esc, fmt, gbp }); return; }
   const m = salesModel();
-  $('v-sales').innerHTML = renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai }, { esc, fmt, gbp });
+  $('v-sales').innerHTML = renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai,
+    reorders: m.base ? reordersDue(m.base, m.today) : [], more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml() }, { esc, fmt, gbp });
 }
 const plusDays = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 const salesQuote = spId => salesModel().open.find(q => q.spId === spId) || (S.salesQ || []).find(q => q.spId === spId);
@@ -1072,9 +1272,9 @@ async function markQuoteLost(spId, reason) {
   } catch (e) { toast(e.message, null, true); }
   loadSalesData();
 }
-async function openAi(key) {
-  const c = (salesModel().base || []).find(x => x.key === key); if (!c) return;
-  S.ai = { key, angle: '', to: '', person: '' }; render();
+async function openAi(key, angle = '') {
+  const c = (salesModel().base || []).find(x => x.key === key); if (!c) return toast('There are no Xero invoices for this customer yet, so there is nothing for the AI to go on.', null, true);
+  S.ai = { key, angle, to: '', person: '' }; S.tab = 'sales'; render(); $('saibox')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   if (c.contactId && /^[0-9a-f-]{36}$/i.test(c.contactId)) data.xero('contact', { id: c.contactId }).then(x => { if (S.ai?.key === key) { S.ai.to = x.email || ''; S.ai.person = x.person || ''; } }).catch(() => {});
 }
 async function writeAi(key) {
@@ -1087,6 +1287,28 @@ async function writeAi(key) {
     S.ai.draft = { subject: r.subject, greeting: r.greeting, paragraphs: r.paragraphs || [] };
   } catch (e) { toast(e.message, null, true); }
   if (S.ai) S.ai.busy = false; render();
+}
+/** The monthly news email: one personal AI draft per ticked customer, one after another. */
+async function newsEmails() {
+  const text = $('news-text').value.trim(); if (!text) return toast('Write what is new first: the AI builds each email around it.', null, true);
+  const picked = [...document.querySelectorAll('[data-newspick]:checked')].map(x => x.dataset.newspick);
+  if (!picked.length) return toast('Tick at least one customer.', null, true);
+  if (!confirm(`Draft ${picked.length} email${picked.length === 1 ? '' : 's'} in your Outlook Drafts, one per customer? (About ${picked.length}p of AI.) Nothing is sent.`)) return;
+  const m = salesModel(); S.news = { text, picked, busy: '' }; let done = 0, noMail = 0;
+  for (const key of picked) {
+    const c = m.base.find(x => x.key === key); if (!c) continue;
+    S.news.busy = `Drafting ${done + 1} of ${picked.length}…`; render();
+    try {
+      const x = c.contactId && /^[0-9a-f-]{36}$/i.test(c.contactId) ? await data.xero('contact', { id: c.contactId }).catch(() => ({})) : {};
+      const r = await data.salesAi(customerFacts(c, { person: x.person || '', openQuotes: m.open.filter(q => normName(q.customer) === key), angle: text, from: S.me.name }), 'checkin', { news: true });
+      await data.draftEmail({ to: x.email || '', subject: r.subject, html: aiEmailHtml({ greeting: r.greeting, paragraphs: r.paragraphs }, S.me.name) });
+      await data.addSalesAction({ customer: c.customer, kind: 'email', note: `News email: ${r.subject}` });
+      done++; if (!x.email) noMail++;
+    } catch (e) { toast(`Stopped at ${c.customer}: ${mailErr(e)}`, null, true); break; }
+  }
+  S.news = { text, picked, busy: '' };
+  toast(`${done} email${done === 1 ? '' : 's'} in your Outlook Drafts${noMail ? ` (${noMail} with no address in Xero: add it before sending)` : ''}. Check each one and press Send.`);
+  loadSalesData();
 }
 async function draftAi(key) {
   const c = (salesModel().base || []).find(x => x.key === key); if (!c) return;
@@ -2133,7 +2355,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); if (md()) { ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
@@ -2205,11 +2427,11 @@ function onClick(e) {
     if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
     return;
   }
-  const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen],tr[data-sopen]'); if (!t) return;
+  const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen],tr[data-sopen],tr[data-enqopen]'); if (!t) return;
   const d = t.dataset;
   if ('goback' in d) return history.back();
   if ('preview' in d) return enterPreview();
-  if (d.cust) { S.cust = d.cust; S.custName = null; S.bookEdit = null; return render(); }
+  if (d.cust) { S.cust = d.cust; S.custName = null; S.bookEdit = null; S.ctab = S.ctab || 'overview'; return render(); }
   if ('addperson' in d) { S.bookEdit = { kind: 'person', role: 'orders', main: false }; return render(); }
   if ('addsite' in d) { S.bookEdit = { kind: 'site', main: false }; return render(); }
   if (d.editperson) { S.bookEdit = { kind: 'person', ...S.book.people.find(p => p.id === +d.editperson) }; return render(); }
@@ -2235,19 +2457,41 @@ function onClick(e) {
   if (d.wondrill) return wonDrill(d.wondrill, d.key);
   if (d.wonlines) { S.wonOpen = S.wonOpen === d.wonlines ? null : d.wonlines; return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
+  if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; render(); setTimeout(() => $('goenq' in d ? 'enquiries' : 'smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if (d.sendout) { e.stopPropagation(); return sendOutForm(+d.job, d.sendout); }
   if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
   if (d.outback) { e.stopPropagation(); return outBack(+d.outback); }
   if (d.outremove) return removeOut(+d.outremove);
-  if ('salesreload' in d) { S.salesQ = null; S.hist = null; return loadSalesData(true); }
+  if ('salesreload' in d) { S.salesQ = null; S.hist = null; S.salesErr = null; return loadSalesData(true); }
+  if (d.custpage) { const n = d.custname || (S.hist?.invoices || []).find(x => normName(x.customer) === d.custpage)?.customer || S.book.people.find(p => p.key === d.custpage)?.customer || d.custpage; return openCustomer(d.custpage, n); }
+  if (d.ctab) { S.ctab = d.ctab; return render(); }
+  if ('cnote' in d) { const t = $('cn-text').value.trim(), kind = $('cn-kind').value, name = S.custName || S.cust; if (!t) return;
+    data.addSalesAction({ customer: name, kind, note: t }).then(async () => { S.salesActs = await data.loadActions(); toast('Noted.'); render(); }).catch(e => toast(e.message, null, true)); return; }
+  if ('cinsight' in d) return writeInsight(S.cust, S.custName || S.cust);
+  if ('cmail' in d) { if (S.cmail) delete S.cmail[S.cust]; return loadCustomerMail(S.cust); }
+  if ('taskadd' in d) return openTaskForm(d.taskadd);
+  if ('taskcancel' in d) { S.taskForm = null; return closeDoc(); }
+  if (d.enqopen) { S.enqOpen = S.enqOpen === +d.enqopen ? null : +d.enqopen; return render(); }
+  if (d.enqreply) return replyEnquiry(+d.enqreply);
+  if (d.enqsend) return sendEnquiryReply(+d.enqsend);
+  if (d.enqnewcust) return enquiryToCustomer(+d.enqnewcust);
+  if ('enqsync' in d) return syncEnquiries(true);
+  if ('enqmailbox' in d) { const v = $('enq-mailbox').value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return toast('That is not an email address.', null, true);
+    data.saveOfficeSetting('enquiry_mailbox', v).then(async () => { S.officeSet = await data.loadOfficeSettings(); S.enqState = 'reading'; toast(`Enquiries will be read from ${v}.`); syncEnquiries(true); }).catch(e => toast(e.message, null, true)); return; }
+  if ('enqdoneall' in d) { const xs = (S.enq || []).filter(e => e.kind === 'customer' && e.status === 'new');
+    Promise.all(xs.map(e => data.setEnquiry(e.id, { status: 'ignored', by: S.me.email }))).then(async () => { S.enq = await data.loadEnquiries(); render(); }).catch(e => toast(e.message, null, true)); return; }
+  if ('goenq' in d) { S.tab = 'customers'; render(); setTimeout(() => $('enquiries')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
+  if ('gotasks' in d) { $('today')?.scrollIntoView({ behavior: 'smooth' }); return; }
+  if ('gosmart' in d) { S.tab = 'sales'; render(); setTimeout(() => $('smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
+  if ('newsgo' in d) return newsEmails();
   if (d.sview) { S.salesView = d.sview; return render(); }
   if (d.sopen) { S.salesOpen = S.salesOpen === +d.sopen ? null : +d.sopen; return render(); }
   if (d.qchase) return chaseQuote(+d.qchase);
   if (d.qcall) return logCall(+d.qcall, null);
   if (d.ccall) return logCall(null, d.ccall);
-  if (d.aiopen) return openAi(d.aiopen);
+  if (d.aiopen) return openAi(d.aiopen, d.angle || '');
   if (d.aiwrite) return writeAi(d.aiwrite);
   if (d.aidraft) return draftAi(d.aidraft);
   if ('aiclose' in d) { S.ai = null; return render(); }
@@ -2413,6 +2657,9 @@ document.addEventListener('change', e => {
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
+  if (e.target.dataset.taskdone) return toggleTask(+e.target.dataset.taskdone, e.target.checked);
+  if (e.target.dataset.enqstatus && e.target.value) { const id = +e.target.dataset.enqstatus, v = e.target.value; data.setEnquiry(id, { status: v, by: S.me.email }).then(async () => { S.enq = await data.loadEnquiries(); render(); }).catch(x => toast(x.message, null, true)); return; }
+  if (e.target.dataset.newspick !== undefined) { S.news = { ...(S.news || {}), text: $('news-text')?.value || '', picked: [...document.querySelectorAll('[data-newspick]:checked')].map(x => x.dataset.newspick) }; return; }
   if (e.target.dataset.qnext) { const q = salesQuote(+e.target.dataset.qnext); if (q) data.setFollow(q, { nextOn: e.target.value || null }).then(() => { toast(e.target.value ? `Follow-up for ${q.quoteNo} booked for ${fmt(e.target.value)}.` : 'Follow-up date cleared.'); loadSalesData(); }).catch(x => toast(x.message, null, true)); return; }
   if (e.target.dataset.qlost) return markQuoteLost(+e.target.dataset.qlost, e.target.value);
   if (e.target.dataset.qnote) { const q = salesQuote(+e.target.dataset.qnote); if (q) data.setFollow(q, { note: e.target.value.trim() }).then(() => loadSalesData()).catch(x => toast(x.message, null, true)); return; }
@@ -2469,6 +2716,7 @@ document.addEventListener('submit', async e => {
   if ('partform' in f.dataset) return savePart(f);
   if (f.id === 'outf') return saveOut();
   if (f.id === 'rfqf') return saveRfq();
+  if (f.id === 'taskf') return saveTask();
   if ('pfsettings' in f.dataset) return savePfSettings();
   if ('targetform' in f.dataset) {
     const num = id => { const v = $(id).value.trim(); return v === '' ? null : Math.round(Number(v)); };

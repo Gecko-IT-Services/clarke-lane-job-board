@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, domainOf } from '../src/core/crm.js';
+import { customerBase } from '../src/core/sales.js';
+
+const today = '2026-10-21';
+const ago = d => new Date(Date.parse(today + 'T12:00:00Z') - d * 864e5).toISOString().slice(0, 10);
+
+assert.equal(domainOf('Sam@Example.CO.UK'), 'example.co.uk');
+assert.deepEqual(mailTerms(['sam@example.co.uk, jo@example.co.uk', 'bob@gmail.com', 'me@clarke-lane.co.uk', 'nonsense'], 'clarke-lane.co.uk'), ['example.co.uk', 'bob@gmail.com']);
+
+const idx = customerIndex([{ key: 'example', customer: 'Example Ltd', email: 'sam@example.co.uk' }, { key: 'solo', customer: 'Solo Trader', email: 'solo@gmail.com' }]);
+assert.equal(whoIs(idx, 'new.person@example.co.uk').customer, 'Example Ltd', 'same company domain');
+assert.equal(whoIs(idx, 'SOLO@gmail.com').customer, 'Solo Trader');
+assert.equal(whoIs(idx, 'other@gmail.com'), null, 'never by a webmail domain');
+
+assert.equal(plainText('<p>Hi&nbsp;there</p><style>x{}</style><div>Need 40 brackets</div>'), 'Hi there\n Need 40 brackets');
+const chain = 'Please quote 10 of the attached.' + ' x'.repeat(120) + '\nFrom: Someone\nSent: Monday\nOld stuff';
+assert.ok(!plainText(chain).includes('Old stuff'), 'the earlier thread is cut off');
+
+assert.equal(worthReading({ from: 'buyer@example.co.uk' }, 'clarke-lane.co.uk'), true);
+assert.equal(worthReading({ from: 'levi@clarke-lane.co.uk' }, 'clarke-lane.co.uk'), false);
+assert.equal(worthReading({ from: 'noreply@xero.com' }, 'clarke-lane.co.uk'), false);
+
+const now = '2026-10-21T12:00:00Z';
+const enq = [{ id: 1, kind: 'enquiry', status: 'new', receivedAt: '2026-10-21T09:00:00Z' }, { id: 2, kind: 'enquiry', status: 'new', receivedAt: '2026-10-20T09:00:00Z' },
+  { id: 3, kind: 'enquiry', status: 'won', receivedAt: '2026-10-10T09:00:00Z' }, { id: 4, kind: 'other', status: 'ignored', receivedAt: '2026-10-19T09:00:00Z' }, { id: 5, kind: null, status: 'new', receivedAt: '2026-10-21T10:00:00Z' }];
+assert.deepEqual(enquiryList(enq, now).map(e => e.id), [2, 1, 4, 3], 'new first, longest waiting first; unread rows left out');
+assert.equal(enquiryList(enq, now)[0].waitHours, 27);
+assert.deepEqual(enquiryFunnel(enq, today), { received: 3, answered: 1, quoted: 1, won: 1, waiting: 2 });
+
+const tasks = [{ id: 1, title: 'a', dueOn: ago(2), assignedTo: 'levi', doneAt: null }, { id: 2, title: 'b', dueOn: today, assignedTo: 'mandy', doneAt: null },
+  { id: 3, title: 'c', dueOn: ago(-3), assignedTo: 'levi', doneAt: null }, { id: 4, title: 'd', dueOn: ago(-30), assignedTo: 'levi', doneAt: null }, { id: 5, title: 'e', dueOn: ago(1), assignedTo: 'levi', doneAt: '2026-10-20' }];
+const g = taskGroups(tasks, today, 'levi');
+assert.deepEqual([g.overdue, g.today, g.soon, g.later].map(x => x.map(t => t.id)), [[1], [], [3], [4]]);
+assert.equal(taskGroups(tasks, today).today.length, 1);
+
+// Reorders: brackets every ~21 days, last 35 days ago (due); covers once 200 days ago (stopped); boxes every 30 days, last 10 (not due).
+const inv = [];
+for (let k = 0; k < 5; k++) inv.push({ customer: 'Example Ltd', contactId: 'c1', date: ago(35 + k * 21), net: 500, lines: [{ description: 'Bracket BRK-1', qty: 10, amount: 500 }] });
+for (let k = 0; k < 3; k++) inv.push({ customer: 'Example Ltd', contactId: 'c1', date: ago(10 + k * 30), net: 300, lines: [{ description: 'Laser cut box 2mm, folded', qty: 2, amount: 300 }] });
+for (let k = 0; k < 3; k++) inv.push({ customer: 'Other Ltd', contactId: 'c2', date: ago(200 + k * 14), net: 100, lines: [{ description: 'Cover', qty: 1, amount: 100 }] });
+const base = customerBase(inv, today);
+const due = reordersDue(base, today);
+assert.deepEqual(due.map(d => [d.customer, d.item, d.every]), [['Example Ltd', 'Bracket BRK-1', 21]]);
+
+const more = couldBuyMore(base, [{ customer: 'Example Ltd', procs: { Laser: {}, Fold: {} } }]);
+assert.equal(more.length, 1);
+assert.deepEqual(more[0].missing, ['powder coating', 'welding']);
+assert.equal(couldBuyMore(base, []).find(x => x.customer === 'Other Ltd'), undefined, 'too few orders, and nothing to tell from "Cover"');
+
+const tl = timeline({ key: 'example ltd'.replace(/ ltd$/, ''), jobs: [], invoices: inv, quotes: [], actions: [], tasks: [], enquiries: [] });
+assert.ok(tl.length >= 0);
+const key = base.find(c => c.customer === 'Example Ltd').key;
+const t2 = timeline({ key, jobs: [{ customer: 'Example Ltd', so: 'SO-1', ordered: ago(1), id: 9 }], invoices: inv, actions: [{ customer: 'Example Ltd', kind: 'call', note: 'Rang Sam', at: today + 'T09:00:00Z', id: 1 }] });
+assert.equal(t2[0].kind, 'call'); assert.equal(t2[1].kind, 'order');
+
+assert.equal(trendWords({ yearNet: 1200, prevNet: 1000 }), 'growing on the year before');
+assert.equal(trendWords({ yearNet: 0, prevNet: 1000 }), 'nothing in the last year');
+console.log('crm: ok');

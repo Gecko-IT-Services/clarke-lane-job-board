@@ -10,7 +10,7 @@ export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply',
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
 const later = x => x <= 0.01 ? 'almost none are ordered' : pc(x) + ' are ordered';
 
-export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today }, h) {
+export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today, reorders = [], more = [], news = null, enquiriesBox = '' }, h) {
   const { esc, fmt, gbp } = h;
   if (err) return `<div class="hhead"><div><h2>Sales</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
   if (loading) return `<div class="hhead"><div><h2>Sales</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
@@ -67,19 +67,18 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
     </ul>` : '<p class="note">No decided quotes in the last 12 months yet.</p>'}</section>`;
 
   // Customers gone quiet.
-  const aiPanel = c => {
-    if (!ai || ai.key !== c.key) return '';
-    if (ai.draft) return `<tr class="sdetail"><td colspan="6"><div class="saibox">
+  // Writing to one customer: its own panel, opened from any list (quiet, reorder, could buy more, the customer page).
+  const aiC = ai ? (base || []).find(c => c.key === ai.key) : null;
+  const aiBox = !aiC ? '' : `<section class="panel saipanel" id="saibox"><h3>Email to ${esc(aiC.customer)}</h3>${ai.draft ? `<div class="saibox">
         <label class="fl">To<input type="text" id="ai-to" value="${esc(ai.to || '')}" placeholder="their email"></label>
         <label class="fl">Subject<input type="text" id="ai-subj" value="${esc(ai.draft.subject)}"></label>
         <label class="fl">Email (edit anything)<textarea id="ai-body" rows="8">${esc([ai.draft.greeting, ...ai.draft.paragraphs].join('\n\n'))}</textarea></label>
-        <p class="note">Written by AI from what ${esc(c.customer)} buys and when${ai.angle ? ', and your angle' : ''}: check it before sending. Your name and Clarke Lane are added at the end.</p>
-        <div class="actions"><button class="btn pri" type="button" data-aidraft="${esc(c.key)}">${icon('mail')}Put in my Outlook Drafts</button><button class="btn" type="button" data-aiwrite="${esc(c.key)}">Write it again</button><button class="btn" type="button" data-aiclose>Close</button></div></div></td></tr>`;
-    return `<tr class="sdetail"><td colspan="6"><div class="saibox">
-        <label class="fl">Anything to say? (optional)<input type="text" id="ai-angle" value="${esc(ai.angle || '')}" placeholder="e.g. we have laser capacity next week; new powder coat colours; check their next batch"></label>
-        <div class="actions"><button class="btn pri" type="button" data-aiwrite="${esc(c.key)}" ${ai.busy ? 'disabled' : ''}>${ai.busy ? 'Writing…' : 'Write the email with AI'}</button><button class="btn" type="button" data-aiclose>Cancel</button>
-        <span class="note">About 1p an email. It only uses what they buy, when, and your words above: never prices.</span></div></div></td></tr>`;
-  };
+        <p class="note">Written by AI from what ${esc(aiC.customer)} buys and when${ai.angle ? ', and your words' : ''}: check it before sending. Your name and Clarke Lane are added at the end.</p>
+        <div class="actions"><button class="btn pri" type="button" data-aidraft="${esc(aiC.key)}">${icon('mail')}Put in my Outlook Drafts</button><button class="btn" type="button" data-aiwrite="${esc(aiC.key)}">Write it again</button><button class="btn" type="button" data-aiclose>Close</button></div></div>`
+      : `<div class="saibox"><label class="fl">Anything to say? (optional)<input type="text" id="ai-angle" value="${esc(ai.angle || '')}" placeholder="e.g. we have laser capacity next week; new powder coat colours; check their next batch"></label>
+        <div class="actions"><button class="btn pri" type="button" data-aiwrite="${esc(aiC.key)}" ${ai.busy ? 'disabled' : ''}>${ai.busy ? 'Writing…' : 'Write the email with AI'}</button><button class="btn" type="button" data-aiclose>Cancel</button>
+        <span class="note">About 1p an email. It only uses what they buy, when, and your words above: never prices.</span></div></div>`}</section>`;
+  const writeBtn = (c, angle = '') => `<button class="btn sm pri" type="button" data-aiopen="${esc(c.key)}" data-angle="${esc(angle)}">Write an email</button>`;
   const custBox = `<section class="panel"><h3>Customers to get back in touch with</h3>
     ${histErr ? `<div class="err">Xero's invoices could not be read: ${esc(histErr)}</div>` : !base ? '<p class="note">Reading Xero\'s invoices…</p>'
       : `<p class="note">From Xero's sales invoices${histEarliest ? ` (back to ${esc(fmt(histEarliest))})` : ''}: regular customers who have gone quiet for well past their usual gap, and customers who have not ordered for 6 months.${histEarliest && histEarliest > new Date(Date.parse(today) - 200 * 864e5).toISOString().slice(0, 10) ? ' <b>Xero only has a few months of history</b>, so this fills in as orders build up.' : ''}</p>
@@ -88,10 +87,28 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
           <td>${c.usual ? 'every ' + esc(days(c.usual)) : '—'}<small>${c.orders} orders</small></td><td>${esc(fmt(c.last))}<small>${esc(days(c.since))} ago</small></td>
           <td class="num">${gbp(c.yearNet)}${c.prevNet > c.yearNet ? `<small>was ${gbp(c.prevNet)}</small>` : ''}</td>
           <td>${c.items.slice(0, 2).map(i => esc(i.item)).join('<br>') || '—'}</td>
-          <td><button class="btn sm pri" type="button" data-aiopen="${esc(c.key)}">Write an email</button> <button class="btn sm" type="button" data-ccall="${esc(c.key)}">Log a call</button></td></tr>${aiPanel(c)}`).join('')}</tbody></table></div>`
+          <td>${writeBtn(c)} <button class="btn sm" type="button" data-ccall="${esc(c.key)}">Log a call</button> <button class="btn sm link" type="button" data-custpage="${esc(c.key)}">Page</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="allclear ok">Nobody has gone quiet.</p>'}`}</section>`;
+
+  // Repeat parts due again, and work a regular customer could also give us.
+  const reorderBox = `<section class="panel" id="smart"><h3>Due a reorder <small>repeat items past their usual gap</small></h3>${!base ? '<p class="note">Reading Xero\'s invoices…</p>' : reorders.length
+      ? `<div class="tbl-wrap"><table class="lines"><thead><tr><th>Customer</th><th>Item</th><th>Usually</th><th>Last ordered</th><th></th></tr></thead><tbody>${reorders.slice(0, 20).map(r => `<tr><td><b>${esc(r.customer)}</b></td><td>${esc(r.item)}</td>
+          <td>every ${esc(days(r.every))}<small>${r.times} orders</small></td><td>${esc(fmt(r.last))}<small>${esc(days(r.since))} ago</small></td>
+          <td>${writeBtn(r, `Their regular order of "${r.item}" looks due: they usually order it about every ${r.every} days and last ordered it on ${r.last}. Ask whether they need the next batch.`)} <button class="btn sm" type="button" data-ccall="${esc(r.key)}">Log a call</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="note">No repeat items are overdue.</p>'}</section>`;
+  const moreBox = more.length ? `<section class="panel"><h3>Could give us more <small>regular customers who have never had these from us</small></h3>
+      <div class="tbl-wrap"><table class="lines"><thead><tr><th>Customer</th><th>Has from us</th><th>Worth asking about</th><th></th></tr></thead><tbody>${more.slice(0, 15).map(x => `<tr><td><b>${esc(x.customer)}</b></td>
+        <td>${esc(x.has.join(', '))}</td><td>${esc(x.missing.join(', '))}</td><td>${writeBtn(x, `Mention that we also do ${x.missing.join(' and ')} in-house or through our partners, so they can send the whole job to one supplier. Do not assume they need it.`)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="note">From the processes on their orders and the words on their invoices: a prompt to ask, not a guess about their business.</p></section>` : '';
+  // The monthly news email: one personal draft per ticked customer.
+  const active = (base || []).filter(c => c.since != null && c.since <= 365 && c.yearNet > 0);
+  const newsBox = !base ? '' : `<section class="panel" id="snews"><h3>Email your customers <small>a short personal note to each, e.g. once a month</small></h3>
+    <label class="fl">What's new? (in your words)<textarea id="news-text" rows="3" placeholder="e.g. We have a new press brake so we can fold up to 3m; laser capacity next week; new RAL colours in stock">${esc(news?.text || '')}</textarea></label>
+    <p class="note">Each ticked customer gets their own email, written by AI from what they buy and your words above, as a draft in your Outlook Drafts to check and send (about 1p each).</p>
+    <div class="snewslist">${active.slice(0, 60).map((c, i) => `<label><input type="checkbox" data-newspick="${esc(c.key)}" ${(news?.picked ? news.picked.includes(c.key) : i < 15) ? 'checked' : ''}> ${esc(c.customer)}</label>`).join('')}</div>
+    <div class="actions"><button class="btn pri" type="button" data-newsgo ${news?.busy ? 'disabled' : ''}>${news?.busy ? esc(news.busy) : `${icon('mail')}Draft the emails`}</button></div></section>`;
 
   return `<div class="hhead"><div><h2>Sales</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with. Only you see this page.</p></div>
       <div class="hbtns"><button class="btn" type="button" data-salesreload>${icon('refresh')}Refresh</button></div></div>
-    ${monthBox}${chaseBox}${listBox}${custBox}${says}`;
+    ${monthBox}${enquiriesBox}${aiBox}${chaseBox}${listBox}${reorderBox}${moreBox}${custBox}${newsBox}${says}`;
 }

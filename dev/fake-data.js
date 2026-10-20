@@ -16,7 +16,7 @@ let jobs = [
 ];
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
-export const whoAmI = async () => ({ email: 'x', name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : 'Shop Floor', role });
+export const whoAmI = async () => ({ email: role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : 'workshop@clarke-lane.example', name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : 'Shop Floor', role });
 const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
 export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
 export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
@@ -214,6 +214,7 @@ function salesHistory() {
   add('Sample Works Ltd', 'cx6', 21, 95, 16, 'Control box enclosure, powder coated RAL 7035', 1450);   // usually every 3 weeks; quiet for 3 months
   add('Fourth Example Ltd', 'cx2', 30, 12, 20, 'Guard plate 2mm Zintec', 520);
   add('Old Example Ltd', 'cx9', 45, 260, 8, 'Stainless hopper 304', 2200);                            // lapsed
+  add('Tenth Example Ltd', 'cx7', 20, 30, 6, 'Shelf bracket 2mm Zintec', 380);                          // usually every 20 days: due a reorder
   return { invoices: inv, earliest: inv.reduce((m, x) => (!m || x.date < m ? x.date : m), '') };
 }
 const follow = {}; const salesActs = []; let actNo = 1;
@@ -221,5 +222,41 @@ export const loadSales = async () => ({ follow: structuredClone(follow), actions
 export const setFollow = async (q, p) => { follow[q.spId] = { ...(follow[q.spId] || { state: 'open' }), ...p }; };
 export const addSalesAction = async a => { salesActs.unshift({ id: actNo++, spId: a.spId ?? null, customer: a.customer, kind: a.kind, note: a.note || '', by: 'levi@example.com', at: new Date().toISOString() }); };
 export const logSalesEmail = async () => {};
-export const salesAi = async facts => ({ subject: `Next batch of ${facts.theyBuy?.[0]?.item || 'parts'}?`, greeting: facts.contactFirstName ? `Hi ${facts.contactFirstName},` : 'Hello,',
+export const salesAiCheckin = async facts => ({ subject: `Next batch of ${facts.theyBuy?.[0]?.item || 'parts'}?`, greeting: facts.contactFirstName ? `Hi ${facts.contactFirstName},` : 'Hello,',
   paragraphs: ['Made-up AI text for the practice page: it has been a little while since your last order, so I thought I would check in.', 'If you have drawings for the next batch, send them over and we will get a price back to you quickly.'], model: 'practice', costUsd: 0 });
+
+// Customers, enquiries and tasks: made-up people and emails only.
+export const salesAi = async (facts, kind = 'checkin') => {
+  if (kind === 'enquiry') return /laser|quote|price/i.test(facts.subject + facts.text)
+    ? { kind: 'enquiry', summary: 'Asks for a price on laser cut and folded brackets.', company: 'Newco Fabrications Ltd', person: facts.fromName, phone: '01234 567890', wants: '50 brackets, 3mm mild steel, laser cut and folded, powder coated black', hasDrawings: true }
+    : /delivery|order/i.test(facts.subject) ? { kind: 'customer', summary: 'Asks when their order will be delivered.', company: 'Example Customer Ltd', person: facts.fromName, phone: '', wants: '', hasDrawings: false }
+    : { kind: 'other', summary: 'A sales pitch.', company: '', person: facts.fromName, phone: '', wants: '', hasDrawings: false };
+  if (kind === 'reply') return { subject: 'Re: ' + facts.subject, greeting: 'Hi ' + String(facts.fromName || '').split(' ')[0] + ',', paragraphs: ['Made-up AI reply for the practice page: thank you for your enquiry about ' + facts.wants + '.', 'We will price this and come back to you. Could you confirm when you need them and the delivery address?'], model: 'practice' };
+  if (kind === 'summary') return { summary: 'Made-up AI summary: a regular customer for brackets, ordering about every two weeks and steady on last year.', nextStep: 'Ask whether they would like their brackets powder coated by us next time.', model: 'practice' };
+  return salesAiCheckin(facts);
+};
+const staffRows = [{ email: 'levi@clarke-lane.example', name: 'Levi', role: 'md' }, { email: 'mandy@clarke-lane.example', name: 'Mandy', role: 'office' }, { email: 'workshop@clarke-lane.example', name: 'Shop Floor', role: 'floor' }];
+export const loadStaff = async () => structuredClone(staffRows);
+const tasks = [{ id: 1, title: 'Call Sam about the next bracket batch', customer: 'Example Customer Ltd', customerKey: 'examplecustomer', dueOn: ago(1), assignedTo: 'levi@clarke-lane.example', source: '', sourceRef: '', note: '', doneAt: null, doneBy: null, by: 'levi@clarke-lane.example', createdAt: ago(5) + 'T09:00:00Z' },
+  { id: 2, title: 'Send Fourth Example the revised drawing', customer: 'Fourth Example Ltd', customerKey: 'fourthexample', dueOn: ago(-2), assignedTo: 'mandy@clarke-lane.example', source: '', sourceRef: '', note: '', doneAt: null, doneBy: null, by: 'levi@clarke-lane.example', createdAt: ago(2) + 'T09:00:00Z' }];
+let taskNo = 3;
+export const loadTasks = async () => structuredClone(tasks);
+export const addTask = async t => { tasks.push({ id: taskNo++, title: t.title, customer: t.customer || '', customerKey: t.customerKey || '', dueOn: t.dueOn, assignedTo: t.assignedTo, source: t.source || '', sourceRef: String(t.sourceRef || ''), note: '', doneAt: null, doneBy: null, by: 'levi@example.com', createdAt: new Date().toISOString() }); };
+export const setTask = async (id, p, by) => { const t = tasks.find(x => x.id === id); if ('done' in p) { t.doneAt = p.done ? new Date().toISOString() : null; t.doneBy = p.done ? by : null; } if ('dueOn' in p) t.dueOn = p.dueOn; };
+export const deleteTask = async id => { tasks.splice(tasks.findIndex(x => x.id === id), 1); };
+const enqs = []; let enqNo = 1;
+export const loadEnquiries = async () => structuredClone(enqs).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+export const claimEnquiry = async m => { if (enqs.some(e => e.messageId === m.messageId)) return null; const id = enqNo++; enqs.push({ id, ...m, kind: null, summary: '', company: '', person: '', phone: '', wants: '', hasDrawings: false, customerKey: '', status: 'new', handledBy: null, handledAt: null, error: null }); return id; };
+export const setEnquiry = async (id, p) => { const e = enqs.find(x => x.id === id); Object.assign(e, p); if ('status' in p) { e.handledBy = p.by || null; e.handledAt = p.status === 'new' ? null : new Date().toISOString(); } };
+const insights = {};
+export const loadInsight = async k => insights[k] || null;
+export const saveInsight = async (k, c, x) => { insights[k] = { ...x }; };
+export const inboxMessages = async () => [
+  { graphId: 'g1', messageId: '<m1@example.net>', subject: 'Quote for laser cut brackets', fromEmail: 'jo@newco.example', fromName: 'Jo Bloggs', receivedAt: new Date(Date.now() - 26 * 36e5).toISOString(), text: 'Hello, could you quote for 50 brackets, 3mm mild steel, laser cut and folded, powder coated black? Drawing attached. Thanks, Jo', webLink: '', hasAttachments: true },
+  { graphId: 'g2', messageId: '<m2@example.net>', subject: 'Delivery of our order', fromEmail: 'buyer@example.com', fromName: 'Sam Buyer', receivedAt: new Date(Date.now() - 5 * 36e5).toISOString(), text: 'When will SO-9781 be delivered?', webLink: '', hasAttachments: false },
+  { graphId: 'g3', messageId: '<m3@example.net>', subject: 'Boost your SEO today', fromEmail: 'sales@spammy.example', fromName: 'Spammy', receivedAt: new Date(Date.now() - 3 * 36e5).toISOString(), text: 'We can get you to page one.', webLink: '', hasAttachments: false }];
+export const attachmentNames = async () => ['bracket-rev-B.pdf'];
+export const searchMail = async (boxes, terms) => ({ consent: false, noAccess: [], errors: [], messages: [
+  { id: 'e1', mailbox: 'me', subject: 'Next batch of brackets', from: 'buyer@example.com', fromName: 'Sam Buyer', to: ['levi@clarke-lane.example'], at: new Date(Date.now() - 3 * 864e5).toISOString(), preview: 'Hi Levi, we will need another 100 next month, can you hold the price?', webLink: '', internetMessageId: '<e1>' },
+  { id: 'e2', mailbox: 'info@example.com', subject: 'Re: Quote Q-0320', from: 'levi@clarke-lane.example', fromName: 'Levi', to: ['buyer@example.com'], at: new Date(Date.now() - 6 * 864e5).toISOString(), preview: 'Hi Sam, please find our quote attached.', webLink: '', internetMessageId: '<e2>' }] });
+export const loadActions = async () => structuredClone(salesActs);

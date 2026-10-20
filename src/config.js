@@ -12,4 +12,6 @@ export const CONFIG = {
   // Asked for only when someone emails a document (never at sign-in), so a missing consent
   // cannot stop anyone signing in. Admin-consented on the Entra app.
   MAIL_SCOPES: ['Mail.ReadWrite'],
+  // Reading info@ (enquiries) and colleagues' mail on a customer page. Asked for only there, never at sign-in.
+  SHARED_MAIL_SCOPES: ['Mail.Read.Shared'],
 };
