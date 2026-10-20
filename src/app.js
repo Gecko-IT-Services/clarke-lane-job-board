@@ -19,6 +19,8 @@ import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
 import { renderTv } from './tv.js';
 import { renderMetal } from './metal.js';
+import { renderSales } from './sales.js';
+import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
@@ -375,7 +377,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['sales', 'Sales'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
@@ -384,10 +386,10 @@ function renderTabs() {
   // Map lives under Dispatch and Customers under Sales orders (Philip: fewer tabs); their parent tab stays lit.
   const lit = { map: 'dispatch', customers: 'orders', parts: 'orders', metal: 'orders' }[S.tab] || S.tab;
   $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
-  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal'].includes(k)).map(([k, t]) => {
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal'].includes(k) && (k !== 'sales' || md())).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
-    return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
+    return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck', sales: 'book' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
   }).join('');
 }
 
@@ -1008,6 +1010,98 @@ function outPanel(j) {
       ${r.backOn ? '' : `<button class="btn sm" type="button" data-outback="${r.id}">Back in</button> `}<button class="btn sm link" type="button" data-outedit="${r.id}">Change</button></p>`).join('')}
     ${can.map(p => `<button class="btn sm" type="button" data-sendout="${esc(p)}" data-job="${j.id}">Send out for ${esc(SHORT[p])}</button>`).join(' ')}</div>`;
 }
+/* ---------- sales (Levi only): quotes to chase, the month against his target, customers gone quiet ---------- */
+async function loadSalesData(fresh) {
+  if (S.salesLoading) return; S.salesLoading = true; S.salesErr = null;
+  try {
+    const [qs, f] = await Promise.all([fresh || !S.salesQ ? data.allQuotes() : S.salesQ, data.loadSales()]);
+    S.salesQ = qs; S.salesF = f;
+  } catch (e) { S.salesErr = e.message; }
+  S.salesLoading = false;
+  if (S.xero && (fresh || !S.hist)) data.xero('history').then(r => { S.hist = r; S.histErr = null; }).catch(e => { S.histErr = e.message; S.hist = { invoices: [] }; }).then(() => { if (S.tab === 'sales') render(); });
+  if (S.tab === 'sales') render();
+}
+/** Everything the Sales screen shows, worked out from the quotes, follow-ups, orders and Xero. */
+function salesModel() {
+  const today = todayIso(), F = S.salesF || { follow: {}, actions: [] };
+  const quotes = (S.salesQ || []).map(q => ({ ...q, jobId: S.jobs.find(j => j.spQuoteId === q.spId)?.id || null }));
+  const stats = winStats(quotes, F.follow, today);
+  const open = pipeline(quotes, F.follow, F.actions, stats, today);
+  const base = S.hist ? customerBase(S.hist.invoices, today) : null;
+  return { today, quotes, stats, open, chase: chaseList(open), actions: F.actions, base, quiet: base ? quietCustomers(base) : [],
+    month: monthGap({ target: Number(S.settings?.monthly_target) || null, jobs: S.jobs, quotes, open, stats, today, jobValue: j => value(j) }) };
+}
+function renderSalesView() {
+  if (!S.salesQ && !S.salesErr && !S.salesLoading) loadSalesData();
+  if (!S.salesQ) { $('v-sales').innerHTML = renderSales({ loading: !S.salesErr, err: S.salesErr }, { esc, fmt, gbp }); return; }
+  const m = salesModel();
+  $('v-sales').innerHTML = renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai }, { esc, fmt, gbp });
+}
+const plusDays = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+const salesQuote = spId => salesModel().open.find(q => q.spId === spId) || (S.salesQ || []).find(q => q.spId === spId);
+async function chaseQuote(spId) {
+  const q = salesQuote(spId); if (!q) return;
+  try {
+    const { subject, html } = quoteChaseEmail(q, S.me.name);
+    const link = await data.draftEmail({ to: q.contactEmail, subject, html });
+    await data.addSalesAction({ spId, customer: q.customer, kind: 'email', note: `Follow-up email for ${q.quoteNo}` });
+    await data.setFollow(q, { nextOn: plusDays(todayIso(), 7) });
+    data.logSalesEmail({ customer: q.customer, kind: 'quote' }).catch(() => {});
+    toast(`Follow-up for ${q.quoteNo} is in your Outlook Drafts${q.contactEmail ? ` to ${q.contactEmail}` : ' (no email on the quote: add one)'}. Check it and press Send. Next follow-up booked for a week's time.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (e) { toast(mailErr(e), null, true); }
+  loadSalesData();
+}
+async function logCall(spId, customerKey) {
+  const q = spId ? salesQuote(spId) : null, c = customerKey ? (salesModel().base || []).find(x => x.key === customerKey) : null;
+  const who = q ? `${q.customer} about ${q.quoteNo}` : c?.customer; if (!who) return;
+  const note = prompt(`Call with ${who}: what was said? (optional)`); if (note === null) return;
+  try {
+    await data.addSalesAction({ spId: q?.spId ?? null, customer: q ? q.customer : c.customer, kind: 'call', note: note.trim() });
+    if (q) await data.setFollow(q, { nextOn: plusDays(todayIso(), 7), ...(note.trim() ? { note: note.trim() } : {}) });
+    toast(q ? 'Call noted. Next follow-up booked for a week\'s time (change the date if needed).' : 'Call noted.');
+  } catch (e) { toast(e.message, null, true); }
+  loadSalesData();
+}
+async function markQuoteLost(spId, reason) {
+  const q = salesQuote(spId); if (!q || !reason) return;
+  try {
+    await data.setFollow(q, { state: 'lost', lostReason: reason });
+    await data.addSalesAction({ spId, customer: q.customer, kind: 'lost', note: reason });
+    toast(`${q.quoteNo} marked lost (${reason}).`, async () => { await data.setFollow(q, { state: 'open', lostReason: '' }); await data.addSalesAction({ spId, customer: q.customer, kind: 'reopen' }); loadSalesData(); });
+  } catch (e) { toast(e.message, null, true); }
+  loadSalesData();
+}
+async function openAi(key) {
+  const c = (salesModel().base || []).find(x => x.key === key); if (!c) return;
+  S.ai = { key, angle: '', to: '', person: '' }; render();
+  if (c.contactId && /^[0-9a-f-]{36}$/i.test(c.contactId)) data.xero('contact', { id: c.contactId }).then(x => { if (S.ai?.key === key) { S.ai.to = x.email || ''; S.ai.person = x.person || ''; } }).catch(() => {});
+}
+async function writeAi(key) {
+  const m = salesModel(), c = (m.base || []).find(x => x.key === key); if (!c || !S.ai) return;
+  if ($('ai-angle')) S.ai.angle = $('ai-angle').value.trim();
+  S.ai.busy = true; S.ai.draft = null; render();
+  try {
+    const facts = customerFacts(c, { person: S.ai.person, openQuotes: m.open.filter(q => normName(q.customer) === c.key), angle: S.ai.angle, from: S.me.name });
+    const r = await data.salesAi(facts);
+    S.ai.draft = { subject: r.subject, greeting: r.greeting, paragraphs: r.paragraphs || [] };
+  } catch (e) { toast(e.message, null, true); }
+  if (S.ai) S.ai.busy = false; render();
+}
+async function draftAi(key) {
+  const c = (salesModel().base || []).find(x => x.key === key); if (!c) return;
+  const to = $('ai-to').value.trim(), subject = $('ai-subj').value.trim(), parts = $('ai-body').value.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  if (!subject || !parts.length) return toast('The email needs a subject and some text.', null, true);
+  try {
+    const link = await data.draftEmail({ to, subject, html: aiEmailHtml({ greeting: parts[0], paragraphs: parts.slice(1) }, S.me.name) });
+    await data.addSalesAction({ customer: c.customer, kind: 'email', note: subject });
+    S.ai = null;
+    toast(`The email to ${c.customer} is in your Outlook Drafts${to ? '' : ' (add their email address there)'}. Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (e) { toast(mailErr(e), null, true); }
+  loadSalesData();
+}
+
 /* ---------- metal prices: ask several suppliers, compare, order from one (Levi and Mandy) ---------- */
 const blankMetal = () => ({ material: 'Aluminium', grade: '', form: 'Sheet', thickness: '', size: '', qty: '1', unit: 'sheets' });
 /** Suppliers asked before, newest first, with the email used last time. */
@@ -2031,7 +2125,8 @@ function render() {
   const kept = snapshotInputs();
   if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero', 'metal'].includes(S.tab)) S.tab = 'floor';
   if (S.kiosk && S.tab !== 'tv') { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
-  if (!office() && !['floor', 'tv'].includes(S.tab)) S.tab = 'floor';   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
+  if (!office() && !['floor', 'tv'].includes(S.tab)) S.tab = 'floor';
+  if (S.tab === 'sales' && !md()) S.tab = 'home';   // sales figures and the target are Levi's only   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
   document.body.classList.toggle('kiosk-mode', !!S.kiosk || S.tab === 'tv');
   document.body.classList.toggle('tv-mode', S.tab === 'tv'); tvAwake(S.tab === 'tv');
   renderTabs();
@@ -2043,7 +2138,7 @@ function render() {
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
-    tv: renderTvView, metal: renderMetalView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+    tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor');
   renderDrawer();
   restoreInputs(kept);
@@ -2110,7 +2205,7 @@ function onClick(e) {
     if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
     return;
   }
-  const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen]'); if (!t) return;
+  const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen],tr[data-sopen]'); if (!t) return;
   const d = t.dataset;
   if ('goback' in d) return history.back();
   if ('preview' in d) return enterPreview();
@@ -2146,6 +2241,16 @@ function onClick(e) {
   if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
   if (d.outback) { e.stopPropagation(); return outBack(+d.outback); }
   if (d.outremove) return removeOut(+d.outremove);
+  if ('salesreload' in d) { S.salesQ = null; S.hist = null; return loadSalesData(true); }
+  if (d.sview) { S.salesView = d.sview; return render(); }
+  if (d.sopen) { S.salesOpen = S.salesOpen === +d.sopen ? null : +d.sopen; return render(); }
+  if (d.qchase) return chaseQuote(+d.qchase);
+  if (d.qcall) return logCall(+d.qcall, null);
+  if (d.ccall) return logCall(null, d.ccall);
+  if (d.aiopen) return openAi(d.aiopen);
+  if (d.aiwrite) return writeAi(d.aiwrite);
+  if (d.aidraft) return draftAi(d.aidraft);
+  if ('aiclose' in d) { S.ai = null; return render(); }
   if ('rfnew' in d) return newRfq(d.rfnew ? +d.rfnew : null);
   if ('rfcancel' in d) { S.rfqForm = null; return render(); }
   if ('rfadd' in d) { collectRfq(); const last = S.rfqForm.lines.at(-1); S.rfqForm.lines.push({ ...blankMetal(), material: last.material, grade: last.grade, form: last.form, unit: last.unit }); return render(); }
@@ -2308,6 +2413,9 @@ document.addEventListener('change', e => {
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
+  if (e.target.dataset.qnext) { const q = salesQuote(+e.target.dataset.qnext); if (q) data.setFollow(q, { nextOn: e.target.value || null }).then(() => { toast(e.target.value ? `Follow-up for ${q.quoteNo} booked for ${fmt(e.target.value)}.` : 'Follow-up date cleared.'); loadSalesData(); }).catch(x => toast(x.message, null, true)); return; }
+  if (e.target.dataset.qlost) return markQuoteLost(+e.target.dataset.qlost, e.target.value);
+  if (e.target.dataset.qnote) { const q = salesQuote(+e.target.dataset.qnote); if (q) data.setFollow(q, { note: e.target.value.trim() }).then(() => loadSalesData()).catch(x => toast(x.message, null, true)); return; }
   if (e.target.dataset.rfpick !== undefined && S.rfqForm) { collectRfq(); render(); return; }
   if (e.target.id === 'rf-copy' && S.rfqForm && e.target.value) { collectRfq(); const from = (S.metal || []).find(r => r.id === +e.target.value); if (from) S.rfqForm.lines = structuredClone(from.lines).map(l => ({ ...l, qty: String(l.qty) })); return render(); }
   if (e.target.id === 'rf-pojob') { S.rfqPoJob = +e.target.value || null; return; }

@@ -9,6 +9,7 @@
 //   POST items     office only → Products and services that are sold (description, code, sales price)
 //   POST send      office only → one DRAFT sales invoice per despatch (never approved or sent)
 //   POST bills     office only → the last 12 months' supplier bills, materials lines (account 5000) only. Read only.
+//   POST history   MD only → sales invoices and credit notes, last 24 months, with their lines (the customer base). Read only.
 //   POST disconnect office only
 //
 // Secrets (Supabase › Edge Functions › Secrets): XERO_CLIENT_ID, XERO_CLIENT_SECRET.
@@ -336,6 +337,21 @@ async function debts() {
     contactId: x.Contact?.ContactID || '', customer: x.Contact?.Name || '', date: xDate(x.DateString || x.Date),
     due: xDate(x.DueDateString || x.DueDate), total: Number(x.Total || 0), owed: Number(x.AmountDue || 0) })) };
 }
+/** Sales (20 Oct, Levi only): every approved or paid sales invoice and credit note in the last 24 months with
+ *  its lines, for who buys what and how often. Read only. Also says how far back Xero's invoices go. */
+async function history() {
+  const s = await session();
+  const d = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10).split('-').map(Number).join(',');
+  const where = (t: string) => encodeURIComponent(`Type=="${t}" AND Date>=DateTime(${d})`);
+  const inv = await allPages(s, `Invoices?where=${where('ACCREC')}&Statuses=AUTHORISED,PAID`, 'Invoices');
+  let credits: any[] = [];
+  try { credits = await allPages(s, `CreditNotes?where=${where('ACCRECCREDIT')}`, 'CreditNotes'); } catch { /* invoices alone still tell most of it */ }
+  const row = (x: any, sign: number) => ({ contactId: x.Contact?.ContactID || '', customer: x.Contact?.Name || '', date: xDate(x.DateString || x.Date),
+    number: x.InvoiceNumber || x.CreditNoteNumber || '', net: sign * Number(x.SubTotal || 0),
+    lines: sign > 0 ? (x.LineItems || []).map((l: any) => ({ description: String(l.Description || '').slice(0, 200), code: l.ItemCode || '', qty: Number(l.Quantity || 0), amount: Number(l.LineAmount || 0) })) : [] });
+  const all = [...inv.map(x => row(x, 1)), ...credits.filter(c => ['AUTHORISED', 'PAID'].includes(c.Status)).map(x => row(x, -1))];
+  return { invoices: all, earliest: all.reduce((m: string, x) => (!m || x.date < m ? x.date : m), '') };
+}
 /** Metal prices (20 Oct): what suppliers actually charged for materials, from approved and paid bills in the
  *  last 12 months, lines on account 5000 only. Read only. */
 async function bills() {
@@ -403,6 +419,10 @@ Deno.serve(async req => {
     }
     if (route === 'debts') return cors(req, json(await debts()));
     if (route === 'bills') return cors(req, json(await bills()));
+    if (route === 'history') {
+      if (me.role !== 'md') throw new HttpError(403, 'Only Levi can see the customer history.');
+      return cors(req, json(await history()));
+    }
     if (route === 'online') return cors(req, json(await onlineLinks((await req.json().catch(() => ({}))).ids)));
     if (route === 'invoices') return cors(req, json(await invoiceStatus((await req.json().catch(() => ({}))).ids)));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));

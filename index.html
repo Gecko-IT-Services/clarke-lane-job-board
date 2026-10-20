@@ -251,6 +251,19 @@ body.kiosk-mode #app > header.top,body.kiosk-mode #app > nav.tabs,body.kiosk-mod
 .kiosk .fstat{margin:0;font-size:18px;color:var(--muted)}
 .kiosk .fstat b{color:var(--ink)}
 .kiosk .allclear{margin:0;padding:24px;font-size:20px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:14px}
+/* Sales (Levi only) */
+#v-sales{display:flex;flex-direction:column;gap:18px} #v-sales .panel h3 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
+#v-sales .hcard b{display:block;font-size:22px} #v-sales .hcard span{color:var(--muted);font-size:13px} #v-sales .sline{margin:12px 0 0}
+#v-sales .schase{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+#v-sales .scard{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+#v-sales .stop{display:flex;gap:12px;justify-content:space-between} #v-sales .stop b{display:block} #v-sales .stop .mono{color:var(--muted);font-size:13px;margin-right:8px} #v-sales small{display:block;color:var(--muted);font-size:12px;font-weight:400}
+#v-sales .sval{text-align:right} #v-sales .scard p{margin:0}
+#v-sales .sacts{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center} #v-sales .sinline{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)} #v-sales .sinline :is(input,select){font-size:13px;padding:4px 6px}
+#v-sales .sseg{margin-bottom:10px;flex-wrap:wrap} #v-sales .sseg em{font-style:normal;color:var(--muted);margin-left:4px}
+#v-sales .slist tr[data-sopen]{cursor:pointer} #v-sales .slist tr.open{background:var(--field)} #v-sales .lines td,#v-sales .lines th{text-align:left} #v-sales .lines .num{text-align:right}
+#v-sales .sdetail td{background:var(--field)} #v-sales .sdetail .fl{margin-top:8px;max-width:640px} #v-sales .shist{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:13px}
+#v-sales .ssays{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#v-sales .saibox{display:flex;flex-direction:column;gap:8px;max-width:760px} #v-sales .saibox textarea{font:inherit}
 /* Metal prices */
 #v-metal{display:flex;flex-direction:column;gap:18px} #v-metal .panel h4{margin:14px 0 6px;font-size:15px}
 #v-metal .mlines td{padding:4px 6px} #v-metal .mlines select{min-width:120px}
@@ -482,13 +495,13 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 .crumb{margin:0 0 4px;font-size:14px}.crumb a{color:var(--muted);text-decoration:none;font-weight:600}.crumb a:hover{color:var(--ink)}
 /* home */
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) > .home{display:flex;flex-direction:column;gap:26px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal) .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal) .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal) .hbtns{margin-left:auto;display:flex;gap:8px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hbtns{margin-left:auto;display:flex;gap:8px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 #v-home .hcards.inv{margin-top:-6px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;transition:transform .12s ease, box-shadow .12s ease}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
@@ -507,8 +520,8 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-ok{background:var(--ok-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-ok .ic{color:var(--ok)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-info{background:var(--info-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-info .ic{color:var(--info)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard[class*="t-"] .ic{background:var(--surface)}
-@media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (max-width:480px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard .ic{width:36px;height:36px} }
+@media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:480px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard .ic{width:36px;height:36px} }
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
@@ -536,7 +549,7 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .tbl-wrap{position:relative}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h input[type=search]{flex:0 1 260px;min-width:0}
-@media (max-width:560px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal) .hbtns,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .seg,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) th:nth-child(3),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) td:nth-child(3){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home.orders th:nth-child(2),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home.orders td:nth-child(2){display:none} #v-orders table.home.orders .num,#v-jobs table.home.board :is(.ord,.num){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h input[type=search]{flex:1 1 100%} :is(#v-orders,#v-jobs) .seg{width:100%} :is(#v-orders,#v-jobs) .seg button{flex:1 1 0;min-width:0;padding:6px 6px;font-size:13px} }
+@media (max-width:560px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hbtns,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .seg,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) th:nth-child(3),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) td:nth-child(3){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home.orders th:nth-child(2),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home.orders td:nth-child(2){display:none} #v-orders table.home.orders .num,#v-jobs table.home.board :is(.ord,.num){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h input[type=search]{flex:1 1 100%} :is(#v-orders,#v-jobs) .seg{width:100%} :is(#v-orders,#v-jobs) .seg button{flex:1 1 0;min-width:0;padding:6px 6px;font-size:13px} }
 #v-dispatch .act .next{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
 #v-dispatch .dfoot{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:12px}
 #v-dispatch .dfoot select{max-width:420px}
@@ -788,6 +801,7 @@ form.inv input{width:110px}
   <section class="view" id="v-help" hidden></section>
   <section class="view" id="v-tv" hidden></section>
   <section class="view" id="v-metal" hidden></section>
+  <section class="view" id="v-sales" hidden></section>
 </main>
 </div>
 <div class="scrim" id="scrim" hidden></div>
@@ -799,7 +813,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/core/sales.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;
