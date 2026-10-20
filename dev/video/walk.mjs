@@ -27,7 +27,7 @@ await step('drawing', 'Attach drawings: they are saved in SharePoint (Factory Jo
   `const c=document.createElement('canvas');c.width=900;c.height=560;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,900,560);g.strokeStyle='#111';g.lineWidth=3;g.strokeRect(120,120,660,300);g.beginPath();g.arc(300,270,46,0,7);g.stroke();g.beginPath();g.arc(600,270,46,0,7);g.stroke();g.font='26px sans-serif';g.fillStyle='#111';g.fillText('VALVE GUARD  2mm Zintec  Rev A',220,490);
    const blob=await new Promise(r=>c.toBlob(r,'image/png'));const dt=new DataTransfer();dt.items.add(new File([blob],'valve-guard-rev-A.png',{type:'image/png'}));const i=document.querySelector('[data-attach]');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}));
    await new Promise(r=>setTimeout(r,800)); [...document.querySelectorAll('#drawer h3')].find(h=>h.innerText==='Drawings').scrollIntoView({block:'start'});`, 1200);
-await step('po', 'Buying parts or outside work? "New purchase order": pick the supplier and the account (materials are 5000; type another code, or leave it for Keith), add lines and costs. It goes to Xero as a draft PO with the SO number on it.',
+await step('po', 'Buying in? "New purchase order": copy a previous PO, or pick the supplier and account (materials 5000) and add lines. "Back-to-back" fills it from the order. It goes to Xero as a draft PO.',
   `document.querySelector('[data-ponew]').click(); await new Promise(r=>setTimeout(r,900)); document.getElementById('po-sup').value='00000000-0000-0000-0000-0000000000a1'; document.getElementById('po-d0').value='Powder coat RAL 9005, 10 valve guards'; document.getElementById('po-u0').value='85'; document.getElementById('po-acc').dispatchEvent(new Event('change',{bubbles:true}));`, 1200);
 await step('pf', 'Customer to pay first? "New pro forma" makes PF-0001. Email it: the draft is copied to Keith, and the customer pays quoting the PF number. Press "Mark paid" when the money arrives.',
   `document.querySelector('[data-pocreate]').click(); await new Promise(r=>setTimeout(r,1500)); document.querySelector('[data-pfnew]').click(); await new Promise(r=>setTimeout(r,700));
@@ -43,7 +43,7 @@ await step('jobs', 'Jobs lists every open job, soonest due first. Click a due da
    await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);`, 1500);
 await step('floor', 'The shop floor screen: tap your station to see the jobs waiting there, in the running order.',
   `document.querySelector('[data-tab="floor"]').click(); window.scrollTo(0,0);`, 1200);
-await step('station', 'Tap a step when it is finished; it turns green. Press "Drawing" to see the drawing full screen. Tap a green step again to undo.',
+await step('station', 'Tap a step when it is finished; it turns green. "Drawing" opens it full screen. Levi and Mandy can reorder a station with ⤒ ▲ ▼; only that station changes.',
   `document.querySelector('[data-station="Laser"]').click(); await new Promise(r=>setTimeout(r,600)); const card=[...document.querySelectorAll('#v-floor .fcard')].find(c=>c.innerText.includes(window.__so))||document.querySelector('#v-floor .fcard'); card.scrollIntoView({block:'center'}); card.querySelector('.step:not(.done)')?.click();`, 1400);
 await step('ready', 'When every process is ticked, the job shows "Ready to dispatch" and appears on the Dispatch tab.',
   `document.querySelector('[data-tab="dispatch"]').click(); window.scrollTo(0,0);`, 1200);
@@ -51,7 +51,9 @@ await step('dn', 'Dispatch: choose what is going (all or part), press "Create di
   `document.querySelector('[data-desp]')?.click(); await new Promise(r=>setTimeout(r,700)); document.getElementById('mkdn')?.click();`, 1800);
 await step('xero', 'Once delivered, notes wait under "Waiting for Xero". Tick them and press "Send to Xero": one draft invoice per note, for exactly what was sent. Keith approves in Xero.',
   `document.querySelector('[data-closedoc]')?.click(); await new Promise(r=>setTimeout(r,300)); document.querySelector('[data-dispview="xero"]')?.click(); window.scrollTo(0,0);`, 1500);
+await step('debts', 'Over 60 days (Levi and Mandy): customers with invoices over 60 days and past due. "Draft a chase email" puts a reminder in Outlook Drafts, copied to Keith. New orders for them show a warning.',
+  `document.querySelector('[data-tab="home"]').click(); await new Promise(r=>setTimeout(r,800)); document.querySelector('[data-homeview="debts"]')?.click(); await new Promise(r=>setTimeout(r,500)); document.getElementById('home-list')?.scrollIntoView({block:'start'}); window.scrollBy(0,-90); document.getElementById('toast').hidden = true;`, 1500);
 await step('home', 'Home, every morning: what is late, due this week and ready to go, invoicing to do, and (for Levi) the month: invoiced, work in progress and the gap to target.',
-  `document.querySelector('[data-tab="home"]').click(); window.scrollTo(0,0);`, 2200);
+  `document.querySelector('[data-homeview="attention"]')?.click(); document.querySelector('[data-tab="home"]').click(); window.scrollTo(0,0);`, 2200);
 writeFileSync('frames.json', JSON.stringify(frames, null, 1));
 b.close();
