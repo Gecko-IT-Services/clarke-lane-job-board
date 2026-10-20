@@ -313,7 +313,7 @@ async function read() {
       id: q.QuoteID, number: q.QuoteNumber, status: q.Status, customer: q.Contact?.Name || '',
       reference: q.Reference || '', date: xDate(q.DateString || q.Date), expiry: xDate(q.ExpiryDateString || q.ExpiryDate),
       subTotal: q.SubTotal, total: q.Total,
-      lines: (q.LineItems || []).map((l: any) => ({ description: l.Description || '', qty: l.Quantity, unit: l.UnitAmount, amount: l.LineAmount })),
+      lines: (q.LineItems || []).map((l: any) => ({ code: l.ItemCode || '', description: l.Description || '', qty: l.Quantity, unit: l.UnitAmount, amount: l.LineAmount })),
     })),
   };
 }
