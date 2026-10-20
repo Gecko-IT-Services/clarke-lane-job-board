@@ -77,3 +77,16 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
       ${set && !compact ? `<ul class="tkey"><li><i class="k-done"></i>Invoiced</li><li><i class="k-could"></i>Work in progress, due by ${fmt(mp.end)}</li>${target ? '<li><i class="k-gap"></i>Gap to target</li>' : ''}<li><i class="k-pace"></i>Even pace to today</li></ul>` : ''}
       ${link}</div></section>`;
 }
+
+/** Jobs' one line (MD only): invoiced · work in progress · gap, and what is due later to bring forward. */
+export function monthLine({ mp, breakeven, target, name }, { gbp, esc, fmt }) {
+  if (mp.dispatched == null) return '';
+  const tgt = target || breakeven;
+  if (!tgt) return `<p class="mline"><b>${esc(name)}</b> <a href="#home" data-tab="home">Set break-even and target on Home →</a></p>`;
+  const gap = Math.max(0, tgt - mp.dispatched - mp.dueByEnd);
+  const st = monthState(mp, breakeven, target);
+  return `<p class="mline"><b>${esc(name)}:</b> ${gbp(mp.dispatched)} invoiced · <span class="wip">${gbp(mp.dueByEnd)} work in progress</span> ·
+    ${gap ? `<b class="gap">gap ${gbp(gap)}</b> to ${target ? 'target' : 'break-even'}` : `<b class="ok">no gap</b> if it all goes out`}
+    ${gap && mp.dueLater > 0 ? ` · ${gbp(mp.dueLater)} more due after ${fmt(mp.end)}: bring some forward` : ''}
+    <span class="g-state g-${st.tone}">${esc(st.word)}</span> <a href="#home" data-tab="home">Details on Home →</a></p>`;
+}

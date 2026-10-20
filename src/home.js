@@ -14,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ jobs, me, office, md = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
+export function renderHome({ jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true } }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -51,7 +51,7 @@ export function renderHome({ jobs, me, office, md = false, monthXero = { x: null
   ].join('') : '';
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
-  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), xeroNote: monthXero.note, breakeven, target, compact: true,
+  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), xeroNote: monthXero.note, breakeven, target, edit: editTarget,
     name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
@@ -132,7 +132,7 @@ export function renderHome({ jobs, me, office, md = false, monthXero = { x: null
   const seg = `<div class="seg" role="group" aria-label="Show">
     <button type="button" data-homeview="attention" aria-pressed="${!isOut && !drill}">Needs attention <em>${rows.length}</em></button>
     <button type="button" data-homeview="out" aria-pressed="${isOut}">Going out <em>${d.goingOut.length}</em></button></div>`
-    + (drill ? ' <button type="button" class="btn sm" data-goback title="Back to the last screen">← Back</button>' : '');
+    + (drill ? ' <button type="button" class="btn sm" data-homeview="attention" title="Back to Needs attention">✕ Close this list</button>' : '');
 
   return `<div class="home">
     <div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>

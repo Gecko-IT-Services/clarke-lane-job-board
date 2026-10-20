@@ -1641,7 +1641,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(),
+  ({ home: () => { $('v-home').innerHTML = renderHome({ jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
@@ -1683,7 +1683,7 @@ function navPush() {
   if (sameNav(navOf(), history.state)) return;
   history.pushState({ ...navOf(), i: (history.state?.i || 0) + 1 }, '', '#' + S.tab); renderBack();
 }
-function renderBack() { const b = $('backrow'); if (b) b.hidden = !(history.state?.i > 0); }
+function renderBack() { const b = $('backrow'); if (b) b.hidden = S.tab === 'home' || !(history.state?.i > 0); }   // Home is the start: no Back there (Philip, 20 Oct)
 window.addEventListener('popstate', e => {
   const n = e.state;
   if (!n?.v) { fromHash(); render(); renderBack(); return; }
