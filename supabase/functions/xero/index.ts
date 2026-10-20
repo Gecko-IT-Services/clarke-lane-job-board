@@ -24,8 +24,8 @@ const CLIENT_ID = Deno.env.get('XERO_CLIENT_ID') || '';
 const CLIENT_SECRET = Deno.env.get('XERO_CLIENT_SECRET') || '';
 // Granular scopes: Xero apps created after 2 March 2026 cannot use the old broad ones.
 // accounting.invoices covers invoices and quotes (sales orders), read and draft-invoice write.
-const SCOPES = Deno.env.get('XERO_SCOPES') ||
-  'openid profile email offline_access accounting.invoices accounting.contacts.read';
+// accounting.settings.read: Products and services (Xero answered 401 to Items without it, 20 Oct).
+const SCOPES = [...new Set(`${Deno.env.get('XERO_SCOPES') || 'openid profile email offline_access accounting.invoices accounting.contacts.read'} accounting.settings.read`.split(/\s+/).filter(Boolean))].join(' ');
 const CALLBACK = `${SB_URL}/functions/v1/xero/callback`;
 const BOARD = 'https://jobs.clarke-lane.co.uk/';
 // The old GitHub address redirects to jobs.clarke-lane.co.uk; kept here in case it is used before the redirect.
@@ -204,7 +204,12 @@ async function contact(id: string) {
 /** Xero's Products and services that are sold: what the order form offers as parts. Read only. */
 async function items() {
   const s = await session();
-  const r = await xero(s, 'Items');
+  let r;
+  try { r = await xero(s, 'Items'); }
+  catch (e) {
+    if (/ 40[13] /.test(` ${(e as Error).message} `)) throw new HttpError(409, 'Xero needs one more permission for its Products and services. Levi: on the Xero tab press Reconnect and approve in Xero.');
+    throw e;
+  }
   // Every product Xero has, sold or not: those converted from Sage are often not ticked as sold
   // (Mandy, 20 Oct: VFS01-11-1696 is in Xero but never showed). The code is usually the part number.
   const all = r.Items || [];
