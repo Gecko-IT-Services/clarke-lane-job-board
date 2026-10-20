@@ -318,6 +318,26 @@ async function read() {
   };
 }
 
+/** Aged debt (Levi and Mandy, 20 Oct): every approved sales invoice with money still owed. Read only. */
+async function debts() {
+  const s = await session();
+  const where = encodeURIComponent('Type=="ACCREC" AND AmountDue>0');
+  const inv = await allPages(s, `Invoices?where=${where}&Statuses=AUTHORISED&summaryOnly=true`, 'Invoices');
+  return { invoices: inv.map((x: any) => ({ id: x.InvoiceID, number: x.InvoiceNumber || '', reference: x.Reference || '',
+    contactId: x.Contact?.ContactID || '', customer: x.Contact?.Name || '', date: xDate(x.DateString || x.Date),
+    due: xDate(x.DueDateString || x.DueDate), total: Number(x.Total || 0), owed: Number(x.AmountDue || 0) })) };
+}
+/** Xero's pay-online page for each invoice (for a chase email), up to 15 at a time. Read only. */
+async function onlineLinks(ids: unknown) {
+  const want = (Array.isArray(ids) ? ids : []).filter(i => /^[0-9a-f-]{36}$/i.test(String(i))).slice(0, 15);
+  const s = await session(), out: Record<string, string> = {};
+  for (const id of want) {
+    try { const r = await xero(s, `Invoices/${id}/OnlineInvoice`); const u = r.OnlineInvoices?.[0]?.OnlineInvoiceUrl; if (u) out[id] = u; }
+    catch { /* a draft or an invoice Xero will not share: the email just has no link for it */ }
+  }
+  return { links: out };
+}
+
 /** Levi's month (MD only): this month's approved and paid sales invoices, and credit notes, net of
  *  VAT. The board leaves out its own invoices (by ID and by their DN- reference) and adds the rest, so
  *  the month counts what was invoiced in Xero outside the board too (the weeks before changeover). */
@@ -357,6 +377,8 @@ Deno.serve(async req => {
       const b = await req.json().catch(() => ({}));
       return cors(req, json(await monthSales(b.from, b.to)));
     }
+    if (route === 'debts') return cors(req, json(await debts()));
+    if (route === 'online') return cors(req, json(await onlineLinks((await req.json().catch(() => ({}))).ids)));
     if (route === 'invoices') return cors(req, json(await invoiceStatus((await req.json().catch(() => ({}))).ids)));
     if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }
