@@ -80,3 +80,14 @@ console.log('xero: ok');
   assert.equal('AccountCode' in buildPurchaseOrder({ date: '2026-10-19', so: 'SO-1', accountCode: '', lines: [{ description: 'x', qty: 1, unit: 1 }] }, 's1').LineItems[0], false, 'not sure: left for Keith');
   console.log('xero purchase order: ok');
 }
+
+// emailList: several addresses in one box.
+{
+  const { emailList } = await import('../src/core/jobs.js');
+  const assert = (await import('node:assert')).strict;
+  assert.deepEqual(emailList('a@x.co.uk, b@x.co.uk; A@X.co.uk\nc@y.com'), { ok: ['a@x.co.uk', 'b@x.co.uk', 'c@y.com'], bad: [] });
+  assert.deepEqual(emailList('buyer@x.com and accounts'), { ok: ['buyer@x.com'], bad: ['and', 'accounts'] });
+  assert.deepEqual(emailList(''), { ok: [], bad: [] });
+  assert.deepEqual(emailList('<a@x.com>'), { ok: ['a@x.com'], bad: [] });
+  console.log('emailList ok');
+}

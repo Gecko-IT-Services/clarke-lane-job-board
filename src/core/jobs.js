@@ -583,3 +583,17 @@ export function missingLineCodes(jobs, xeroOrders) {
   }
   return out;
 }
+
+/**
+ * Several email addresses in one box (Philip, 20 Oct: Mandy sends to more than one person at a customer):
+ * split on commas, semicolons, spaces or new lines, each once (ignoring case). bad: the bits that are not addresses.
+ */
+export function emailList(text) {
+  const ok = [], bad = [], seen = new Set();
+  for (const raw of String(text || '').split(/[,;\s]+/)) {
+    const e = raw.trim().replace(/^<|>$/g, ''); if (!e) continue;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { bad.push(e); continue; }
+    if (!seen.has(e.toLowerCase())) { seen.add(e.toLowerCase()); ok.push(e); }
+  }
+  return { ok, bad };
+}
