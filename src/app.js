@@ -408,11 +408,14 @@ function openOrderForm(prefill = {}, amendId = null) {
   if (S.xero && !S.xitems && !S.xitemsErr) loadXeroItems();
 }
 /** Xero's Products and services, read once per visit for the Part box. Not fatal: the board's own parts still show. */
+let xitemsLoading = false;
 async function loadXeroItems() {
+  if (xitemsLoading) return; xitemsLoading = true;
   S.xitemsErr = null;
   try { const r = await data.xero('items'); S.xitems = r.items || []; S.xitemsTotal = r.total ?? S.xitems.length; }
   catch (e) { S.xitems = []; S.xitemsErr = e.message; }
-  if (S.form) { collectForm(); keepInputs = false; render(); }
+  xitemsLoading = false;
+  if (S.form) { collectForm(); keepInputs = false; render(); } else if (S.tab === 'xero') render();
 }
 const formParts = n => partSuggestions(S.jobs.filter(j => !j.preview), S.xitems || [], n.customer, S.parts || []);
 /** PO(s) for one dispatch note: its lines' own call-off POs, else the order's PO. */
@@ -905,6 +908,7 @@ async function xeroAction(route) {
 }
 const onBoard = q => S.jobs.find(j => j.xeroQuoteId === q.id || j.so.toUpperCase() === String(q.number).toUpperCase());
 function renderXero() {
+  if (S.xero && !S.xitems && !S.xitemsErr && !xitemsLoading) loadXeroItems();
   const x = S.xero, r = S.xeroRead, busy = S.xeroBusy || xeroReading ? 'disabled' : '';
   const imported = S.xeroOrders || [];
   const last = imported.reduce((a, q) => (q.importedAt > (a?.importedAt || '') ? q : a), null);
@@ -932,7 +936,22 @@ function renderXero() {
       <span class="right"><span class="chip ${x ? 'ok' : ''}">${x ? icon('link') + 'Connected' : 'Not connected'}</span></span></div>
     ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
     <div class="panel"><h3>Connection</h3>${head}</div>
-    ${importPanel}${fixPanel}`;
+    ${importPanel}${fixPanel}${x ? productsCheck() : ''}`;
+}
+/** Xero tab: what Xero's Products and services give the board, and a look-up by code (Mandy, 20 Oct). */
+function productsCheck() {
+  const pc = S.pcheck || {};
+  const list = S.xitems || [];
+  const q = (pc.q || '').trim().toUpperCase();
+  const hits = q ? list.filter(i => `${i.code} ${i.description}`.toUpperCase().includes(q)).slice(0, 8) : [];
+  const lineHits = q ? (S.xeroOrders || []).flatMap(o => (o.lines || []).filter(l => `${l.code || ''} ${l.description}`.toUpperCase().includes(q)).map(l => ({ so: o.number, ...l }))).slice(0, 6) : [];
+  return `<div class="panel"><h3>Check: Xero's Products and services</h3>
+    ${S.xitemsErr ? `<div class="err">Xero said: ${esc(S.xitemsErr)}</div>` : !S.xitems ? '<p class="note">Not read yet.</p>'
+      : `<p>Xero sent <b>${S.xitemsTotal ?? list.length}</b> product${(S.xitemsTotal ?? list.length) === 1 ? '' : 's'}; <b>${list.length}</b> can be offered in the Part box (${list.filter(i => !i.sold).length} not ticked as sold in Xero).</p>`}
+    <div class="actions"><button class="btn sm" type="button" data-pcheckread>${icon('refresh')}Read them again</button>
+      <input type="search" id="pcheck-q" placeholder="Look up a code, e.g. VFS01-11-1696" value="${esc(pc.q || '')}" style="min-width:260px"></div>
+    ${q ? `<p class="note"><b>In Xero's products:</b> ${hits.length ? hits.map(i => `<span class="mono">${esc(i.code || '(no code)')}</span> ${esc(i.description)}${i.price != null ? ' · ' + gbp(i.price, 2) : ''}`).join(' · ') : 'not found'}</p>
+      <p class="note"><b>On imported Xero sales orders:</b> ${lineHits.length ? lineHits.map(l => `${esc(l.so)}: <span class="mono">${esc(l.code || '(no item code)')}</span> ${esc(l.description)}`).join(' · ') : 'not found'}</p>` : ''}</div>`;
 }
 async function addMissingCodes() {
   const fix = missingLineCodes(S.jobs, S.xeroOrders); if (!fix.length) return;
@@ -1972,6 +1991,7 @@ function onClick(e) {
     const all = ids.every(x => sel.has(x)); ids.forEach(x => (all ? sel.delete(x) : sel.add(x))); return render(); }
   if ('pickclear' in d) { S.sel = new Set(); S.lastPick = null; return render(); }
   if ('addcodes' in d) return addMissingCodes();
+  if ('pcheckread' in d) { S.xitems = null; S.xitemsErr = null; render(); return loadXeroItems().then(render); }
   if (d.chase) return chaseDebt(d.chase);
   if (d.hintadd) return addHinted(+d.hintadd);
   if (d.keeppart) return keepForPart(+d.keeppart);
@@ -2030,6 +2050,7 @@ document.addEventListener('input', e => {
     document.querySelector('#doc .paper').innerHTML = docHtml('job', S.sheet.jobId);
     return;
   }
+  if (e.target.id === 'pcheck-q') { S.pcheck = { q: e.target.value }; const pos = e.target.selectionStart; render(); const el = $('pcheck-q'); el?.focus(); el?.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'psearch') { S.psearch = e.target.value; const pos = e.target.selectionStart; renderParts(); const el = $('psearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (['search', 'osearch', 'dsearch'].includes(e.target.id)) {
