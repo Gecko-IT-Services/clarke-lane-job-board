@@ -109,8 +109,12 @@ export const xero = async (route, body) => {
     quotes: [{ id: 'q1', number: 'SO-9776', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
       lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] }],
     invoices: [] };
-  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering', postcode: 'PO1 2NH' }, { id: '00000000-0000-0000-0000-0000000000a1', name: 'Example Powder Coaters Ltd', postcode: 'SO15 1AA', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a2', name: 'Example Steel Supplies', postcode: 'SO16 2BB', supplier: true }],
+  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering', postcode: 'PO1 2NH' }, { id: '00000000-0000-0000-0000-0000000000a1', name: 'Example Powder Coaters Ltd', postcode: 'SO15 1AA', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a2', name: 'Example Steel Supplies', postcode: 'SO16 2BB', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a3', name: 'Example Metals Ltd', postcode: 'SO17 3CC', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a4', name: 'Sample Alloys Ltd', postcode: 'SO18 4DD', supplier: true }],
     defaults: { accountCode: '200', taxType: 'OUTPUT2', from: 'your last 100 invoices' } };
+  if (route === 'contact' && /a\d$/.test(body.id)) return { id: body.id, name: 'Supplier', email: 'sales' + body.id.slice(-1) + '@example.com', person: '', address: '' };
+  if (route === 'bills') return { from: '2025-10-20', bills: [   // made-up suppliers and prices
+    { number: 'B-1001', supplier: 'Example Steel Supplies', date: '2026-08-12', description: 'ALU SHEET 5083 H111 3.0MM 2500X1250', qty: 5, unit: 74.2, amount: 371 },
+    { number: 'B-1044', supplier: 'Example Metals Ltd', date: '2026-09-03', description: 'Stainless 304 2B 1.5mm sheet 2500 x 1250', qty: 2, unit: 51.8, amount: 103.6 }] };
   if (route === 'contact') return { id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
@@ -178,3 +182,16 @@ export const loadOutwork = async () => structuredClone(outwork);
 export const sendOut = async f => { const id = outNo++; outwork.push({ id, ...f, supplier: f.supplier.trim(), dueBack: f.dueBack || null, backOn: null, sentBy: f.by, backBy: null }); return id; };
 export const updateOutwork = async (id, f) => { const r = outwork.find(x => x.id === id); Object.assign(r, f); if ('backOn' in f && !f.backOn) { r.backOn = null; r.backBy = null; } };
 export const deleteOutwork = async id => { if (role === 'floor') throw new Error('It was not removed. Only Levi and Mandy can remove a send.'); outwork.splice(outwork.findIndex(x => x.id === id), 1); };
+
+// Metal prices: one made-up enquiry already priced, so the history has something in it.
+const rfqs = [{ id: 1, jobId: null, lines: [{ material: 'Aluminium', grade: '5083', form: 'Sheet', thickness: '3', size: '2500 × 1250', qty: 4, unit: 'sheets' }], note: '', status: 'ordered',
+  orderedFrom: 'Example Steel Supplies', orderedPo: 'PO-0001', by: 'mandy@example.com', createdAt: '2026-09-28T09:00:00Z',
+  quotes: [{ id: 1, rfqId: 1, supplierId: '00000000-0000-0000-0000-0000000000a2', supplier: 'Example Steel Supplies', email: 'sales2@example.com', askedAt: '2026-09-28T09:05:00Z', prices: [76.5], carriage: 0, leadDays: 2, validUntil: null, note: '', enteredAt: '2026-09-29T10:00:00Z' },
+    { id: 2, rfqId: 1, supplierId: '00000000-0000-0000-0000-0000000000a3', supplier: 'Example Metals Ltd', email: 'sales3@example.com', askedAt: '2026-09-28T09:05:00Z', prices: [79], carriage: 15, leadDays: 3, validUntil: null, note: '', enteredAt: '2026-09-29T11:00:00Z' }] }];
+let rfqNo = 2, mqNo = 3;
+export const loadMetal = async () => structuredClone(rfqs).sort((a, b) => b.id - a.id);
+export const createRfq = async ({ jobId, lines, note, suppliers }) => { const id = rfqNo++; rfqs.push({ id, jobId: jobId || null, lines, note: note || '', status: 'open', orderedFrom: null, orderedPo: null, by: 'mandy@example.com', createdAt: new Date().toISOString(),
+  quotes: suppliers.map(x => ({ id: mqNo++, rfqId: id, supplierId: x.supplierId || '', supplier: x.supplier.trim(), email: x.email.trim(), askedAt: null, prices: null, carriage: null, leadDays: null, validUntil: null, note: '' })) }); return id; };
+export const markAsked = async qid => { for (const r of rfqs) for (const q of r.quotes) if (q.id === qid) q.askedAt = new Date().toISOString(); };
+export const saveQuote = async (qid, f) => { for (const r of rfqs) for (const q of r.quotes) if (q.id === qid) Object.assign(q, { prices: f.prices, carriage: f.carriage, leadDays: f.leadDays, validUntil: f.validUntil || null, note: f.note || '', enteredBy: f.by, enteredAt: new Date().toISOString() }); };
+export const setRfq = async (id, p) => { Object.assign(rfqs.find(r => r.id === id), p); };
