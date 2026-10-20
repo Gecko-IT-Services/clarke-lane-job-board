@@ -8,7 +8,7 @@ const W = ms => b.sleep(ms);
 async function step(name, caption, code, wait = 900) {
   if (code) { const r = await b.js(code); if (r) console.log(name, '→', r); }
   await W(wait);
-  if (!['xero','soa','drawing','dn'].includes(name)) await b.js(`document.getElementById('toast').hidden = true;`);
+  if (!['xero','soa','drawing','dn','amend'].includes(name)) await b.js(`document.getElementById('toast').hidden = true;`);
   const f = `f${String(frames.length + 1).padStart(2, '0')}-${name}.jpg`;
   await b.shot(f); frames.push({ f, caption }); console.log('shot', f);
 }
@@ -19,7 +19,7 @@ for (let i = 0; i < 90 && !(await b.js(`return !!document.querySelector('[data-x
 
 await step('xero', 'Changeover day: on the Xero tab, press "Import open sales orders" once. It brings every open sales order in Xero onto Won quotes.', click('[data-xero="import"]'), 2500);
 await step('won', 'Won quotes lists the orders brought in from Xero, and quotes Levi marks Ordered in the quote calculator. Press "Create sales order" on one.', click('[data-tab="quotes"]'), 1500);
-await step('form', 'The order form fills itself in: customer, lines, prices and due dates. Check the customer PO and tick the processes the job needs.', click('[data-start]'), 2000);
+await step('form', 'The order form fills itself in: customer, lines, prices and due dates. Check the customer PO, add more contact emails with commas between them, and tick the processes the job needs.', click('[data-start]'), 2000);
 await step('soa', 'Press "Create sales order". It gets the next SO number and the order acknowledgement is ready to email to the customer.',
   `document.getElementById('of-po') && (document.getElementById('of-po').value='PO 4471'); document.querySelector('[data-orderform]').requestSubmit();`, 2500);
 await step('order', 'Open the order from Sales orders to see everything about it: lines, drawings, processes, dispatches, purchase orders and pro formas.',
@@ -43,8 +43,12 @@ await step('sheet', 'Print the job sheet for the job folder: what to make, the p
 await step('pick', 'Sales orders: tick orders to see their total value in the bar at the bottom; untick or Clear when done.',
   `document.querySelector('[data-closedoc]')?.click(); document.querySelector('[data-close]')?.click(); await new Promise(r=>setTimeout(r,400)); document.querySelector('[data-tab="orders"]').click(); await new Promise(r=>setTimeout(r,600));
    for (let k = 0; k < 3; k++) { document.querySelectorAll('#v-orders input[data-pick]')[k]?.click(); await new Promise(r=>setTimeout(r,250)); } window.scrollTo(0,0);`, 1200);
+await step('amend', 'Delivery date moved? Open the order, press Amend order and change Promised delivery: the lines on that date move with it, so Next due changes. Then Save the changes.',
+  `document.querySelector('[data-pickclear]')?.click(); await new Promise(r=>setTimeout(r,300)); const row=[...document.querySelectorAll('#v-orders tr[data-open]')].find(r=>r.innerText.includes(window.__so)); if(!row) return 'NO ROW'; row.click(); await new Promise(r=>setTimeout(r,600));
+   document.querySelector('[data-amend]').click(); await new Promise(r=>setTimeout(r,600)); const d=document.getElementById('of-due'); d.value='2026-12-02'; d.dispatchEvent(new Event('input',{bubbles:true})); d.dispatchEvent(new Event('change',{bubbles:true}));
+   d.scrollIntoView({block:'center'});`, 1200);
 await step('parts', 'Parts (from Sales orders): each customer\'s part numbers and their drawings. A drawing kept here attaches itself to every new order for that part. Part numbers already on orders are suggested.',
-  `document.querySelector('[data-pickclear]')?.click(); document.querySelector('[data-tab="parts"]').click(); await new Promise(r=>setTimeout(r,600));
+  `document.querySelector('[data-orderform]')?.requestSubmit(); await new Promise(r=>setTimeout(r,1200)); document.querySelector('[data-close]')?.click(); document.querySelector('[data-tab="parts"]').click(); await new Promise(r=>setTimeout(r,600));
    document.querySelector('[data-partopen]')?.click(); await new Promise(r=>setTimeout(r,600)); window.scrollTo(0,0);`, 1200);
 // Break-even and target here are made up for the video (this repo is public): never Clarke Lane's real figures.
 await step('jobs', 'Jobs lists every open job, soonest due first. Click a due date to change it, drag ⠿ to bring a job forward. For Levi, one line at the top shows the month; the full picture is on Home.',
@@ -61,6 +65,8 @@ await step('sentout', 'Powder coat and plating go to another company. At P/Coat,
    document.querySelector('[data-sendout]')?.click(); await new Promise(r=>setTimeout(r,400));
    if (document.getElementById('out-fin') && !document.getElementById('out-fin').value) document.getElementById('out-fin').value = 'RAL 9005 satin';
    document.querySelector('#outf [type=submit]')?.click(); await new Promise(r=>setTimeout(r,900)); document.getElementById('toast').hidden = true; window.scrollTo(0,0);`, 1200);
+await step('tv', 'The workshop TV: Shop floor › TV board shows the whiteboard. Blue tick done, orange star to do (filled for the next step), OUT at the coater. It updates by itself and nothing can be pressed.',
+  `location.hash = '#tv'; await new Promise(r=>setTimeout(r,1200));`, 1200);
 await step('ready', 'When every process is ticked, the job shows "Ready to dispatch" and appears on the Dispatch tab.',
   `document.querySelector('[data-tab="dispatch"]').click(); window.scrollTo(0,0);`, 1200);
 await step('dn', 'Dispatch: choose what is going (all or part), press "Create dispatch note", then email it, print it, or Save PDF: the file is named with the customer, note and order.',
