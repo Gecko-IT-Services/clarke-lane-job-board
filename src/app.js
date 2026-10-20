@@ -8,6 +8,7 @@ import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
+import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart } from './core/parts.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
 import { icon, XERO, MICROSOFT } from './icons.js';
@@ -129,7 +130,7 @@ async function reload() {
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
       data.loadPurchaseOrders().catch(() => S.pos || [])]);
-    if (office()) S.chases = await data.loadChases().catch(() => S.chases || []);
+    if (office()) [S.chases, S.parts] = await Promise.all([data.loadChases().catch(() => S.chases || []), data.loadParts().catch(e => { S.partsErr = e.message; return S.parts || []; })]);
     S.error = null;
   } catch (e) { S.error = e.message; }
   render();
@@ -367,16 +368,16 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help']];   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
   // Map lives under Dispatch and Customers under Sales orders (Philip: fewer tabs); their parent tab stays lit.
-  const lit = { map: 'dispatch', customers: 'orders' }[S.tab] || S.tab;
+  const lit = { map: 'dispatch', customers: 'orders', parts: 'orders' }[S.tab] || S.tab;
   $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
-  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers'].includes(k)).map(([k, t]) => {
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -563,6 +564,7 @@ async function submitOrder() {
       await data.setJobProcesses(n.jobId, n.procs.filter(p => !j.procs[p]), needed(j).filter(p => !n.procs.includes(p)));
       if ((n.contactEmail || '') !== (j.contactEmail || '')) await data.updateJob(n.jobId, { contact_email: n.contactEmail.trim() });
       S.form = null; keepInputs = false; await reload(); S.open = n.jobId;
+      await linkPartDrawings(n.jobId);
       toast(`${j.so} amended.`);
     } else {
       const j = await data.createJob({ so_number: n.so.trim().toUpperCase(), customer: n.customer.trim(), customer_po: n.po.trim(),
@@ -571,9 +573,11 @@ async function submitOrder() {
         due_date: lines.map(l => l.due).sort().pop(), processes: n.procs, lines: payloadLines });
       const who = n.customer.trim();
       S.form = null; keepInputs = false; await reload();
-      if (n.b2b && S.xero) { S.busy = false; render(); backToBackPo(j.id); return toast(`${j.so_number} created for ${who}. Here is its back-to-back purchase order: check the supplier and costs, then send it to Xero.`); }
+      const fromParts = await linkPartDrawings(j.id, true);
+      const partsNote = fromParts.length ? ` Drawing${fromParts.length === 1 ? '' : 's'} from Parts attached: ${fromParts.join(', ')}.` : '';
+      if (n.b2b && S.xero) { S.busy = false; render(); backToBackPo(j.id); return toast(`${j.so_number} created for ${who}.${partsNote} Here is its back-to-back purchase order: check the supplier and costs, then send it to Xero.`); }
       showDoc('soa', j.id);
-      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Not started. Press Job sheet to print one for the folder.`);
+      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Not started.${partsNote} Press Job sheet to print one for the folder.`);
     }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
@@ -1150,7 +1154,7 @@ const kb = n => n == null ? '' : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` 
 function drawingsPanel(j) {
   const up = S.uploading?.jobId === j.id ? `<p class="note">Uploading ${esc(S.uploading.name)} to SharePoint… ${Math.round(S.uploading.pct * 100)}%</p>` : '';
   return `<div class="panel drawings"${office() ? ` data-dropjob="${j.id}"` : ''}><h3>Drawings</h3>${j.files.length ? `<ul class="files">${j.files.map(f => `<li>
-      <button type="button" class="btn" data-drawing="${f.id}" data-job="${j.id}">${icon('doc')}${esc(f.name)}</button><span class="note">${kb(f.size)} · ${fmt(f.at.slice(0, 10))}</span>
+      <button type="button" class="btn" data-drawing="${f.id}" data-job="${j.id}">${icon('doc')}${esc(f.name)}</button><span class="note">${kb(f.size)} · ${fmt(f.at.slice(0, 10))}${f.partFileId && office() ? ` · from Parts${partOfFile(f.partFileId) ? ` (${esc(partOfFile(f.partFileId).part.partNo)})` : ''}` : ''}</span>
       ${office() && /\.pdf$/i.test(f.name) ? `<button type="button" class="btn link sm" data-readdrawing="${f.id}" data-job="${j.id}" title="Read the drawing for the processes it suggests">Check processes</button>` : ''}
       ${office() ? `<button type="button" class="btn link sm" data-rmdrawing="${f.id}" title="Takes it off this job. The file stays in SharePoint.">Remove</button>` : ''}</li>`).join('')}</ul>`
     : `<div class="note">${office() ? 'No drawings yet. Attach the drawing so the shop floor can see it.' : 'No drawings on this job.'}</div>`}${up}${office() ? hintBox(j) : ''}
@@ -1173,8 +1177,100 @@ async function attachDrawings(jobId, files) {
   if (pdf && office()) readDrawingFile(jobId, pdf.name, pdf);
 }
 
+/* ---------- parts library: a customer's part numbers and their drawings (Sales orders › Parts) ---------- */
+/** New or amended order: link the current drawing of every library part its lines name (same SharePoint file). */
+async function linkPartDrawings(jobId, quiet = false) {
+  const j = job(jobId); if (!j || !office() || !S.parts?.length) return [];
+  const todo = drawingsToLink(S.parts, j); if (!todo.length) return [];
+  const done = [];
+  for (const { part, file } of todo) { try { await data.linkPartFile(jobId, file); done.push(part.partNo); } catch (e) { toast(e.message, null, true); } }
+  if (done.length) { if (!quiet) toast(`Drawing${done.length === 1 ? '' : 's'} from Parts attached to ${j.so}: ${done.join(', ')}.`); await reload(); }
+  return done;
+}
+const partOfFile = id => { for (const p of S.parts || []) { const f = p.files.find(x => x.id === id); if (f) return { part: p, file: f }; } return null; };
+function renderParts() {
+  const q = (S.psearch || '').trim().toLowerCase();
+  const parts = (S.parts || []).filter(p => !q || `${p.partNo} ${p.customer} ${p.description}`.toLowerCase().includes(q))
+    .sort((a, b) => a.customer.localeCompare(b.customer) || a.partNo.localeCompare(b.partNo, 'en', { numeric: true }));
+  const customers = [...new Set([...S.jobs.map(j => j.customer), ...(S.xc?.contacts || []).map(c => c.name)])].sort();
+  const add = S.partAdd ? `<form class="panel partadd" data-partform><h3>Add a part</h3>
+      <div class="row3"><label class="fl">Customer<input type="text" id="pa-cust" list="pa-custs" required autocomplete="off" value="${esc(S.partAdd.customer || '')}"><datalist id="pa-custs">${customers.map(c => `<option value="${esc(c)}"></option>`).join('')}</datalist></label>
+      <label class="fl">Part number<input type="text" id="pa-no" required value="${esc(S.partAdd.partNo || '')}" placeholder="as on the drawing, e.g. UL-PR-10448"></label>
+      <label class="fl">Description (optional)<input type="text" id="pa-desc" value="${esc(S.partAdd.description || '')}" placeholder="e.g. Exhaust shim"></label></div>
+      <div class="actions"><button class="btn pri" type="submit">Add the part</button><button class="btn" type="button" data-partadd="close">Cancel</button></div></form>` : '';
+  const up = id => S.uploading?.partId === id ? `<p class="note">Uploading ${esc(S.uploading.name)} to SharePoint… ${Math.round(S.uploading.pct * 100)}%</p>` : '';
+  const detail = p => { const cur = currentFile(p), used = ordersForPart(S.jobs, p);
+    return `<tr class="wdetail"><td colspan="5"><div class="panel drawings" data-droppart="${p.id}">
+      <h3>Drawings for ${esc(p.partNo)}</h3>
+      ${p.files.length ? `<ul class="files">${p.files.map(f => `<li><button type="button" class="btn${f === cur ? ' pri' : ''}" data-partview="${f.id}">${icon('doc')}${esc(f.name)}</button>
+        <span class="note">${f === cur ? '<b>current</b> · new orders get this one · ' : 'older · '}${fmt(f.at.slice(0, 10))} · ${esc((f.by || '').split('@')[0])}</span>
+        <button type="button" class="btn link sm" data-partrmfile="${f.id}" title="Takes it off the part. The file stays in SharePoint; orders that have it keep it.">Remove</button></li>`).join('')}</ul>`
+        : '<p class="note">No drawing yet. Attach one, or drag it here: new orders naming this part number then get it automatically.</p>'}${up(p.id)}
+      <label class="btn"${S.uploading ? ' aria-disabled="true"' : ''}>${icon('plus')}${p.files.length ? 'Add a new revision' : 'Attach drawing'}<input type="file" class="sr" data-partattach="${p.id}" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.dxf,.dwg,.step,.stp"${S.uploading ? ' disabled' : ''}></label>
+      <span class="note droptip">or drag it here. The newest becomes current; orders already made keep theirs.</span>
+      <p class="note">Saved in SharePoint: Factory Jobs › Documents › Part drawings › ${esc(p.customer)} › ${esc(p.partNo)}.</p>
+      <p class="note"><b>On ${used.length} order${used.length === 1 ? '' : 's'}</b>${used.length ? ': ' + used.slice(0, 12).map(j => `<button type="button" class="btn link sm" data-open="${j.id}">${esc(j.so)}</button>`).join(' ') : ''}</p>
+      <div class="actions"><button type="button" class="btn sm" data-partdel="${p.id}">Remove this part</button></div></div></td></tr>`; };
+  const row = p => { const cur = currentFile(p), open = S.partOpen === p.id;
+    return `<tr class="${open ? 'open' : ''}" data-partopen="${p.id}" style="cursor:pointer"><td><b class="mono">${esc(p.partNo)}</b>${p.description ? `<span class="ref">${esc(p.description)}</span>` : ''}</td>
+      <td>${esc(p.customer)}</td><td>${cur ? `${icon('doc')} ${esc(cur.name)}${p.files.length > 1 ? ` <span class="note">+${p.files.length - 1} older</span>` : ''}` : '<span class="chip soon">No drawing</span>'}</td>
+      <td>${ordersForPart(S.jobs, p).length}</td><td class="act"><button class="btn sm" type="button" data-partopen="${p.id}">${open ? 'Close' : 'Open'}</button></td></tr>${open ? detail(p) : ''}`; };
+  $('v-parts').innerHTML = `<div class="home">
+    <div class="hhead"><div><h2>Parts</h2><p class="sub">Customers' repeat parts and their drawings. A new order that names one of these part numbers gets its drawing attached automatically.</p></div>
+      <div class="hbtns"><button class="btn" type="button" data-tab="orders">Sales orders</button><button class="btn pri" type="button" data-partadd="open">${icon('plus')}Add a part</button></div></div>
+    ${S.partsErr ? `<div class="err">Could not load the parts: ${esc(S.partsErr)}</div>` : ''}
+    ${add}
+    <section><div class="hsec-h"><h3>${(S.parts || []).length} part${(S.parts || []).length === 1 ? '' : 's'}</h3><span class="note">by customer</span>
+      <input type="search" id="psearch" placeholder="Search part number, customer or description" aria-label="Search parts" value="${esc(S.psearch || '')}"></div>
+    ${parts.length ? `<div class="tbl-wrap"><table class="lines home"><thead><tr><th>Part</th><th>Customer</th><th>Current drawing</th><th>Orders</th><th class="act"><span class="sr">Open</span></th></tr></thead><tbody>${parts.map(row).join('')}</tbody></table></div>`
+      : `<div class="tbl-wrap"><p class="allclear">${q ? 'No parts match.' : 'No parts yet. Press Add a part, or press Keep for this part when a drawing is attached to an order.'}</p></div>`}</section></div>`;
+}
+async function savePart(f) {
+  const customer = $('pa-cust').value.trim(), partNo = $('pa-no').value.trim(), description = $('pa-desc').value.trim();
+  if (!customer || normPartNo(partNo).length < 3) return toast('Enter the customer and a part number (3 characters or more).', null, true);
+  try {
+    const id = await data.addPart({ customer, customerKey: normName(customer), partNo, description });
+    S.partAdd = null; S.partOpen = id; S.parts = await data.loadParts(); render();
+    toast(`${partNo} added for ${customer}. Attach its drawing below.`);
+  } catch (e) { toast(e.message, null, true); }
+}
+async function attachPartDrawing(partId, file) {
+  const p = (S.parts || []).find(x => x.id === partId); if (!p || !file) return;
+  S.uploading = { partId, name: file.name, pct: 0 }; render();
+  try { await data.uploadPartDrawing(p, file, x => { S.uploading.pct = x; render(); }); toast(`${file.name} is now the current drawing for ${p.partNo}.`); }
+  catch (e) { toast(e.message, null, true); }
+  S.uploading = null; S.parts = await data.loadParts().catch(() => S.parts); render();
+}
+async function removePartDrawing(fileId) {
+  const x = partOfFile(fileId); if (!x) return;
+  try { await data.removePartFile(x.file.id); S.parts = await data.loadParts(); toast(`${x.file.name} taken off ${x.part.partNo}. It is still in SharePoint.`); } catch (e) { toast(e.message, null, true); }
+  render();
+}
+async function removePart(id) {
+  const p = (S.parts || []).find(x => x.id === id); if (!p) return;
+  if (S.partDelAsk !== p.id) { S.partDelAsk = p.id; return toast(`Press Remove this part again to take ${p.partNo} out of the parts list. Its drawings stay in SharePoint and on orders.`); }
+  try { await data.deletePart(p.id); S.partOpen = null; S.parts = await data.loadParts(); toast(`${p.partNo} removed from the parts list.`); } catch (e) { toast(e.message, null, true); }
+  render();
+}
+/** From an order's drawing: keep it in the library for the part number the drawing gives (adds the part if new). */
+async function keepForPart(jobId) {
+  const j = job(jobId), h = S.hints?.[jobId]; if (!j || !h?.reading?.facts.part) return;
+  const f = j.files.find(x => x.name === h.name) || j.files[j.files.length - 1]; if (!f) return;
+  const partNo = h.reading.facts.part;
+  try {
+    let p = findPart(S.parts, j.customer, partNo);
+    const line = j.lines.find(l => normPartNo(l.part).includes(normPartNo(partNo)));
+    const id = p ? p.id : await data.addPart({ customer: j.customer, customerKey: normName(j.customer), partNo, description: line ? line.part.replace(new RegExp(partNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim() : '' });
+    const pfId = await data.addPartFile(id, f);
+    await data.markJobFileFromPart(f.id, pfId).catch(() => {});
+    S.parts = await data.loadParts();
+    toast(`${f.name} kept for ${partNo}${p ? ' as its current drawing' : ' (new part)'}. New orders for ${j.customer} naming ${partNo} will get it.`);
+    h.kept = true; await reload();
+  } catch (e) { toast(e.message, null, true); }
+}
+
 /* Drag and drop drawings onto an order's Drawings section (Philip, 20 Oct), office only. */
-const dropZone = e => (office() && e.dataTransfer?.types?.includes('Files') ? e.target.closest?.('[data-dropjob]') : null);
+const dropZone = e => (office() && e.dataTransfer?.types?.includes('Files') ? e.target.closest?.('[data-dropjob],[data-droppart]') : null);
 let dropOver = null;
 document.addEventListener('dragover', e => {
   const z = dropZone(e); if (!z) return;
@@ -1187,7 +1283,9 @@ document.addEventListener('drop', e => {
   if (!z) { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); return; }   // a file dropped elsewhere must not open in the tab
   e.preventDefault();
   if (S.uploading) return toast('Wait for the drawing being uploaded to finish.', null, true);
-  const files = [...e.dataTransfer.files]; if (files.length) attachDrawings(+z.dataset.dropjob, files);
+  const files = [...e.dataTransfer.files]; if (!files.length) return;
+  if (z.dataset.droppart) return attachPartDrawing(+z.dataset.droppart, files[0]);
+  attachDrawings(+z.dataset.dropjob, files);
 });
 window.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files') && !dropZone(e)) e.preventDefault(); });
 
@@ -1236,6 +1334,11 @@ function hintBox(j) {
       : `<p class="note">The processes on the order already cover what the drawing says${r.suggest.length ? ` (${esc(r.suggest.join(', '))})` : ''}.</p>`}
     ${r.flags.length ? `<p class="bad">Not one of the nine processes: ${esc(r.flags.join('; '))}. Bought in, or done another way?</p>` : ''}
     <p class="note">Bends that are only drawn, not written, can't be read: check Fold by eye.</p>
+    ${r.facts.part && !h.kept ? (() => { const p = findPart(S.parts, j.customer, r.facts.part), f = j.files.find(x => x.name === h.name);
+      const same = p && f && currentFile(p)?.itemId === f.itemId;
+      return same ? `<p class="note">This is the current drawing for ${esc(r.facts.part)} in Parts.</p>`
+        : `<p>${p ? `<b>${esc(r.facts.part)}</b> is in Parts with another drawing.` : `Keep this drawing for <b>${esc(r.facts.part)}</b>, so the next order for it gets it automatically?`}
+          <button class="btn sm" type="button" data-keeppart="${j.id}">${p ? 'Make this its current drawing' : 'Keep for this part'}</button></p>`; })() : ''}
     <div class="actions">${add.length ? `<button class="btn sm pri" type="button" data-hintadd="${j.id}">Add ${esc(add.join(', '))}</button>` : ''}<button class="btn sm" type="button" data-hintclose="${j.id}">${add.length ? 'Not needed' : 'OK'}</button></div></div>`;
 }
 async function removeDrawingFrom(id) {
@@ -1652,7 +1755,7 @@ function render() {
   $('preview-bar').hidden = !PREVIEW.on;
   if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
-  if (!office() && ['quotes', 'orders', 'customers', 'xero'].includes(S.tab)) S.tab = 'floor';
+  if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero'].includes(S.tab)) S.tab = 'floor';
   if (S.kiosk) { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
   if (!office() && S.tab !== 'floor') S.tab = 'floor';   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
   document.body.classList.toggle('kiosk-mode', !!S.kiosk);
@@ -1664,7 +1767,7 @@ function render() {
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
-    orders: renderOrders, map: renderMapTab, customers: renderCustomers, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+    orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor');
   renderDrawer();
   restoreInputs(kept);
@@ -1799,6 +1902,13 @@ function onClick(e) {
   if (d.pob2b) return backToBackPo(+d.pob2b);
   if (d.chase) return chaseDebt(d.chase);
   if (d.hintadd) return addHinted(+d.hintadd);
+  if (d.keeppart) return keepForPart(+d.keeppart);
+  if (d.partadd) { S.partAdd = d.partadd === 'open' ? {} : null; render(); if (S.partAdd) $('pa-cust')?.focus(); return; }
+  if (d.partopen) { e.stopPropagation(); S.partOpen = S.partOpen === +d.partopen ? null : +d.partopen; return render(); }
+  if (d.partview) { const x = partOfFile(+d.partview); if (!x) return; const w = window.open('', '_blank');
+    return data.drawingBlob(x.file).then(b => { const u = URL.createObjectURL(b); if (w) w.location = u; else location.href = u; }, er => { w?.close(); toast(er.message, null, true); }); }
+  if (d.partrmfile) return removePartDrawing(+d.partrmfile);
+  if (d.partdel) return removePart(+d.partdel);
   if (d.hintclose) { delete S.hints[+d.hintclose]; return render(); }
   if (d.readdrawing) { const j = job(+d.job), f = j?.files.find(x => x.id === +d.readdrawing); if (!f) return;
     S.hints = { ...(S.hints || {}), [j.id]: { name: f.name, busy: true } }; render();
@@ -1846,6 +1956,7 @@ document.addEventListener('input', e => {
     document.querySelector('#doc .paper').innerHTML = docHtml('job', S.sheet.jobId);
     return;
   }
+  if (e.target.id === 'psearch') { S.psearch = e.target.value; const pos = e.target.selectionStart; renderParts(); const el = $('psearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (['search', 'osearch', 'dsearch'].includes(e.target.id)) {
     const id = e.target.id; S[id] = e.target.value; const pos = e.target.selectionStart;
@@ -1889,6 +2000,7 @@ document.addEventListener('change', e => {
   }
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
+  if (e.target.dataset.partattach) { const fl = e.target.files[0]; e.target.value = ''; attachPartDrawing(+e.target.dataset.partattach, fl); return; }
   if (e.target.dataset.attach) { const fs = [...e.target.files]; e.target.value = ''; attachDrawings(+e.target.dataset.attach, fs); return; }
   if (e.target.dataset.setdue) { setDue(+e.target.dataset.setdue, e.target.dataset.from, e.target.value); return; }
   if (e.target.dataset.mapkind) { S.mapShow[e.target.dataset.mapkind] = e.target.checked; render(); }
@@ -1897,6 +2009,7 @@ document.addEventListener('change', e => {
 document.addEventListener('submit', async e => {
   const f = e.target; e.preventDefault();
   if ('orderform' in f.dataset) return submitOrder();
+  if ('partform' in f.dataset) return savePart(f);
   if ('pfsettings' in f.dataset) return savePfSettings();
   if ('targetform' in f.dataset) {
     const num = id => { const v = $(id).value.trim(); return v === '' ? null : Math.round(Number(v)); };

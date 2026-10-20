@@ -20,8 +20,22 @@ export const whoAmI = async () => ({ email: 'x', name: role === 'md' ? 'Levi' : 
 const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
 export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
 export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
-  blobs.set(f.id, file); files.set(job.id, [...(files.get(job.id) || []), f]); onProgress(1); return f; };
-export const drawingBlob = async f => blobs.get(f.id);
+  blobs.set(f.itemId, file); files.set(job.id, [...(files.get(job.id) || []), f]); onProgress(1); return f; };
+export const drawingBlob = async f => blobs.get(f.itemId);
+// Parts library, in this page only (made-up).
+const parts = []; let partNo = 1;
+export const loadParts = async () => structuredClone(parts);
+export const addPart = async ({ customer, customerKey, partNo: no, description }) => {
+  if (parts.some(p => p.customerKey === customerKey && p.partNo.toUpperCase() === no.toUpperCase())) throw new Error(`${no} is already in the parts list for ${customer}`);
+  const id = partNo++; parts.push({ id, customer, customerKey, partNo: no, description: description || '', by: 'mandy@example.com', at: new Date().toISOString(), files: [] }); return id; };
+export const updatePart = async (id, patch) => { Object.assign(parts.find(p => p.id === id), patch); };
+export const deletePart = async id => { parts.splice(parts.findIndex(p => p.id === id), 1); };
+export const addPartFile = async (partId, f) => { const id = fileNo++; parts.find(p => p.id === partId).files.unshift({ ...f, id, partId, by: 'mandy@example.com', at: new Date().toISOString() }); return id; };
+export const uploadPartDrawing = async (part, file, onProgress = () => {}) => { const itemId = 'i' + (fileNo + 1000); blobs.set(itemId, file); onProgress(1);
+  return addPartFile(part.id, { name: file.name, driveId: 'd', itemId, url: '#', size: file.size, mime: file.type }); };
+export const removePartFile = async id => { for (const p of parts) p.files = p.files.filter(f => f.id !== id); };
+export const linkPartFile = async (jobId, pf) => { files.set(jobId, [...(files.get(jobId) || []), { id: fileNo++, name: pf.name, driveId: pf.driveId, itemId: pf.itemId, url: '#', size: pf.size, mime: pf.mime, by: 'mandy@example.com', at: new Date().toISOString(), partFileId: pf.id }]); };
+export const markJobFileFromPart = async (jobFileId, pfId) => { for (const v of files.values()) for (const f of v) if (f.id === jobFileId) f.partFileId = pfId; };
 export const removeDrawing = async id => { for (const [k, v] of files) files.set(k, v.filter(f => f.id !== id)); };
 export const setProcess = async (id, p, done, by) => { find(id).procs[p] = done ? { done, by, at: new Date().toISOString() } : { done: false }; };
 export const setJobProcesses = async (id, add, remove) => { const j = find(id); add.forEach(p => { j.procs[p] = { done: false }; }); remove.forEach(p => delete j.procs[p]); };

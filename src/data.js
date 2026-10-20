@@ -34,7 +34,7 @@ export async function loadJobs({ office }) {
     id: j.id, so: j.so_number, quote: j.quote_no, spQuoteId: j.sp_quote_id, xeroQuoteId: j.xero_quote_id, customer: j.customer,
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
     ordered: j.ordered_on, due: j.due_date, notes: j.notes, address: j.delivery_address, status: j.status,
-    createdBy: j.created_by, ackEmailedAt: j.ack_emailed_at, priority: j.priority ?? null,
+    createdBy: j.created_by, createdAt: j.created_at, ackEmailedAt: j.ack_emailed_at, priority: j.priority ?? null,
     lines: [], procs: {}, despatches: [], cancelledDespatches: [], files: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
@@ -55,7 +55,7 @@ export async function loadJobs({ office }) {
   for (const dl of dlines.data) { const d = dById.get(dl.despatch_id); if (d) d.lines[dl.job_line_id] = dl.qty; }
   // Drawings: a missing table (before the migration) just means none yet.
   for (const f of files.data || []) byJob.get(f.job_id)?.files.push({ id: f.id, name: f.name, driveId: f.drive_id, itemId: f.item_id,
-    url: f.web_url, size: f.size, mime: f.mime, by: f.uploaded_by, at: f.uploaded_at });
+    url: f.web_url, size: f.size, mime: f.mime, by: f.uploaded_by, at: f.uploaded_at, partFileId: f.part_file_id ?? null });
   return [...byJob.values()];
 }
 
@@ -180,10 +180,12 @@ async function factoryDrive() {
 }
 const CHUNK = 320 * 1024 * 16;   // 5 MB, a multiple of 320 KiB as SharePoint asks
 /** Uploads one file into the job's folder and records it on the job. onProgress(0..1). */
-export async function uploadDrawing(job, file, onProgress = () => {}) {
+const spSafe = s => String(s).replace(/[\\/:*?"<>|#%]/g, '-').trim();
+/** Puts a file into the Factory Jobs Documents library at folders/name (renamed if taken); returns { drive, item }. */
+async function putFactoryFile(folders, file, onProgress) {
   if (file.size > 100 * 1024 * 1024) throw new Error(`${file.name} is over 100 MB. Make it smaller or put it in SharePoint by hand.`);
   const drive = await factoryDrive();
-  const path = ['Job drawings', job.so.replace(/[\\/:*?"<>|#%]/g, '-'), file.name.replace(/[\\/:*?"<>|#%]/g, '-')].map(encodeURIComponent).join('/');
+  const path = [...folders, file.name].map(x => encodeURIComponent(spSafe(x))).join('/');
   let item;
   if (file.size <= 4 * 1024 * 1024) {
     item = await (await graphRaw(`/drives/${drive}/root:/${path}:/content?@microsoft.graph.conflictBehavior=rename`,
@@ -200,11 +202,74 @@ export async function uploadDrawing(job, file, onProgress = () => {}) {
       onProgress(end / file.size);
     }
   }
+  return { drive, item };
+}
+export async function uploadDrawing(job, file, onProgress = () => {}) {
+  const { drive, item } = await putFactoryFile(['Job drawings', job.so], file, onProgress);
   const sb = await getSupabase();
   const { error } = await sb.from('job_files').insert({ job_id: job.id, name: item.name, drive_id: drive, item_id: item.id,
     web_url: item.webUrl || '', size: item.size ?? file.size, mime: item.file?.mimeType || file.type || '' });
   if (error) fail(`${item.name} is in SharePoint but was not linked to ${job.so}`, error);
   return item;
+}
+
+/* ---------- parts library (office): a customer's part numbers and their drawings ---------- */
+export async function loadParts() {
+  const sb = await getSupabase();
+  const [p, f] = await Promise.all([sb.from('parts').select('*').order('part_no'), sb.from('part_files').select('*').order('uploaded_at', { ascending: false })]);
+  if (p.error) fail('Could not load the parts', p.error);
+  if (f.error) fail('Could not load the part drawings', f.error);
+  const by = new Map(p.data.map(x => [x.id, { id: x.id, customer: x.customer, customerKey: x.customer_key, partNo: x.part_no, description: x.description,
+    by: x.created_by, at: x.created_at, files: [] }]));
+  for (const x of f.data) by.get(x.part_id)?.files.push({ id: x.id, partId: x.part_id, name: x.name, driveId: x.drive_id, itemId: x.item_id,
+    url: x.web_url, size: x.size, mime: x.mime, by: x.uploaded_by, at: x.uploaded_at });
+  return [...by.values()];
+}
+export async function addPart({ customer, customerKey, partNo, description }) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('parts').insert({ customer, customer_key: customerKey, part_no: partNo.trim(), description: (description || '').trim() }).select().single();
+  if (error) fail(error.code === '23505' ? `${partNo} is already in the parts list for ${customer}` : 'The part was not saved', error);
+  return data.id;
+}
+export async function updatePart(id, patch) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('parts').update(patch).eq('id', id);
+  if (error) fail('The part was not saved', error);
+}
+export async function deletePart(id) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('parts').delete().eq('id', id);
+  if (error) fail('The part was not removed', error);
+}
+/** A new drawing (or revision) for a part: into SharePoint › Part drawings › customer › part number. */
+export async function uploadPartDrawing(part, file, onProgress = () => {}) {
+  const { drive, item } = await putFactoryFile(['Part drawings', part.customer, part.partNo], file, onProgress);
+  return addPartFile(part.id, { name: item.name, driveId: drive, itemId: item.id, url: item.webUrl || '', size: item.size ?? file.size, mime: item.file?.mimeType || file.type || '' });
+}
+/** Records a file already in SharePoint (e.g. a job's drawing) as a part's drawing; returns its id. */
+export async function addPartFile(partId, f) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('part_files').insert({ part_id: partId, name: f.name, drive_id: f.driveId, item_id: f.itemId,
+    web_url: f.url || '', size: f.size ?? null, mime: f.mime || '' }).select().single();
+  if (error) fail(`${f.name} is in SharePoint but was not added to the part`, error);
+  return data.id;
+}
+export async function removePartFile(id) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('part_files').delete().eq('id', id);
+  if (error) fail('Not removed', error);
+}
+/** Links a part's drawing to a job: the same SharePoint file, never a copy. */
+export async function linkPartFile(jobId, pf) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('job_files').insert({ job_id: jobId, name: pf.name, drive_id: pf.driveId, item_id: pf.itemId,
+    web_url: pf.url || '', size: pf.size ?? null, mime: pf.mime || '', part_file_id: pf.id });
+  if (error) fail(`${pf.name} was not linked`, error);
+}
+export async function markJobFileFromPart(jobFileId, partFileId) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('job_files').update({ part_file_id: partFileId }).eq('id', jobFileId);
+  if (error) fail('Not saved', error);
 }
 /** The file's contents, for showing it on screen. */
 export async function drawingBlob(f) {
@@ -399,7 +464,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 
