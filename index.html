@@ -162,7 +162,14 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .tube-fill{background:linear-gradient(180deg,var(--f1) 0%,var(--f2) 45%,var(--f3) 100%);box-shadow:inset 0 -3px 4px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.18)}
 .tube-fill.t-warn{--f1:#FFD9A0;--f2:#E39A2C;--f3:#A8620C}
 .tube-fill.t-ok,.tube-fill.t-top{--f1:#A6EBC2;--f2:#33A564;--f3:#1D6A40}
-.tube-could{background:repeating-linear-gradient(135deg,rgba(0,0,0,.14) 0 6px,rgba(0,0,0,0) 6px 12px)}
+.tube-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 5px,rgba(255,255,255,0) 5px 10px),linear-gradient(180deg,#B9D3F2 0%,#5C8FCF 45%,#2F5E9E 100%);box-shadow:inset 0 -3px 4px rgba(0,0,0,.22)}
+.tube-gap{position:absolute;top:0;bottom:0;right:0;z-index:2;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.tube-gap span{font-size:11.5px;font-weight:700;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:1px 9px;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.month .mfigs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.month .mfig{display:flex;flex-direction:column;gap:1px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);border-left-width:4px}
+.month .mfig span{font-size:12.5px;font-weight:600;color:var(--muted)} .month .mfig b{font:600 22px var(--display);letter-spacing:-.02em} .month .mfig small{font-size:12px;color:var(--muted)}
+.month .f-inv{border-left-color:#E39A2C} .month .f-inv.good{border-left-color:#33A564} .month .f-wip{border-left-color:#5C8FCF} .month .f-gap{border-left-color:var(--muted)} .month .f-gap.none{border-left-color:var(--ok)}
+@media (max-width:640px){.month .mfigs{grid-template-columns:1fr}.month .mfig{flex-direction:row;align-items:baseline;gap:8px}.month .mfig b{font-size:18px;margin-left:auto;order:2}.month .mfig small{display:none}}
 .tube-ring{position:absolute;top:-1px;bottom:-1px;width:4px;margin-left:-2px;background:linear-gradient(90deg,#3A3D42,#C9CDD2,#3A3D42);box-shadow:0 0 0 1px rgba(0,0,0,.25)}
 .tube-tag{position:absolute;top:0;transform:translateX(-50%);font-size:11.5px;font-weight:600;white-space:nowrap;color:var(--ink)}
 .tube-pace{position:absolute;top:56px;width:0;height:0;margin-left:-6px;border:6px solid transparent;border-bottom:8px solid var(--info);border-top:0}
@@ -173,7 +180,7 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .month .tkey{list-style:none;margin:2px 0 0;padding:0;display:flex;gap:4px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
 .month .tkey li{display:flex;align-items:center;gap:6px}
 .month .tkey i{display:inline-block;width:16px;height:8px;border-radius:4px}
-.month .tkey .k-done{background:linear-gradient(90deg,#E39A2C 50%,#33A564 50%)} .month .tkey .k-could{background:repeating-linear-gradient(135deg,rgba(0,0,0,.25) 0 3px,transparent 3px 6px);outline:1px solid var(--line)}
+.month .tkey .k-done{background:linear-gradient(90deg,#E39A2C 50%,#33A564 50%)} .month .tkey .k-could{background:#5C8FCF} .month .tkey .k-gap{background:linear-gradient(180deg,#ECEEF0,#A9AEB5);outline:1px solid var(--line)}
 .month .tkey .k-pace{width:0;height:0;border:5px solid transparent;border-bottom:7px solid var(--info);border-top:0;border-radius:0}
 .month .tform{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .month .tform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
