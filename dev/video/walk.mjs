@@ -50,6 +50,15 @@ await step('amend', 'Delivery date moved? Open the order, press Amend order and 
 await step('parts', 'Parts (from Sales orders): each customer\'s part numbers and their drawings. A drawing kept here attaches itself to every new order for that part. Part numbers already on orders are suggested.',
   `document.querySelector('[data-orderform]')?.requestSubmit(); await new Promise(r=>setTimeout(r,1200)); document.querySelector('[data-close]')?.click(); document.querySelector('[data-tab="parts"]').click(); await new Promise(r=>setTimeout(r,600));
    document.querySelector('[data-partopen]')?.click(); await new Promise(r=>setTimeout(r,600)); window.scrollTo(0,0);`, 1200);
+await step('rfq', 'Metal prices (from Sales orders): add the metal you need and tick the suppliers to ask. "Draft the emails" puts the same enquiry, RFQ-0002, in your Outlook Drafts for each one.',
+  `document.querySelector('[data-tab="metal"]').click(); await new Promise(r=>setTimeout(r,600)); document.querySelector('[data-rfnew]').click(); await new Promise(r=>setTimeout(r,400));
+   const set=(id,v)=>{const e=document.getElementById(id); e.value=v; e.dispatchEvent(new Event('input',{bubbles:true}));};
+   set('rf-g0','5083'); set('rf-t0','3'); set('rf-s0','2500 x 1250'); set('rf-q0','4');
+   document.querySelector('[data-rfadd]').click(); await new Promise(r=>setTimeout(r,300));
+   const m=document.getElementById('rf-m1'); m.value='Stainless steel'; set('rf-g1','304'); set('rf-t1','1.5'); set('rf-s1','2500 x 1250'); set('rf-q1','2'); window.scrollTo(0,0);`, 1200);
+await step('compare', 'Type each reply in with Enter prices: they sit side by side with the cheapest highlighted, the change on last time and the last price paid in Xero. Order fills in the PO. Price history finds every price.',
+  `document.querySelector('[data-rfcancel]')?.click(); await new Promise(r=>setTimeout(r,300)); document.querySelector('[data-rfopen]')?.click(); await new Promise(r=>setTimeout(r,400));
+   const m=document.getElementById('msearch'); m.value='3mm 5083'; m.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,400)); window.scrollTo(0,0);`, 1200);
 // Break-even and target here are made up for the video (this repo is public): never Clarke Lane's real figures.
 await step('jobs', 'Jobs lists every open job, soonest due first. Click a due date to change it, drag ⠿ to bring a job forward. For Levi, one line at the top shows the month; the full picture is on Home.',
   `document.querySelector('[data-closedoc]')?.click(); document.querySelector('[data-close]')?.click(); await new Promise(r=>setTimeout(r,400)); document.querySelector('[data-tab="home"]').click();

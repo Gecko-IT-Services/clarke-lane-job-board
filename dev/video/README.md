@@ -5,7 +5,7 @@ remade whenever the screens change:
 
 1. In the repo: `python3 dev/make-smoke.py` and `python3 -m http.server 8080`
 2. In `dev/video`:
-   - `node walk.mjs`: 22 screenshots and their on-screen captions (frames.json)
+   - `node walk.mjs`: 24 screenshots and their on-screen captions (frames.json)
    - `python3 say.py`: speaks `narration.json` (the first line is the title card) with the Mac's "Daniel" voice
    - `node make-video.mjs`: the captioned video, each step held as long as its voice-over (walkthrough.mp4, timeline.json)
    - `swift add-voice.swift`: lays the voice over the video (walkthrough-voice.mp4)
