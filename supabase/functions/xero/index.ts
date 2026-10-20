@@ -290,7 +290,7 @@ async function purchaseOrder(b: any, me: { email: string; name: string }) {
   if (!made?.PurchaseOrderID) throw new HttpError(502, 'Xero did not return a purchase order.');
   const net = lines.reduce((a: number, l: any) => a + Math.round(l.qty * l.unit * 100) / 100, 0);
   const { error } = await admin.from('purchase_orders').upsert({ job_id: job.id, xero_id: made.PurchaseOrderID, po_number: made.PurchaseOrderNumber || '',
-    supplier_id: contactId, supplier_name: made.Contact?.Name || '', delivery_date: po.DeliveryDate || null, lines, net, created_by: me.email }, { onConflict: 'xero_id' });
+    supplier_id: contactId, supplier_name: made.Contact?.Name || '', delivery_date: po.DeliveryDate || null, lines, net, account_code: accountCode, created_by: me.email }, { onConflict: 'xero_id' });
   return { id: made.PurchaseOrderID, number: made.PurchaseOrderNumber || '', supplier: made.Contact?.Name || '', recorded: !error };
 }
 

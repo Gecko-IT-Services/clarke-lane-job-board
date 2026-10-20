@@ -20,7 +20,7 @@ import { postcodeOf } from './core/geo.js';
 import { dashboard, dispatchLists, partSuggestions, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
-  addWorkingDays, quoteStates, repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
+  addWorkingDays, quoteStates, repeatLines, poSuggestions, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
   byRunningOrder, partsLeft, moveInOrder, nextStep } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
@@ -1142,6 +1142,13 @@ function collectPo() {
 }
 function showPoForm() {
   const f = S.poForm, j = job(f.jobId); if (!j) return;
+  // Copy a previous PO: same parts first, then the same customer, then the rest (newest first).
+  const sug = poSuggestions(j, S.jobs, S.pos || []);
+  const copyOpt = p => `<option value="${p.id}">${esc(p.no || 'Draft PO')} · ${esc(p.supplier)} · ${p.so ? esc(p.so) + ' · ' : ''}${p.lines.length} line${p.lines.length === 1 ? '' : 's'} · ${gbp(p.net, 2)} · ${fmt(p.at.slice(0, 10))}</option>`;
+  const groups = [['Same parts as this order', sug.samePart], [`Other orders for ${j.customer}`, sug.sameCustomer], ['Other purchase orders', sug.other.slice(0, 30)]].filter(([, l]) => l.length);
+  const copy = groups.length ? `<label class="fl">Copy a previous PO (optional)<select class="f" id="po-copy"><option value="">${sug.samePart.length ? `${sug.samePart.length} earlier PO${sug.samePart.length === 1 ? '' : 's'} for the same parts…` : 'Choose one to copy…'}</option>
+      ${groups.map(([t, l]) => `<optgroup label="${esc(t)}">${l.map(copyOpt).join('')}</optgroup>`).join('')}</select></label>
+      ${f.copied ? `<p class="note">Copied from <b>${esc(f.copied)}</b>: supplier, account and lines. Check the quantities and costs before sending.</p>` : ''}` : '';
   const cs = (S.xc?.contacts || []).slice().sort((a, b) => (b.supplier - a.supplier) || a.name.localeCompare(b.name));
   const sup = cs.filter(c => c.supplier), rest = cs.filter(c => !c.supplier);
   const opt = c => `<option value="${esc(c.id)}"${c.id === f.contactId ? ' selected' : ''}>${esc(c.name)}</option>`;
@@ -1149,6 +1156,7 @@ function showPoForm() {
   $('doc').innerHTML = `<div class="docbar"><span>New purchase order for ${esc(j.so)} · ${esc(j.customer)}</span><button class="btn" type="button" data-closedoc>Close</button></div>
     <div class="sheetedit panel poform"><h3>Purchase order for ${esc(j.so)}</h3>
       <p class="note">It goes to Xero as a <b>draft</b> purchase order, with ${esc(j.so)} as the reference. Approve and send it to the supplier from Xero; Keith matches the supplier's bill to it there.</p>
+      ${copy}
       <div class="row2"><label class="fl">Supplier (from Xero)${S.xcErr ? ` <span class="bad">${esc(S.xcErr)}</span>` : ''}<select class="f" id="po-sup"><option value="">${S.xc ? 'Choose the supplier…' : 'Reading Xero…'}</option>
         ${sup.length ? `<optgroup label="Suppliers">${sup.map(opt).join('')}</optgroup>` : ''}${rest.length ? `<optgroup label="Other contacts">${rest.map(opt).join('')}</optgroup>` : ''}</select></label>
         <label class="fl">Delivery date (optional)<input type="date" id="po-del" value="${esc(f.delivery)}"></label></div>
@@ -1166,6 +1174,16 @@ function showPoForm() {
         <span class="note" style="margin-left:auto">Net <b>${gbp(net, 2)}</b> + VAT as set in Xero</span></div>
       <div class="actions"><button class="btn pri" type="button" data-pocreate ${f.busy ? 'disabled' : ''}>${f.busy ? 'Sending to Xero…' : `Create draft PO in ${XERO}`}</button></div></div>`;
   $('doc').hidden = false; document.body.classList.add('doc-open');
+}
+/** Fills the open PO form from an earlier PO: its supplier, account code and lines (kept as they were). */
+function copyPo(id) {
+  const p = (S.pos || []).find(x => x.id === id), f = S.poForm; if (!p || !f) return;
+  f.contactId = p.supplierId || f.contactId;
+  f.account = p.account === '5000' || p.account === '' ? p.account : 'other'; f.other = f.account === 'other' ? p.account : '';
+  f.lines = p.lines.map(l => ({ description: String(l.description || ''), qty: String(l.qty ?? 1), unit: l.unit == null ? '' : String(l.unit) }));
+  if (!f.lines.length) f.lines = [blankPoLine()];
+  const from = job(p.jobId); f.copied = `${p.no || 'a draft PO'}${from ? ` (${from.so})` : ''}`;
+  showPoForm();
 }
 async function createPo() {
   collectPo(); const f = S.poForm, j = job(f.jobId);
@@ -1684,6 +1702,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
+  if (e.target.id === 'po-copy' && S.poForm && e.target.value) { collectPo(); copyPo(+e.target.value); return; }
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }

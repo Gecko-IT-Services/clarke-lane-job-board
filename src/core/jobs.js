@@ -466,3 +466,24 @@ export function partSuggestions(jobs, items, customer) {
   }
   return [...seen.values()];
 }
+
+/**
+ * Earlier purchase orders worth copying for a job (Philip, 20 Oct: "copy a previous PO with supplier and
+ * same parts"). pos: [{ id, jobId, lines: [{ description }], at }]; jobs: every job. Groups, newest first:
+ * samePart (the earlier job had one of this job's parts, or a PO line names one), sameCustomer, other.
+ * The job's own POs are included (a second batch of the same order is the commonest repeat).
+ */
+export function poSuggestions(job, jobs, pos) {
+  const norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const parts = new Set(job.lines.map(l => norm(l.part)).filter(p => p.length >= 3));
+  const byId = new Map(jobs.map(j => [j.id, j]));
+  const cust = norm(job.customer);
+  const out = { samePart: [], sameCustomer: [], other: [] };
+  for (const p of [...pos].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : b.id - a.id))) {
+    const from = byId.get(p.jobId);
+    const hit = (from && from.lines.some(l => parts.has(norm(l.part))))
+      || p.lines.some(l => { const d = norm(l.description); return [...parts].some(x => d.includes(x)); });
+    (hit ? out.samePart : from && norm(from.customer) === cust ? out.sameCustomer : out.other).push({ ...p, so: from?.so || '', customer: from?.customer || '' });
+  }
+  return out;
+}
