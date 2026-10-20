@@ -112,6 +112,7 @@ export const xero = async (route, body) => {
   if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering', postcode: 'PO1 2NH' }, { id: '00000000-0000-0000-0000-0000000000a1', name: 'Example Powder Coaters Ltd', postcode: 'SO15 1AA', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a2', name: 'Example Steel Supplies', postcode: 'SO16 2BB', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a3', name: 'Example Metals Ltd', postcode: 'SO17 3CC', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a4', name: 'Sample Alloys Ltd', postcode: 'SO18 4DD', supplier: true }],
     defaults: { accountCode: '200', taxType: 'OUTPUT2', from: 'your last 100 invoices' } };
   if (route === 'contact' && /a\d$/.test(body.id)) return { id: body.id, name: 'Supplier', email: 'sales' + body.id.slice(-1) + '@example.com', person: '', address: '' };
+  if (route === 'history') return salesHistory();
   if (route === 'bills') return { from: '2025-10-20', bills: [   // made-up suppliers and prices
     { number: 'B-1001', supplier: 'Example Steel Supplies', date: '2026-08-12', description: 'ALU SHEET 5083 H111 3.0MM 2500X1250', qty: 5, unit: 74.2, amount: 371 },
     { number: 'B-1044', supplier: 'Example Metals Ltd', date: '2026-09-03', description: 'Stainless 304 2B 1.5mm sheet 2500 x 1250', qty: 2, unit: 51.8, amount: 103.6 }] };
@@ -195,3 +196,30 @@ export const createRfq = async ({ jobId, lines, note, suppliers }) => { const id
 export const markAsked = async qid => { for (const r of rfqs) for (const q of r.quotes) if (q.id === qid) q.askedAt = new Date().toISOString(); };
 export const saveQuote = async (qid, f) => { for (const r of rfqs) for (const q of r.quotes) if (q.id === qid) Object.assign(q, { prices: f.prices, carriage: f.carriage, leadDays: f.leadDays, validUntil: f.validUntil || null, note: f.note || '', enteredBy: f.by, enteredAt: new Date().toISOString() }); };
 export const setRfq = async (id, p) => { Object.assign(rfqs.find(r => r.id === id), p); };
+
+// Sales: made-up quote history (won and not) and invoice history, so every part of the Sales screen has something in it.
+const ago = d => new Date(Date.now() - d * 864e5).toISOString().slice(0, 10);
+const CUSTS = ['Example Customer Ltd', 'Second Example Ltd', 'Third Example Ltd', 'Fourth Example Ltd', 'Fifth Example Ltd', 'Sample Works Ltd'];
+const pastQuotes = Array.from({ length: 36 }, (_, i) => { const won = i % 5 < 2, d = 40 + i * 6;
+  return { spId: 400 + i, quoteNo: 'Q-' + String(200 + i).padStart(4, '0'), customer: CUSTS[i % CUSTS.length], contactName: 'Sam Buyer', contactEmail: 'buyer@example.com', status: won ? 'Ordered' : 'Quote',
+    quoteDate: ago(d), wonDate: won ? ago(d - 3 - (i % 9)) : '', sellTotal: 300 + (i * 137) % 2400, carriage: i % 3 ? 0 : 15, deliveryDays: 10 }; });
+const openQuotes = [[2, 'Example Customer Ltd', 1850], [9, 'Second Example Ltd', 4200], [13, 'Sample Works Ltd', 960], [21, 'Fourth Example Ltd', 2750], [33, 'Third Example Ltd', 640], [75, 'Fifth Example Ltd', 3100]]
+  .map(([d, c, v], i) => ({ spId: 500 + i, quoteNo: 'Q-' + String(320 + i).padStart(4, '0'), customer: c, contactName: 'Sam Buyer', contactEmail: 'buyer@example.com', status: 'Quote', quoteDate: ago(d), wonDate: '', sellTotal: v, carriage: 0, deliveryDays: 10 }));
+export const allQuotes = async () => [...(await orderedQuotes()).map(q => ({ ...q, wonDate: q.quoteDate })), ...pastQuotes, ...openQuotes];
+function salesHistory() {
+  const inv = [];
+  const add = (c, id, every, from, n, item, net) => { for (let k = 0; k < n; k++) inv.push({ contactId: id, customer: c, date: ago(from + k * every), number: 'INV-' + (5000 + inv.length), net,
+    lines: [{ description: item, code: '', qty: 10, amount: net }, { description: 'Carriage', code: '', qty: 1, amount: 15 }] }); };
+  add('Example Customer Ltd', 'cx1', 14, 5, 30, 'Bracket BRK-1 3mm S275', 640);
+  add('Sample Works Ltd', 'cx6', 21, 95, 16, 'Control box enclosure, powder coated RAL 7035', 1450);   // usually every 3 weeks; quiet for 3 months
+  add('Fourth Example Ltd', 'cx2', 30, 12, 20, 'Guard plate 2mm Zintec', 520);
+  add('Old Example Ltd', 'cx9', 45, 260, 8, 'Stainless hopper 304', 2200);                            // lapsed
+  return { invoices: inv, earliest: inv.reduce((m, x) => (!m || x.date < m ? x.date : m), '') };
+}
+const follow = {}; const salesActs = []; let actNo = 1;
+export const loadSales = async () => ({ follow: structuredClone(follow), actions: structuredClone(salesActs) });
+export const setFollow = async (q, p) => { follow[q.spId] = { ...(follow[q.spId] || { state: 'open' }), ...p }; };
+export const addSalesAction = async a => { salesActs.unshift({ id: actNo++, spId: a.spId ?? null, customer: a.customer, kind: a.kind, note: a.note || '', by: 'levi@example.com', at: new Date().toISOString() }); };
+export const logSalesEmail = async () => {};
+export const salesAi = async facts => ({ subject: `Next batch of ${facts.theyBuy?.[0]?.item || 'parts'}?`, greeting: facts.contactFirstName ? `Hi ${facts.contactFirstName},` : 'Hello,',
+  paragraphs: ['Made-up AI text for the practice page: it has been a little while since your last order, so I thought I would check in.', 'If you have drawings for the next batch, send them over and we will get a price back to you quickly.'], model: 'practice', costUsd: 0 });

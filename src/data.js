@@ -327,6 +327,51 @@ export async function deleteOutwork(id) {
   if (!count) throw new Error('It was not removed. Only Levi and Mandy can remove a send.');
 }
 
+/* ---------- sales (Levi only): follow-ups on quotes and customers, and the AI email writer ---------- */
+export async function allQuotes() {
+  const s = await spLists();
+  const items = await allItems(`/sites/${s.site}/lists/${s.quotes}/items?$expand=fields&$top=500`);
+  return items.map(i => toQuote(i, s.qcol));
+}
+export async function loadSales() {
+  const sb = await getSupabase();
+  const [f, a] = await Promise.all([sb.from('quote_follow').select('*'), sb.from('sales_actions').select('*').order('created_at', { ascending: false }).limit(2000)]);
+  for (const x of [f, a]) if (x.error) fail('Could not load the sales follow-ups', x.error);
+  return { follow: Object.fromEntries(f.data.map(x => [x.sp_quote_id, { state: x.state, lostReason: x.lost_reason, nextOn: x.next_on, note: x.note, updatedAt: x.updated_at }])),
+    actions: a.data.map(x => ({ id: x.id, spId: x.sp_quote_id, customer: x.customer, kind: x.kind, note: x.note, by: x.created_by, at: x.created_at })) };
+}
+export async function setFollow(q, patch) {
+  const sb = await getSupabase();
+  const row = { sp_quote_id: q.spId, quote_no: q.quoteNo, customer: q.customer, updated_at: new Date().toISOString() };
+  if ('state' in patch) row.state = patch.state;
+  if ('lostReason' in patch) row.lost_reason = patch.lostReason;
+  if ('nextOn' in patch) row.next_on = patch.nextOn || null;
+  if ('note' in patch) row.note = patch.note;
+  const { error } = await sb.from('quote_follow').upsert(row, { onConflict: 'sp_quote_id' });
+  if (error) fail('The follow-up was not saved', error);
+}
+export async function addSalesAction({ spId = null, customer, kind, note = '' }) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('sales_actions').insert({ sp_quote_id: spId, customer, kind, note });
+  if (error) fail('It was not noted', error);
+}
+export async function logSalesEmail({ customer, kind }) {
+  const sb = await getSupabase();
+  await sb.from('sales_emails').insert({ customer, kind, ai: false });
+}
+export async function salesAi(facts) {
+  const sb = await getSupabase();
+  const { data: { session } } = await sb.auth.getSession();
+  let res;
+  try {
+    res = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/sales-ai`, { method: 'POST',
+      headers: { Authorization: `Bearer ${session?.access_token}`, apikey: CONFIG.SUPABASE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ facts }) });
+  } catch { throw new Error('Could not reach the AI email writer. Check the internet connection and try again.'); }
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error || `The AI email writer failed (${res.status}).`);
+  return out;
+}
+
 /* ---------- metal prices (office): enquiries to several suppliers and the prices they gave ---------- */
 export async function loadMetal() {
   const sb = await getSupabase();
@@ -556,7 +601,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes', 'quote_follow', 'sales_actions']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 
