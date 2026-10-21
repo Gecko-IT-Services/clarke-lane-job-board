@@ -11,17 +11,23 @@ const days = n => `${n} day${n === 1 ? '' : 's'}`;
 const waited = h => h < 1 ? 'just now' : h < 24 ? `${h} hour${h === 1 ? '' : 's'}` : days(Math.round(h / 24));
 const first = s => String(s || '').split(/[ @]/)[0];
 
-/** Home: what is waiting today, and my tasks. */
+/** Home: what is waiting today, and my tasks. panel (Levi): Sales this week and his tasks; otherwise Mandy's two panels, Today and Sales this week. */
 export function renderToday({ m, tasks, md, me, staff, panel = false }, h) {
   const { esc, fmt } = h;
-  const tile = (n, label, attrs, tone) => `<button type="button" class="tcard${n ? ' t-' + tone : ''}" ${attrs}><b>${n}</b><span>${label}</span></button>`;
+  const tile = (n, label, attrs, tone) => `<button type="button" class="tcard${n > 0 ? ' t-' + tone : ''}" ${attrs}><b>${n}</b><span>${label}</span></button>`;
   // Levi's Home (Philip, 21 Oct: "remove what doesn't matter"): the four sales numbers he acts on, then his tasks.
   const salesTiles = [tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn'), tile(m.reorders, 'repeat parts to ask about', 'data-tab="sales" data-gosmart', 'info'),
     tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info'), tile(m.enquiries, m.enquiries === 1 ? 'enquiry waiting for a reply' : 'enquiries waiting for a reply', 'data-tab="customers" data-goenq', 'bad')].join('');
-  const tiles = [tile(m.enquiries, m.enquiries === 1 ? 'new enquiry to answer' : 'new enquiries to answer', 'data-tab="customers" data-goenq', 'bad'),
+  // Mandy's Home (Philip, 21 Oct: "align what matters"): Today is the day's work (enquiries, tasks, won quotes to turn
+  // into orders, orders still without a drawing) with her tasks below; Sales this week is what to chase, no task list.
+  const won = m.won == null ? '—' : m.won;
+  const todayTiles = [tile(m.enquiries, m.enquiries === 1 ? 'new enquiry to answer' : 'new enquiries to answer', 'data-tab="customers" data-goenq', 'bad'),
     tile(m.overdueTasks + m.todayTasks, m.overdueTasks ? `tasks due (${m.overdueTasks} overdue)` : 'tasks due today', 'data-gotasks', m.overdueTasks ? 'bad' : 'warn'),
-    tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn'), tile(m.reorders, 'repeat parts due a reorder', 'data-tab="sales" data-gosmart', 'info'),
-    tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info')].join('');
+    tile(won, m.won == null ? 'won quotes · checking…' : m.won === 1 ? 'won quote waiting to become an order' : 'won quotes waiting to become orders', 'data-tab="quotes"', 'warn'),
+    tile(m.noDrawing, m.noDrawing === 1 ? 'open order with no drawing' : 'open orders with no drawing', 'data-homeview="nodrawing" title="Show the open orders with no drawing attached"', 'info')].join('');
+  const chaseTiles = [tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn'), tile(m.reorders, 'repeat parts to ask about', 'data-tab="sales" data-gosmart', 'info'),
+    tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info'),
+    tile(m.noContact, m.noContact === 1 ? 'open order with no contact saved' : 'open orders with no contact saved', 'data-tab="customers"', 'info')].join('');
   const who = e => (staff.find(s => s.email === e)?.name || first(e)).split(' ')[0];
   const row = t => `<li class="${t.dueOn < m.today ? 'late' : ''}"><label><input type="checkbox" data-taskdone="${t.id}"> <b>${esc(t.title)}</b></label>
       ${t.customer ? `<button class="btn link sm" type="button" data-custpage="${esc(t.customerKey)}" data-custname="${esc(t.customer)}">${esc(t.customer)}</button>` : ''}
@@ -32,11 +38,13 @@ export function renderToday({ m, tasks, md, me, staff, panel = false }, h) {
       <button class="btn sm" type="button" data-taskadd="">${icon('plus')}Add a task</button></div>
     <div class="tcards">${salesTiles}</div>
     ${list.length ? `<ul class="tasks">${list.map(row).join('')}</ul>` : '<p class="note">No tasks due in the next week.</p>'}</section>`;
-  return `<section class="today" id="today"><div class="hsec-h"><h3>Today</h3><span class="note">what is waiting for you</span>
+  return `<section class="panel today" id="today"><div class="hsec-h"><h3>Today</h3><span class="note">what is waiting for you</span>
       <button class="btn sm" type="button" data-taskadd="">${icon('plus')}Add a task</button></div>
-    <div class="tcards">${tiles}</div>
+    <div class="tcards">${todayTiles}</div>
     ${list.length ? `<ul class="tasks">${list.map(row).join('')}</ul>` : '<p class="note">No tasks due in the next week.</p>'}
-    ${tasks.later.length ? `<p class="note">${tasks.later.length} more later on.</p>` : ''}</section>`;
+    ${tasks.later.length ? `<p class="note">${tasks.later.length} more later on.</p>` : ''}</section>
+  <section class="panel sales-today"><div class="hsec-h"><h3>Sales this week</h3><span class="note">what to chase</span></div>
+    <div class="tcards">${chaseTiles}</div></section>`;
 }
 
 /** The add-a-task form (Home, a customer, an enquiry or an email). */

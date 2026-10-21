@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, domainOf } from '../src/core/crm.js';
+import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, domainOf, morning } from '../src/core/crm.js';
 import { customerBase } from '../src/core/sales.js';
 
 const today = '2026-10-21';
@@ -56,4 +56,9 @@ assert.equal(t2[0].kind, 'call'); assert.equal(t2[1].kind, 'order');
 
 assert.equal(trendWords({ yearNet: 1200, prevNet: 1000 }), 'growing on the year before');
 assert.equal(trendWords({ yearNet: 0, prevNet: 1000 }), 'nothing in the last year');
+// morning: the counts on Home's tiles (Mandy's two panels, Levi's Sales this week).
+const tg = { overdue: [1], today: [1, 2], soon: [], later: [] };
+assert.deepEqual(morning({ enquiries: [{ kind: 'enquiry', status: 'new' }, { kind: 'enquiry', status: 'answered' }, { kind: 'mail', status: 'new' }], tasks: tg, chase: [1, 2], won: 3, noDrawing: [1], noContact: [1, 2] }),
+  { enquiries: 1, overdueTasks: 1, todayTasks: 2, chase: 2, reorders: 0, quiet: 0, won: 3, noDrawing: 1, noContact: 2 });
+assert.equal(morning({ tasks: tg }).won, null, 'won quotes not read yet');
 console.log('crm: ok');

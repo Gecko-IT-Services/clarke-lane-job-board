@@ -611,6 +611,12 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-home .hmd .month{margin:0} #v-home .sales-today{display:flex;flex-direction:column;gap:10px} #v-home .sales-today .tcards{grid-template-columns:repeat(2,minmax(0,1fr))}
 #v-home .sales-today .hsec-h{margin:0} #v-home .sales-today ul.tasks{margin-top:2px}
 #v-home .hcol{display:flex;flex-direction:column;gap:10px}
+/* Mandy's Home (Philip, 21 Oct): Today beside Sales this week (2×2 tiles each, the same height), the eight cards on one
+   grid so both rows match, and the station snapshot boxed like the reorder round, its stations filling the row. */
+#v-home .hmd > .panel{gap:10px} #v-home .hmd .panel .hsec-h{margin:0;min-height:32px} #v-home .hmd .panel .tcards{grid-template-columns:repeat(2,minmax(0,1fr))}
+#v-home .hcards8{grid-auto-rows:1fr}
+#v-home .snapbox .hsec-h{margin:0} #v-home .snapbox .hsec-h .btn{margin-left:auto}
+#v-home .snapbox .snap{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}
 #v-home .hglance{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;align-items:start}   /* Levi: the month beside the cards, not below (21 Oct) */
 @media (max-width:1180px){#v-home .hglance{grid-template-columns:1fr}}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}

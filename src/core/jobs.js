@@ -375,6 +375,18 @@ export function dashboard(jobs, today) {
 }
 
 /**
+ * Mandy's Home (Philip, 21 Oct): open orders (on the board, not cancelled; held ones count) with no drawing attached
+ * yet, and open orders whose customer has nobody in the contact book (people: customer_people rows, keyed by
+ * normName). Xero's preview orders are left out: nothing can be attached to them. Soonest due first.
+ */
+export function homeGaps(jobs, people = []) {
+  const open = jobs.filter(j => !j.preview && ['upcoming', 'current'].includes(stage(j)) && j.status !== 'cancelled')
+    .sort((a, b) => (nextDue(a) || '9') < (nextDue(b) || '9') ? -1 : 1);
+  const known = new Set(people.map(p => p.key));
+  return { noDrawing: open.filter(j => !(j.files || []).length), noContact: open.filter(j => !known.has(normName(j.customer))) };
+}
+
+/**
  * This month against Levi's target (net £): what has been dispatched since the 1st (cancelled notes
  * left out) and what is still to send on lines due by the month end (late lines included). Values are
  * null when prices are not loaded (the shop floor).

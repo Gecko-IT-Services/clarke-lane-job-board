@@ -494,3 +494,23 @@ console.log('jobs: ok');
   assert.deepEqual(partMatches(list, '1696 COVER').map(x => x.part), ['VFS01-11-1696 cover']);
   console.log('partMatches ok');
 }
+
+// homeGaps (Mandy's Home, 21 Oct): open orders with no drawing, and open orders whose customer has nobody saved.
+{
+  const { homeGaps } = await import('../src/core/jobs.js');
+  const assert = (await import('node:assert')).strict;
+  const base = { status: 'open', due: '2026-10-30', lines: [{ id: 1, qty: 2, price: 1, due: '2026-10-30' }], procs: { Laser: { done: false } }, despatches: [] };
+  const jobs = [
+    { ...base, id: 1, customer: 'Example Customer Ltd', files: [{ id: 1, name: 'a.pdf' }] },
+    { ...base, id: 2, customer: 'Second Example Ltd', files: [] },
+    { ...base, id: 3, customer: 'Second Example Ltd', status: 'held', due: '2026-10-25', lines: [{ id: 1, qty: 2, price: 1, due: '2026-10-25' }] },   // no files at all: counts
+    { ...base, id: 4, customer: 'Third Example Ltd', files: [], status: 'cancelled' },
+    { ...base, id: 5, customer: 'Third Example Ltd', files: [], despatches: [{ lines: { 1: 2 } }] },   // all sent: completed
+    { ...base, id: 6, customer: 'Fourth Example Ltd', files: [], preview: true },
+  ];
+  const g = homeGaps(jobs, [{ key: 'examplecustomer', customer: 'Example Customer Ltd' }, { key: 'thirdexample', customer: 'Third Example Ltd' }]);
+  assert.deepEqual(g.noDrawing.map(j => j.id), [3, 2], 'held counts, soonest first; cancelled, completed and preview left out');
+  assert.deepEqual(g.noContact.map(j => j.id), [3, 2], 'Second Example has nobody in the book');
+  assert.deepEqual(homeGaps([]).noDrawing, []);
+  console.log('homeGaps ok');
+}
