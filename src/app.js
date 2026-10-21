@@ -663,13 +663,14 @@ async function saveFormToBook() {
 function renderCustomers() {
   const q = (S.csearch || '').toLowerCase();
   const names = new Map();
-  for (const x of [...S.book.people, ...S.book.sites]) names.set(x.key, x.customer);
+  for (const x of [...S.book.people, ...S.book.sites]) if (x.customer) names.set(x.key, x.customer);
   for (const j of S.jobs) if (!j.preview && !names.has(normName(j.customer))) names.set(normName(j.customer), j.customer);
   for (const x of S.hist?.invoices || []) if (x.customer && !names.has(normName(x.customer))) names.set(normName(x.customer), x.customer);
   for (const q of S.salesQ || []) if (q.customer && !names.has(normName(q.customer))) names.set(normName(q.customer), q.customer);
   if (S.cust && !names.has(S.cust) && S.custName) names.set(S.cust, S.custName);
   const list = [...names.entries()].filter(([, n]) => !q || n.toLowerCase().includes(q)).sort((a, b) => a[1].localeCompare(b[1]));
   const sel = S.cust && names.has(S.cust) ? S.cust : null, name = sel ? names.get(sel) : '';
+  S.custShown = name;   // the name on the page: what the contact book saves with
   const items = list.map(([k, n]) => { const b = { people: S.book.people.filter(p => p.key === k).length, sites: S.book.sites.filter(x => x.key === k).length };
     return `<button type="button" class="citem ${k === sel ? 'on' : ''}" data-cust="${esc(k)}"><b>${esc(n)}</b><span>${b.people ? `${b.people} contact${b.people === 1 ? '' : 's'}` : 'no contacts yet'}${b.sites ? ` · ${b.sites} address${b.sites === 1 ? '' : 'es'}` : ''}</span></button>`; }).join('');
   let main = '<div class="empty">Pick a customer on the left, or add one.</div>';
@@ -717,7 +718,8 @@ function renderCustomers() {
   ensureHistory(); ensureQuotes();
 }
 async function saveBookForm(kind) {
-  const v = id => $(id)?.value ?? '', name = S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer || '';
+  const v = id => $(id)?.value ?? '', name = S.custShown || S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust && x.customer)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer || '';
+  if (!S.cust || !name) return toast('Pick the customer on the left first.', null, true);
   const base = { id: S.bookEdit?.id, key: S.cust, customer: name, main: $('bk-main')?.checked };
   const rec = kind === 'person' ? { ...base, role: v('bk-role'), name: v('bk-name').trim(), email: v('bk-email').trim(), phone: v('bk-phone').trim(), notes: v('bk-notes').trim() }
     : { ...base, label: v('bk-label').trim(), address: v('bk-address').trim(), contact: v('bk-contact').trim(), phone: v('bk-phone').trim() };
@@ -727,7 +729,7 @@ async function saveBookForm(kind) {
   catch (e) { toast(e.message, null, true); }
 }
 async function copyXeroToBook() {
-  const name = S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer;
+  const name = S.custShown || S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust && x.customer)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer;
   const xc = contactFor(name); if (!xc) return;
   try { const d = await data.xero('contact', { id: xc.id });
     S.bookEdit = { kind: 'person', role: 'accounts', name: d.person || '', email: d.email || '', main: !bookFor(name).people.some(p => p.role === 'accounts') };
