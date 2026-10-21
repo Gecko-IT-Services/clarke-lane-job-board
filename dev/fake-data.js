@@ -5,7 +5,7 @@ let jobs = [
     ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO14 3TJ', status: 'open',
     lines: [{ id: 11, lineNo: 1, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16' },
             { id: 12, lineNo: 2, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23' },
-            { id: 13, lineNo: 3, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-30' }],
+            { id: 13, lineNo: 3, part: 'Bracket BRK-1001 — 3mm S275, 304 stainless cover', qty: 10, price: 13.1, due: '2026-10-30' }],
     procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T09:00:00Z' }, 'Fold': { done: false } },
     despatches: [{ id: 1, dn: 'DN-0001', date: '2026-10-14', lines: { 11: 10 }, xero: null, deliveredOn: '2026-10-14' },
       { id: 5, dn: 'DN-0005', date: '2026-10-15', lines: { 12: 10 }, xero: null, emailedAt: '2026-10-15T09:30:00Z' }] },
@@ -21,7 +21,7 @@ const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings:
 export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
 export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
   blobs.set(f.itemId, file); files.set(job.id, [...(files.get(job.id) || []), f]); onProgress(1); return f; };
-export const drawingBlob = async f => blobs.get(f.itemId);
+export const drawingBlob = async f => blobs.get(f.itemId) || (f.itemId.startsWith('sp') ? (await fetch('/dev/example-drawing.pdf')).blob() : undefined);
 // Parts library, in this page only (made-up).
 const parts = []; let partNo = 1;
 export const loadParts = async () => structuredClone(parts);
@@ -286,3 +286,25 @@ export const searchMail = async (boxes, terms) => ({ consent: false, noAccess: [
   { id: 'e1', mailbox: 'me', subject: 'Next batch of brackets', from: 'buyer@example.com', fromName: 'Sam Buyer', to: ['levi@clarke-lane.example'], at: new Date(Date.now() - 3 * 864e5).toISOString(), preview: 'Hi Levi, we will need another 100 next month, can you hold the price?', webLink: '', internetMessageId: '<e1>' },
   { id: 'e2', mailbox: 'info@example.com', subject: 'Re: Quote Q-0320', from: 'levi@clarke-lane.example', fromName: 'Levi', to: ['buyer@example.com'], at: new Date(Date.now() - 6 * 864e5).toISOString(), preview: 'Hi Sam, please find our quote attached.', webLink: '', internetMessageId: '<e2>' }] });
 export const loadActions = async () => structuredClone(salesActs);
+
+// SharePoint Company Data (read only in the real board): made-up folders and files.
+const spf = (id, name, path = '', at = '2024-01-01T00:00:00Z', size = 120000) => ({ id, itemId: id, driveId: 'd', name, path, url: '#', size, at, mime: '', folder: false });
+const spFolderLists = {
+  clients: ['Example Customer', 'Second Example', 'Sample Works', 'Fourth Example Engineering', 'MISCELLANEOUS'].map((n, i) => ({ ...spf('spc' + i, n, 'Company Data/01 Client Folder'), folder: true })),
+  laser: ['Example Customer Ltd', 'Sample Works'].map((n, i) => ({ ...spf('spl' + i, n, 'Bystronic Drawings/Customers'), folder: true })),
+  certs: ['304', 'S355', '316', '6082 T6', '1050', '6063 T6'].map((n, i) => ({ ...spf('spm' + i, n, 'Company Data/Mat Certs'), folder: true })) };
+const spFiles = {
+  spc0: [spf('sp1', 'QCLE01204 Brackets.xlsx', '', '2016-03-04T00:00:00Z'), spf('sp2', 'QCLE04410.pdf', 'Quotes', '2021-06-01T00:00:00Z'), spf('sp3', 'QCLE06120 Bracket repeat.xlsx', 'Quotes', '2025-09-12T00:00:00Z'),
+    spf('sp4', 'BRK-1001 Issue 01.pdf', '01-PDF Files', '2019-02-01T00:00:00Z'), spf('sp5', 'BRK-1001 Issue 02.pdf', '01-PDF Files', '2024-05-20T00:00:00Z'), spf('sp6', 'BRK-1001 Issue 02.dxf', '04-DFX Files', '2024-05-20T00:00:00Z'),
+    spf('sp7', 'Delivery Note 3310.pdf', '', '2025-10-01T00:00:00Z'), spf('sp8', 'Declaration of Conformity.pdf', '', '2025-10-02T00:00:00Z'), spf('sp9', 'Pro Forma 118.pdf', '', '2025-08-01T00:00:00Z')],
+  spl0: [spf('sp20', '03-1111-0000 Issue 03.pdf', '', '2023-11-11T00:00:00Z'), spf('sp21', '03-1111-0000 Issue 04.pdf', '', '2025-01-15T00:00:00Z')],
+  spc4: [spf('sp30', 'QCLE00950 - Second Example Ltd.xlsx', '', '2013-05-05T00:00:00Z'), spf('sp31', 'QCLE03000 - Someone Else.xlsx', '', '2019-05-05T00:00:00Z')],
+  spc2: [spf('sp40', 'Control box Rev B.pdf', '', '2024-02-02T00:00:00Z')] };
+let custFolders = [];
+export const companyFolders = async which => structuredClone(spFolderLists[which]);
+export const filesIn = async folder => { await new Promise(r => setTimeout(r, 300)); return structuredClone(spFiles[folder.itemId] || []); };
+export const loadCustomerFolders = async () => structuredClone(custFolders);
+export const setCustomerFolder = async (key, customer, kind, folder) => { custFolders = custFolders.filter(x => !(x.key === key && x.kind === kind));
+  custFolders.push({ key, kind, customer, name: folder?.name || '', driveId: folder?.driveId || null, itemId: folder?.itemId || null, url: folder?.url || '' }); };
+export const clearCustomerFolder = async (key, kind) => { custFolders = custFolders.filter(x => !(x.key === key && x.kind === kind)); };
+export const linkSpFile = async (jobId, f) => { files.set(jobId, [...(files.get(jobId) || []), { id: fileNo++, name: f.name, driveId: f.driveId, itemId: f.itemId, url: '#', size: f.size, mime: f.mime, by: 'mandy@example.com', at: new Date().toISOString() }]); };

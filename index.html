@@ -264,7 +264,11 @@ ul.tasks li.late{border-color:var(--bad)} ul.tasks label{display:inline-flex;gap
 /* Customer pages and enquiries */
 #v-customers .ctabs{margin:6px 0 14px;flex-wrap:wrap}
 #v-customers .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px} #v-customers .cwide{grid-column:1/-1}
-#v-customers .cfacts{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px} #v-customers .ctl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+#v-customers .cfacts{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#v-customers .spfolders{list-style:none;padding:0;gap:8px} #v-customers .spfolders .k{display:inline-block;min-width:190px;color:var(--muted);font-size:13px}
+#v-customers .sppick{margin-top:8px} #v-customers ul.spfiles{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+#v-customers ul.spfiles a{display:inline-flex;align-items:center;gap:6px;word-break:break-word} #v-customers ul.spfiles svg{width:16px;height:16px;flex:none}
+.spfound{margin:8px 0;padding:8px 10px;border:1px dashed var(--line);border-radius:8px} .spfound ul.files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px} .spsugg{margin-top:6px} #v-customers .ctl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
 #v-customers .cnote{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px} #v-customers .cnote input{flex:1;min-width:200px}
 #v-customers .cmail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px} #v-customers .cmail li{border-bottom:1px solid var(--line);padding-bottom:8px} #v-customers .cmail p{margin:4px 0}
 .enquiries{margin-bottom:16px} .enquiries h3 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
@@ -853,7 +857,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

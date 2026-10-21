@@ -6,6 +6,12 @@ export const CONFIG = {
   SUPABASE_KEY: 'sb_publishable_3EuZ_lKqgulfFMIPbiaskA_lmsi6LYO',
   GRAPH: 'https://graph.microsoft.com/v1.0',
   SP_SITE: 'clarkelane.sharepoint.com:/sites/FactoryJobs',   // Levi's quote calculator lists
+  // Company Data: customers' old files, laser drawings and material certificates. Read only, never written.
+  SP_DATA_SITE: 'clarkelane.sharepoint.com:/sites/CompanyData',
+  SP_CLIENTS: 'Company Data/01 Client Folder',
+  SP_LASER: 'Bystronic Drawings/Customers',
+  SP_CERTS: 'Company Data/Mat Certs',
+  SP_MISC: 'MISCELLANEOUS',   // the client folder for one-off customers (quotes named after the customer)
   // Delegated, admin-consented on the Entra app. Do not add scopes here without consent:
   // an unconsented scope stops everyone signing in.
   GRAPH_SCOPES: ['User.Read', 'Sites.ReadWrite.All'],

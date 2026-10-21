@@ -15,6 +15,9 @@ assert.deepEqual(f.customers[0].neverHadFromUs, ['welding']);
 assert.equal(f.quotes.winRate, '31%');
 assert.ok(!JSON.stringify(f).includes('9000') && !JSON.stringify(f).includes('5000'), 'no money is sent');
 assert.deepEqual(f.customerResearch[0].news, ['New site']);
+assert.equal(f.customers[0].quotesSentOverTheYears, undefined, 'no old quotes read: nothing said');
+const g = ideasFacts({ base, oldQuotes: new Map([['a', { count: 37, first: '2014', last: '2025' }]]) });
+assert.deepEqual(g.customers[0].quotesSentOverTheYears, { count: 37, firstYear: '2014', lastYear: '2025' }, 'from their SharePoint folder');
 
 assert.equal(websiteGuess(['sam@acme.co.uk', 'jo@gmail.com', 'kim@acme.co.uk; lee@other.com', 'me@clarke-lane.co.uk'], 'clarke-lane.co.uk'), 'acme.co.uk');
 assert.equal(websiteGuess(['jo@gmail.com']), '');

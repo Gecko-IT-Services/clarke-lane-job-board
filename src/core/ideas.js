@@ -15,14 +15,16 @@ export function trendOf(c) {
   return 'steady';
 }
 
-/** Facts for "Think of ideas". base: customerBase(); more: couldBuyMore(); reorders: reordersDue(); research: loadResearch(). */
-export function ideasFacts({ base = [], more = [], reorders = [], chase = 0, stats = null, funnel = null, research = [], company = 'Clarke Lane Engineering' }) {
+/** Facts for "Think of ideas". base: customerBase(); more: couldBuyMore(); reorders: reordersDue(); research: loadResearch();
+ *  oldQuotes: Map key → quoteHistory() from their SharePoint folders. */
+export function ideasFacts({ base = [], more = [], reorders = [], chase = 0, stats = null, funnel = null, research = [], oldQuotes = new Map(), company = 'Clarke Lane Engineering' }) {
   const also = new Map(more.map(x => [x.key, x.missing]));
   return {
     customer: '(all customers)', company,
     whatWeDo: 'Laser cutting, folding, cutting and drilling, tapping and countersinking, inserts, welding, powder coating and painting, plating and anodising (through partners), and rolling, for sheet metal parts and fabrications.',
     customers: base.filter(c => c.orders > 0).slice(0, 30).map(c => ({ customer: c.customer, ordersOnRecord: c.orders, lastOrdered: c.last, quietForDays: c.since,
-      usualDaysBetweenOrders: c.usual, trend: trendOf(c), theyBuy: (c.items || []).slice(0, 4).map(i => i.item), neverHadFromUs: also.get(c.key) || [] })),
+      usualDaysBetweenOrders: c.usual, trend: trendOf(c), theyBuy: (c.items || []).slice(0, 4).map(i => i.item), neverHadFromUs: also.get(c.key) || [],
+      ...(oldQuotes.get(c.key) ? { quotesSentOverTheYears: { count: oldQuotes.get(c.key).count, firstYear: oldQuotes.get(c.key).first, lastYear: oldQuotes.get(c.key).last } } : {}) })),
     repeatItemsDue: reorders.slice(0, 10).map(r => ({ customer: r.customer, item: r.item, usuallyEveryDays: r.every, daysSince: r.since })),
     quotes: { toChaseNow: chase, winRate: stats?.rate == null ? null : Math.round(stats.rate * 100) + '%' },
     websiteEnquiriesLast90Days: funnel,
