@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 // — No public function answers to the publishable key alone. The site and its key are public, so
 //   every RPC the board has must say "permission denied" (42501) to a caller who has not signed in. —
 // Live check against the real project. Skipped when there is no network; fails until the
-// 20261021160000_anon_rpc migration has been applied there (merge to main).
+// 20261022170000_anon_rpc migration has been applied there (merge to main).
 const { CONFIG } = await import('../src/config.js');
 const dir = new URL('../supabase/migrations/', import.meta.url);
 const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(new URL(f, dir), 'utf8')).join('\n');
