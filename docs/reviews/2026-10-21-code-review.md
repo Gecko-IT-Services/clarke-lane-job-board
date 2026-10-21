@@ -87,7 +87,7 @@ anyone ticks anything. Date pickers on the Jobs board are destroyed mid-pick the
 
 M1, M2, M3, M7 and the pro forma half of M10 fixed in PR 99 (branch fix/review-medium).
 M4, M5, M6, the rest of M10, M11, M12, M13, M14, M17, M18, M19 and M21 fixed in PR 100 (branch fix/review-medium-2).
-M8 and M9 fixed in PR 101 (branch fix/review-schema: a job with any paperwork cannot be deleted; column privileges on the
+M8 and M9 fixed in PR 102 (branch fix/review-schema: a job with any paperwork cannot be deleted; column privileges on the
 four tables the browser updates directly; a trigger keeps cancelled or undelivered notes from being invoiced).
 Left open on purpose: M15 wants the amend made one RPC, M16 and M20 and M22 are product decisions (count cancelled orders' shipped goods;
 who may connect Xero and read history; whether floor ticks ask for a name).
