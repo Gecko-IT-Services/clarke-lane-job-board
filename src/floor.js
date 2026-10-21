@@ -1,12 +1,13 @@
 /**
- * Shop floor: the shared walk-up touchscreen. Station tiles first; a station (or All jobs) shows one
- * card per job with its whole route of processes as big steps to tap. What waits where comes from
+ * Shop floor: the shared walk-up touchscreen. Station tiles first; All jobs shows one card per job with its
+ * whole route of processes as big steps to tap. A station's tablet (Levi, 22 Oct) shows only its own step and
+ * the parts that need it, with where they go next in plain words. What waits where comes from
  * floorQueue() / floorStations() in core/jobs.js (tested); this file only draws it.
  * h: the formatting helpers from app.js. Never shows prices.
  */
 import { jobMood } from './core/mood.js';
 import { moodIcon } from './mood.js';
-import { floorQueue, floorStations, nextStep, partsLeft, lineHtml, dayNo, needed, allDone, nextDue, deliveryLabel, SHORT } from './core/jobs.js';
+import { floorQueue, floorStations, nextStep, partsLeft, lineHtml, dayNo, needed, allDone, nextDue, deliveryLabel, SHORT, linesFor, lineProcs } from './core/jobs.js';
 import { OUT_PROCESSES, outBoard, outNow, suppliersUsed } from './core/outwork.js';
 import { noteSummary, newNotes } from './core/notes.js';
 import { floorNoteStrip } from './notes.js';
@@ -40,7 +41,8 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
   }
 
   const isAll = station === 'all', list = floorQueue(jobs, station), open = isAll ? list : floorQueue(jobs, 'all');
-  const parts = j => partsLeft(j).map(r =>
+  // A station sees only the parts that need it; All jobs sees every part.
+  const parts = j => partsLeft(j, isAll ? undefined : station).map(r =>
     `<span><b>${r.left}</b> × ${lineHtml({ partNo: r.partNo, part: r.desc }, esc)}${r.next && r.next !== r.left ? ` (${r.next} for the next delivery)` : ''}</span>`).join('');
   // Station order (Levi and Mandy only, 20 Oct): move a job up or down at this station alone.
   const moving = canMove && !isAll, placed = moving && list.some(j => j.procs[station].place != null);
@@ -56,11 +58,22 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
       || (!isAll && j.procs[station].place != null && list.slice(i + 1).some(o => nextDue(o) < due));
     const chips = [`<span class="fmood">${moodIcon(jobMood({ held, ready, late, soon }))}</span>`, late ? `<span class="tag late">${count(days, 'day')} late</span>` : due ? `<span class="tag${soon ? ' soon' : ''}">Due ${fmt(due)}</span>` : '',
       deliveryLabel(j) ? `<span class="tag">${deliveryLabel(j)}</span>` : '', ahead ? '<span class="tag late">Brought forward</span>' : ''].join('');
-    const steps = needed(j).map(p => {
+    const step = p => {
       const s = j.procs[p], label = s.done ? `${p} done ${fmtTime(s.at)}. Tap to undo.` : `Tap when ${p} is done`;
       return `<button type="button" class="step${s.done ? ' done' : ''}${p === station ? ' here' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}" aria-label="${esc(label)} on ${esc(j.so)}"${held ? ' disabled' : ''}>
         <span class="bx">${s.done ? TICK : ''}</span><span><b>${esc(SHORT[p])}</b><small>${s.done ? `Done ${esc(fmtTime(s.at))}` : p === station ? 'Tap when done' : 'To do'}</small></span></button>`;
-    }).join('<span class="arrow" aria-hidden="true">→</span>');
+    };
+    // A station: its own step only, then where these parts go next in plain words (not buttons). The steps before
+    // and after are those the parts at this station need, so a part that is never welded is not sent to Weld.
+    const route = () => {
+      const n = needed(j), at = n.indexOf(station), mine = new Set(linesFor(j, station).flatMap(l => lineProcs(j, l)));
+      const todo = (from, to) => n.slice(from, to).filter(p => mine.has(p) && !j.procs[p].done);
+      const before = todo(0, at), after = todo(at + 1);
+      return `${before.length ? `<p class="fearly">Before this: ${esc(before.map(p => SHORT[p]).join(', '))} still to do</p>` : ''}
+        <div class="route">${step(station)}</div>
+        <p class="fthen">${after.length ? `Then: ${esc(after.map(p => SHORT[p]).join(' → '))}` : 'Last step: back to the office'}</p>`;
+    };
+    const steps = isAll ? `<div class="route">${needed(j).map(step).join('<span class="arrow" aria-hidden="true">→</span>')}</div>` : route();
     // Powder coat and plating go to another company: send it, or show where it is and take it back in.
     const outs = OUT_PROCESSES.filter(p => j.procs[p] && !j.procs[p].done).map(p => {
       const o = outNow(outwork, j.id, p);
@@ -77,7 +90,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
     return `<article class="fcard${late ? ' late' : ''}${held ? ' held' : ''}${ready ? ' ready' : ''}">
       <div class="ftop">${move(j, i)}<div><div class="cu">${esc(j.customer)}<span class="so">${esc(j.so)}</span></div><div class="parts">${parts(j)}</div></div>
         <div class="side">${chips}${j.files?.length ? `<button type="button" class="btn" data-drawing="${j.files[0].id}" data-job="${j.id}">${j.files.length > 1 ? `Drawings (${j.files.length})` : 'Drawing'}</button>` : ''}<button type="button" class="btn" data-open="${j.id}">Job details</button></div></div>
-      <div class="route">${steps}</div>${outs}${floorNoteStrip(noteSummary(notes, j.id, office), j.id, h)}<p class="fstat">${status}</p></article>`;
+      ${steps}${outs}${floorNoteStrip(noteSummary(notes, j.id, office), j.id, h)}<p class="fstat">${status}</p></article>`;
   };
   const sub = isAll ? 'Tap any step when it is finished · tap a green step to undo it' : `${count(list.length, 'job')} waiting for ${esc(station)} · do them in this order`;
   const empty = isAll ? 'No open jobs.' : `Nothing waiting for ${esc(station)}.`;

@@ -4,16 +4,20 @@ let jobs = [
   { id: 1, so: 'SO-9781', quote: 'Q-0301', spQuoteId: 301, customer: 'Example Customer Ltd', contactName: 'A Buyer', contactEmail: '', po: 'PO-1',
     ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO14 3TJ', status: 'open',
     // Lines 1–2 use the Part no. box (22 Oct); line 3 is an older line with the number in its text: both looks show.
-    lines: [{ id: 11, lineNo: 1, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16' },
-            { id: 12, lineNo: 2, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23' },
-            { id: 13, lineNo: 3, part: 'Bracket BRK-1001 — 3mm S275, 304 stainless cover', qty: 10, price: 13.1, due: '2026-10-30' }],
+    // Lines 1–2 have their own processes (22 Oct); line 3 is from before, procs [] = every process on the order.
+    lines: [{ id: 11, lineNo: 1, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16', procs: ['Laser', 'Fold'] },
+            { id: 12, lineNo: 2, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23', procs: ['Laser', 'Fold'] },
+            { id: 13, lineNo: 3, part: 'Bracket BRK-1001 — 3mm S275, 304 stainless cover', qty: 10, price: 13.1, due: '2026-10-30', procs: [] }],
     procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T09:00:00Z' }, 'Fold': { done: false } },
     despatches: [{ id: 1, dn: 'DN-0001', date: '2026-10-14', lines: { 11: 10 }, xero: null, deliveredOn: '2026-10-14' },
       { id: 5, dn: 'DN-0005', date: '2026-10-15', lines: { 12: 10 }, xero: null, emailedAt: '2026-10-15T09:30:00Z' }] },
   { id: 2, so: 'SO-9782', quote: '', spQuoteId: null, customer: 'Second Example Ltd', contactName: '', contactEmail: '', po: '',
-    ordered: '2026-10-14', due: '2026-11-04', notes: 'Rush', address: '', status: 'open',
-    lines: [{ id: 21, lineNo: 1, partNo: 'CAB-2040', part: 'Cabinet', qty: 5, price: 310, due: '2026-11-04' }, { id: 22, lineNo: 2, part: 'Carriage', qty: 1, price: 25, due: '2026-11-04' }],
-    procs: { 'Laser': { done: false }, 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [] },
+    ordered: '2026-10-14', due: '2026-11-04', notes: 'Rush', address: 'Unit 9, Sample Trading Estate\nExampletown EX1 2AB', status: 'open',
+    // Each part its own route (Levi, 22 Oct): the cabinet is welded, its door and shelf are not.
+    lines: [{ id: 21, lineNo: 1, partNo: 'CAB-2040', part: 'Cabinet', qty: 5, price: 310, due: '2026-11-04', procs: ['Laser', 'Fold', 'Weld', 'P/Coat Paint'] },
+            { id: 22, lineNo: 2, partNo: 'CAB-2041', part: 'Cabinet door', qty: 5, price: 25, due: '2026-11-04', procs: ['Laser', 'Fold', 'P/Coat Paint'] },
+            { id: 23, lineNo: 3, partNo: 'CAB-2042', part: 'Shelf', qty: 10, price: 12, due: '2026-11-04', procs: ['Laser', 'Fold'] }],
+    procs: { 'Laser': { done: false }, 'Fold': { done: false }, 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [] },
 ];
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
@@ -46,15 +50,19 @@ export const createJob = async p => {
   const id = jobs.length + 1, so = p.so_number || 'SO-97' + (82 + id);
   jobs.push({ id, so, quote: p.quote_no, spQuoteId: p.sp_quote_id, xeroQuoteId: p.xero_quote_id, customer: p.customer, contactName: p.contact_name, contactEmail: p.contact_email || '',
     po: p.customer_po, ordered: '2026-10-15', due: p.due_date, notes: p.notes, address: p.delivery_address, status: 'open',
-    lines: p.lines.map((l, i) => ({ id: nextLine++, lineNo: i + 1, partNo: (l.part_no || '').trim(), part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' })),
-    procs: Object.fromEntries(p.processes.map(x => [x, { done: false }])), despatches: [] });
+    lines: p.lines.map((l, i) => ({ id: nextLine++, lineNo: i + 1, partNo: (l.part_no || '').trim(), part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '', procs: l.processes || [] })),
+    // As create_job: the order's processes are those sent plus every process a line needs.
+    procs: Object.fromEntries([...new Set([...p.processes, ...p.lines.flatMap(l => l.processes || [])])].map(x => [x, { done: false }])), despatches: [] });
   return { id, so_number: so };
 };
 export const amendJob = async (id, p) => {
   const j = find(id);
   Object.assign(j, { po: p.customer_po, contactName: p.contact_name, address: p.delivery_address, notes: p.notes });
-  // As amend_job: a line sent without part_no keeps the one it had.
-  j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, partNo: l.part_no != null ? String(l.part_no).trim() : (j.lines.find(x => x.id === l.id)?.partNo || ''), part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' }));
+  // As amend_job: a line sent without part_no or processes keeps the one it had; a process a line now needs is added.
+  const was = id => j.lines.find(x => x.id === id);
+  j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, partNo: l.part_no != null ? String(l.part_no).trim() : (was(l.id)?.partNo || ''), part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '',
+    procs: Array.isArray(l.processes) ? l.processes : (was(l.id)?.procs || []) }));
+  for (const x of j.lines.flatMap(l => l.procs)) j.procs[x] ??= { done: false };
 };
 export const setJobStatus = async (id, status) => { find(id).status = status; };
 let dn = 6;

@@ -40,7 +40,8 @@ export async function loadJobs({ office }) {
     lines: [], procs: {}, despatches: [], cancelledDespatches: [], files: [],
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
-    { id: l.id, lineNo: l.line_no, partNo: l.part_no || '', part: l.part, qty: l.qty, due: l.due_date, po: l.customer_po || '', price: office ? (price.get(l.id) ?? null) : null });
+    { id: l.id, lineNo: l.line_no, partNo: l.part_no || '', part: l.part, qty: l.qty, due: l.due_date, po: l.customer_po || '', price: office ? (price.get(l.id) ?? null) : null,
+      procs: l.processes || [] });   // [] before 22 Oct (or before the migration): every process on the order, read with lineProcs
   for (const p of procs.data) { const j = byJob.get(p.job_id); if (j) j.procs[p.process] = { done: !!p.done_at, by: p.done_by, at: p.done_at, place: p.place ?? null }; }
   const dById = new Map();
   for (const d of desps.data) {
@@ -72,7 +73,8 @@ export async function setProcess(jobId, process, done, by) {
 
 export async function setJobProcesses(jobId, add, remove) {
   const sb = await getSupabase();
-  if (add.length) { const { error } = await sb.from('job_processes').insert(add.map(process => ({ job_id: jobId, process }))); if (error) fail('Processes not saved', error); }
+  // Ignoring ones already there: amend_job adds a process a line needs itself (22 Oct), and this runs after it.
+  if (add.length) { const { error } = await sb.from('job_processes').upsert(add.map(process => ({ job_id: jobId, process })), { onConflict: 'job_id,process', ignoreDuplicates: true }); if (error) fail('Processes not saved', error); }
   if (remove.length) { const { error } = await sb.from('job_processes').delete().eq('job_id', jobId).in('process', remove); if (error) fail('Processes not saved', error); }
 }
 

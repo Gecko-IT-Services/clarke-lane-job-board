@@ -40,4 +40,8 @@ const jobs = [
 assert.deepEqual(processesFromHistory(jobs, 'EX-PR-00001 shim, rev 02'), { so: 'SO-1', processes: ['Laser', 'Fold'] }, 'by part number');
 assert.deepEqual(processesFromHistory(jobs, 'cover  plate')?.processes, ['Laser', 'P/Coat Paint'], 'by name');
 assert.equal(processesFromHistory(jobs, 'Bracket'), null);
+// Lines with their own processes (22 Oct): only the matching line's.
+const perLine = [{ id: 3, so: 'SO-3', status: 'open', createdAt: '2026-10-22', procs: { Laser: {}, Fold: {}, Weld: {} },
+  lines: [{ part: 'Frame tube', procs: ['Weld'] }, { part: 'Side panel', procs: ['Laser', 'Fold'] }] }];
+assert.deepEqual(processesFromHistory(perLine, 'Side panel')?.processes, ['Laser', 'Fold']);
 console.log('drawing: ok');
