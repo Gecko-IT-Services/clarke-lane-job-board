@@ -32,3 +32,10 @@ const p = tvPage([1, 2, 3, 4, 5], 2, 4);   // wraps: page 4 of 3 is the second p
 assert.deepEqual([p.rows, p.page, p.pages], [[3, 4], 1, 3]);
 assert.equal(tvPage([], 10, 0).pages, 1);
 console.log('tv: ok');
+{
+  const notes = [{ id: 1, jobId: 1, body: 'Boxes of 10', byName: 'Mandy', fromFloor: false, seenBy: null, at: '2026-10-21T09:00:00Z' }];
+  const r1 = tvRows(jobs, out, '2026-10-20', notes).find(x => x.id === 1);
+  assert.deepEqual(r1.jobNote, { body: 'Boxes of 10', by: 'Mandy', fresh: true });
+  assert.equal(tvRows(jobs, out, '2026-10-20').find(x => x.id === 1).jobNote, null);
+  console.log('tv notes: ok');
+}

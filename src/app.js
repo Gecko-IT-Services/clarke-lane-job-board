@@ -18,8 +18,12 @@ import { startWave, endWave } from './wave.js';
 import { renderBoard } from './board.js';
 import { renderShopFloor, clockHtml } from './floor.js';
 import { renderTv } from './tv.js';
+import { notesPanel, floorNotesBox } from './notes.js';
+import { newNotes } from './core/notes.js';
 import { renderMetal } from './metal.js';
 import { renderSales } from './sales.js';
+import { renderIdeas } from './ideas.js';
+import { ideasFacts, websiteGuess, ideaBoard } from './core/ideas.js';
 import { renderToday, taskForm, renderEnquiries, renderCustomerPage } from './customer.js';
 import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
@@ -137,6 +141,8 @@ async function reload() {
       office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
     // Work sent out (powder coat, plating): everyone, the shop floor included. A missing table just means none yet.
     S.outwork = await data.loadOutwork().then(r => { S.outErr = null; return r; }).catch(e => { S.outErr = e.message; return S.outwork || []; });
+    // Notes on jobs: everyone, the shop floor included.
+    S.notes = await data.loadNotes().catch(() => S.notes || []);
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
       data.loadPurchaseOrders().catch(() => S.pos || [])]);
@@ -383,7 +389,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'Sales'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // Sales last (Levi, 20 Oct)   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'CRM'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // CRM (was Sales) last (Levi, 21 Oct)   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
@@ -1009,6 +1015,33 @@ function procButtons(j, focus) {
   return needed(j).map(p => { const s = j.procs[p];
     return `<button type="button" class="pbtn ${s.done ? 'done' : ''} ${focus === p ? 'focus' : ''}" data-proc="${esc(p)}" data-job="${j.id}" aria-pressed="${s.done}"${j.status === 'held' && !office() ? ' disabled' : ''}><b>${s.done ? '✓ ' : ''}${esc(p)}</b><span>${s.done ? `${esc(s.by)} · ${fmtTime(s.at)}` : 'Tap when done'}</span></button>`; }).join('');
 }
+/* ---------- notes on a job: the office and the shop floor (one shared login, so a typed name, kept on the tablet) ---------- */
+function noteName() {
+  if (office()) return S.me.name.split(' ')[0];
+  try { return localStorage.getItem('clj.notename') || ''; } catch { return ''; }
+}
+async function postNote(f) {
+  const jobId = +f.dataset.job, body = $('note-body').value.trim(), by = office() ? noteName() : ($('note-by')?.value || '').trim();
+  if (!body) return;
+  if (!by) return toast('Type your name first.', null, true);
+  if (!office()) { try { localStorage.setItem('clj.notename', by); } catch { /* this visit only */ } }
+  const btn = f.querySelector('[type=submit]'); btn.disabled = true;
+  try {
+    await data.addNote({ jobId, body, by, fromFloor: !office() });
+    // the other side's notes on this job are answered by replying
+    await Promise.all((S.notes || []).filter(n => n.jobId === jobId && !n.seenBy && n.fromFloor === office()).map(n => data.seenNote(n.id, by).catch(() => {})));
+    S.notes = await data.loadNotes(); $('note-body').value = ''; keepInputs = false; render();
+    toast(office() ? 'Note posted. It shows on the shop floor and the TV.' : 'Note posted for the office.');
+  } catch (e) { btn.disabled = false; toast(e.message, null, true); }
+}
+async function seenNote(id) {
+  const by = noteName() || (office() ? S.me.name : 'Shop floor');
+  try { await data.seenNote(id, by); S.notes = await data.loadNotes(); render(); } catch (e) { toast(e.message, null, true); }
+}
+async function removeNote(id) {
+  if (!confirm('Remove this note? Everyone stops seeing it.')) return;
+  try { await data.deleteNote(id); S.notes = await data.loadNotes(); render(); } catch (e) { toast(e.message, null, true); }
+}
 /** On the job's details: its sends to other companies, and Send out when one is due. */
 function outPanel(j) {
   const rows = (S.outwork || []).filter(r => r.jobId === j.id).sort((a, b) => b.sentOn.localeCompare(a.sentOn) || b.id - a.id);
@@ -1175,6 +1208,8 @@ function openTaskForm(src) {
   const today = todayIso(), f = { dueOn: plusDays(today, 1), assignedTo: S.me.email, title: '', customer: '' };
   if (src === 'cust' && S.cust) Object.assign(f, { customer: S.custName || [...S.book.people].find(p => p.key === S.cust)?.customer || (S.hist?.invoices || []).find(x => normName(x.customer) === S.cust)?.customer || S.cust });
   if (src?.startsWith('enquiry:')) { const e = (S.enq || []).find(x => x.id === +src.slice(8)); if (e) Object.assign(f, { title: `Quote for ${e.company || e.fromName}: ${e.wants || e.subject}`.slice(0, 200), customer: e.company || '', source: 'enquiry', sourceRef: e.id, dueOn: today }); }
+  if (src?.startsWith('idea:')) { const i = (S.ideas || []).find(x => x.id === +src.slice(5)); if (i) Object.assign(f, { title: i.title.slice(0, 200), customer: i.customer || '', note: i.angle || '' }); }
+  if (src?.startsWith('rs:')) { const [, key, n] = src.split(':'), r = (S.research || []).find(x => x.key === key), o = r?.openings[+n]; if (o) Object.assign(f, { title: o.idea.slice(0, 200), customer: r.customer, note: o.angle || '' }); }
   if (src?.startsWith('email:')) { const m = Object.values(S.cmail || {}).flatMap(x => x.messages || []).find(x => x.id === src.slice(6)); if (m) Object.assign(f, { title: `Reply to: ${m.subject}`.slice(0, 200), customer: S.custName || '', source: 'email', sourceRef: m.internetMessageId }); }
   S.taskForm = f;
   const names = [...new Set([...S.book.people.map(p => p.customer), ...S.jobs.map(j => j.customer), ...(S.hist?.invoices || []).map(x => x.customer)])].filter(Boolean).sort();
@@ -1206,7 +1241,7 @@ function todayHtml() {
   let chase = [], reorders = [], quiet = [];
   if (md()) { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { const base = customerBase(S.hist.invoices, today); reorders = reordersDue(base, today); quiet = quietCustomers(base); } }
   const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };
-  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt });
+  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt }) + floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc });
 }
 
 /* ---------- sales (Levi only): quotes to chase, the month against his target, customers gone quiet ---------- */
@@ -1230,12 +1265,64 @@ function salesModel() {
   return { today, quotes, stats, open, chase: chaseList(open), actions: F.actions, base, quiet: base ? quietCustomers(base) : [],
     month: monthGap({ target: Number(S.settings?.monthly_target) || null, jobs: S.jobs, quotes, open, stats, today, jobValue: j => value(j) }) };
 }
+/* ---------- Ideas (CRM, Levi only): AI ideas from the board's facts, and customers' websites read by AI ---------- */
+function ensureIdeas() {
+  if (S.ideasLoaded) return; S.ideasLoaded = true;
+  Promise.all([data.loadIdeas(), data.loadResearch()]).then(([i, r]) => { S.ideas = i; S.research = r; S.ideasErr = null; })
+    .catch(e => { S.ideasErr = e.message; S.ideas = S.ideas || []; S.research = S.research || []; }).then(() => { if (S.tab === 'sales') render(); });
+}
+function ideaCustomers() {
+  const base = S.hist ? customerBase(S.hist.invoices, todayIso()) : [];
+  const seen = new Set(base.map(c => c.key)), out = base.map(c => ({ key: c.key, customer: c.customer }));
+  for (const name of [...S.jobs.map(j => j.customer), ...S.book.people.map(p => p.customer)]) { const k = normName(name); if (name && !seen.has(k)) { seen.add(k); out.push({ key: k, customer: name }); } }
+  return out;
+}
+const customerEmails = key => [...S.book.people.filter(p => p.key === key).map(p => p.email), ...S.jobs.filter(j => normName(j.customer) === key).map(j => j.contactEmail),
+  ...(S.enq || []).filter(e => e.customerKey === key || normName(e.company || '') === key).map(e => e.fromEmail)];
+function ideasHtml() {
+  ensureIdeas(); ensureHistory();
+  if (!S.ideas) return '<p class="note">Loading ideas…</p>';
+  return renderIdeas({ board: ideaBoard(S.ideas), research: S.research || [], customers: ideaCustomers(), busy: S.ideaBusy || {}, rs: S.rs || {}, err: S.ideasErr }, { esc, fmt });
+}
+async function thinkOfIdeas() {
+  if (!S.hist) return toast('The customer history from Xero is still loading. Try again in a moment.', null, true);
+  const today = todayIso(), base = customerBase(S.hist.invoices, today), m = S.salesQ && S.salesF ? salesModel() : null;
+  const facts = ideasFacts({ base, more: couldBuyMore(base, S.jobs), reorders: reordersDue(base, today), chase: m ? m.chase.length : 0, stats: m?.stats, funnel: enquiryFunnel(S.enq || [], today), research: S.research || [] });
+  S.ideaBusy = { ...(S.ideaBusy || {}), ideas: true }; render();
+  try {
+    const r = await data.salesAi(facts, 'ideas');
+    const keyOf = name => ideaCustomers().find(c => c.customer === name || c.key === normName(name))?.key || null;
+    await data.saveIdeas((r.ideas || []).map(i => ({ ...i, key: i.customer ? keyOf(i.customer) : null })));
+    S.ideas = await data.loadIdeas(); toast(`${(r.ideas || []).length} ideas.`);
+  } catch (e) { toast(e.message, null, true); }
+  S.ideaBusy = { ...S.ideaBusy, ideas: false }; render();
+}
+async function researchCustomer(name, website) {
+  name = String(name || '').trim(); if (!name) return;
+  const c = ideaCustomers().find(x => x.customer.toLowerCase() === name.toLowerCase()), key = c?.key || normName(name), customer = c?.customer || name;
+  const site = String(website || '').trim().replace(/^https?:\/\//, '').replace(/\/$/, '') || websiteGuess(customerEmails(key), ownDomain());
+  const b = S.hist ? customerBase(S.hist.invoices, todayIso()).find(x => x.key === key) : null;
+  S.ideaBusy = { ...(S.ideaBusy || {}), research: `Reading ${customer}'s website…` }; S.ideasErr = null; render();
+  try {
+    const r = await data.salesAi({ customer, website: site, theyBuy: (b?.items || []).slice(0, 6).map(i => i.item), ordersOnRecord: b?.orders || 0 }, 'research');
+    if (r.found === false) toast(`The AI could not be sure it found ${customer}. Add their website and try again.`, null, true);
+    await data.saveResearch(key, customer, site, r, r.model, r.costUsd);
+    S.research = await data.loadResearch(); S.rs = {};
+  } catch (e) { S.ideasErr = e.message; }
+  S.ideaBusy = { ...S.ideaBusy, research: null }; render();
+}
 function renderSalesView() {
   if (!S.salesQ && !S.salesErr && !S.salesLoading) loadSalesData();
+  if (S.crmView === 'ideas') { $('v-sales').innerHTML = crmHead() + ideasHtml(); return; }
   if (!S.salesQ) { $('v-sales').innerHTML = renderSales({ loading: !S.salesErr, err: S.salesErr }, { esc, fmt, gbp }); return; }
   const m = salesModel();
-  $('v-sales').innerHTML = renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai,
+  $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai,
     reorders: m.base ? reordersDue(m.base, m.today) : [], more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml() }, { esc, fmt, gbp });
+}
+function crmHead() {
+  const n = (S.ideas || []).filter(i => i.status === 'new').length;
+  return `<div class="crmswitch"><div class="seg"><button type="button" data-crmview="main" aria-pressed="${S.crmView !== 'ideas'}">Follow-ups</button>
+    <button type="button" data-crmview="ideas" aria-pressed="${S.crmView === 'ideas'}">${icon('spark')}Ideas${n ? ` <em>${n}</em>` : ''}</button></div></div>`;
 }
 const plusDays = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 const salesQuote = spId => salesModel().open.find(q => q.spId === spId) || (S.salesQ || []).find(q => q.spId === spId);
@@ -1274,7 +1361,7 @@ async function markQuoteLost(spId, reason) {
 }
 async function openAi(key, angle = '') {
   const c = (salesModel().base || []).find(x => x.key === key); if (!c) return toast('There are no Xero invoices for this customer yet, so there is nothing for the AI to go on.', null, true);
-  S.ai = { key, angle, to: '', person: '' }; S.tab = 'sales'; render(); $('saibox')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  S.ai = { key, angle, to: '', person: '' }; S.tab = 'sales'; S.crmView = 'main'; render(); $('saibox')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   if (c.contactId && /^[0-9a-f-]{36}$/i.test(c.contactId)) data.xero('contact', { id: c.contactId }).then(x => { if (S.ai?.key === key) { S.ai.to = x.email || ''; S.ai.person = x.person || ''; } }).catch(() => {});
 }
 async function writeAi(key) {
@@ -1407,7 +1494,7 @@ function orderFromQuote(qid) {
 
 /* ---------- the workshop TV: the whiteboard on a big screen, display only ---------- */
 function renderTvView() {
-  $('v-tv').innerHTML = renderTv({ jobs: S.jobs, outwork: S.outwork || [], today: todayIso(), now: new Date(), page: S.tvPage || 0 }, { esc, fmt });
+  $('v-tv').innerHTML = renderTv({ jobs: S.jobs, outwork: S.outwork || [], notes: S.notes || [], today: todayIso(), now: new Date(), page: S.tvPage || 0 }, { esc, fmt });
 }
 // Next page every 15 seconds when there are more jobs than fit, and the clock.
 setInterval(() => { if (S.tab !== 'tv' || !S.me) return; S.tvPage = (S.tvPage || 0) + 1; renderTvView(); }, 15000);
@@ -1421,7 +1508,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.tab === 'tv') location.hash = '#floor'; });
 function renderFloor() {
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
-    kiosk: !!S.kiosk, canMove: office(), outwork: S.outwork || [], outForm: S.outForm, canRemove: office() }, { esc, fmt, fmtTime, TICK });
+    kiosk: !!S.kiosk, canMove: office(), outwork: S.outwork || [], notes: S.notes || [], office: office(), outForm: S.outForm, canRemove: office() }, { esc, fmt, fmtTime, TICK });
 }
 
 /* ---------- work sent out: powder coat and plating at another company (the whiteboard) ---------- */
@@ -1653,7 +1740,8 @@ function renderDrawer() {
       <div class="fact"><div class="k">Contact</div><div class="v">${esc(j.contactName) || '—'}</div></div>
       ${j.address ? `<div class="fact" style="grid-column:1/-1"><div class="k">Deliver to</div><div class="v" style="white-space:pre-line;font-weight:500">${esc(j.address)}</div></div>` : ''}
     </div>
-    ${j.notes ? `<div class="panel"><div class="note">Notes</div>${esc(j.notes)}</div>` : ''}
+    ${j.notes ? `<div class="panel"><div class="note">Order notes</div>${esc(j.notes)}</div>` : ''}
+    ${notesPanel({ notes: S.notes || [], job: j, office: office(), name: noteName(), canRemove: office() }, { esc })}
     <div class="panel"><h3>Lines</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Desp.</th><th>Outst.</th>${money ? '<th>Unit</th><th>Net</th>' : ''}</tr></thead><tbody>
       ${j.lines.map(l => `<tr><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
@@ -2464,6 +2552,8 @@ function onClick(e) {
   if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
   if (d.outback) { e.stopPropagation(); return outBack(+d.outback); }
   if (d.outremove) return removeOut(+d.outremove);
+  if (d.noteseen) { e.stopPropagation(); return seenNote(+d.noteseen); }
+  if (d.notedel) return removeNote(+d.notedel);
   if ('salesreload' in d) { S.salesQ = null; S.hist = null; S.salesErr = null; return loadSalesData(true); }
   if (d.custpage) { const n = d.custname || (S.hist?.invoices || []).find(x => normName(x.customer) === d.custpage)?.customer || S.book.people.find(p => p.key === d.custpage)?.customer || d.custpage; return openCustomer(d.custpage, n); }
   if (d.ctab) { S.ctab = d.ctab; return render(); }
@@ -2487,6 +2577,14 @@ function onClick(e) {
   if ('gosmart' in d) { S.tab = 'sales'; render(); setTimeout(() => $('smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
   if ('newsgo' in d) return newsEmails();
   if (d.sview) { S.salesView = d.sview; return render(); }
+  if (d.crmview) { S.crmView = d.crmview; render(); window.scrollTo(0, 0); return; }
+  if ('ideasgo' in d) return thinkOfIdeas();
+  if (d.ideastatus) { const id = +d.id, st = d.ideastatus; data.setIdea(id, st).then(() => { S.ideas.find(x => x.id === id).status = st; render(); }).catch(err => toast(err.message, null, true)); return; }
+  if (d.ideaemail) { const i = (S.ideas || []).find(x => x.id === +d.ideaemail); if (i) { data.setIdea(i.id, 'doing').catch(() => {}); i.status = 'doing'; openAi(i.key, i.angle || i.title); } return; }
+  if (d.ideatask) return openTaskForm('idea:' + d.ideatask);
+  if (d.research) return researchCustomer(d.custname, d.site);
+  if (d.rsemail) { const r = (S.research || []).find(x => x.key === d.rsemail), o = r?.openings[+d.i]; if (o) openAi(r.key, `${o.angle} (From their website or public pages: ${o.why})`); return; }
+  if (d.rstask) return openTaskForm(`rs:${d.rstask}:${d.i}`);
   if (d.sopen) { S.salesOpen = S.salesOpen === +d.sopen ? null : +d.sopen; return render(); }
   if (d.qchase) return chaseQuote(+d.qchase);
   if (d.qcall) return logCall(+d.qcall, null);
@@ -2518,7 +2616,7 @@ function onClick(e) {
   if (d.kiosk) return setKiosk(d.kiosk === 'on');
   if (d.mapstop) return focusStop(d.mapstop);
   if ('mapfit' in d) return fitAll();
-  if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; return render(); }
+  if (d.open) { S.open = +d.open; S.ask = null; keepInputs = false; render(); if ('tonotes' in d) setTimeout(() => $('jnotes')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); return; }
   if ('neworder' in d) return openOrderForm();
   if (d.amend) return openAmend(+d.amend);
   if (d.repeat) return openRepeat(+d.repeat);
@@ -2702,6 +2800,7 @@ document.addEventListener('change', e => {
     }
   }
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }
+  if (e.target.id === 'rs-cust') { const c = ideaCustomers().find(x => x.customer === e.target.value.trim()); if (c && $('rs-site') && !$('rs-site').value) $('rs-site').value = websiteGuess(customerEmails(c.key), ownDomain()); }
   if (e.target.id === 'of-contact' && S.form) { const p = bookFor(S.form.customer).people.find(y => y.name === e.target.value.trim()); if (p?.email && $('of-email')) $('of-email').value = p.email; }
   if (e.target.dataset.suggattach) { const fl = e.target.files[0]; e.target.value = ''; if (fl) addSuggested(e.target.dataset.suggattach, fl); return; }
   if (e.target.dataset.partattach) { const fl = e.target.files[0]; e.target.value = ''; attachPartDrawing(+e.target.dataset.partattach, fl); return; }
@@ -2717,6 +2816,8 @@ document.addEventListener('submit', async e => {
   if (f.id === 'outf') return saveOut();
   if (f.id === 'rfqf') return saveRfq();
   if (f.id === 'taskf') return saveTask();
+  if (f.id === 'notef') return postNote(f);
+  if (f.id === 'rsf') return researchCustomer($('rs-cust').value, $('rs-site').value);
   if ('pfsettings' in f.dataset) return savePfSettings();
   if ('targetform' in f.dataset) {
     const num = id => { const v = $(id).value.trim(); return v === '' ? null : Math.round(Number(v)); };

@@ -327,6 +327,31 @@ export async function deleteOutwork(id) {
   if (!count) throw new Error('It was not removed. Only Levi and Mandy can remove a send.');
 }
 
+/* ---------- notes on a job: the office and the shop floor talk on the job itself ---------- */
+const noteRow = r => ({ id: r.id, jobId: r.job_id, body: r.body, byName: r.by_name, fromFloor: r.from_floor, seenBy: r.seen_by, seenAt: r.seen_at, at: r.created_at });
+export async function loadNotes() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('job_notes').select('*').order('created_at');
+  if (error) fail('Could not load the notes', error);
+  return data.map(noteRow);
+}
+export async function addNote({ jobId, body, by, fromFloor }) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('job_notes').insert({ job_id: jobId, body: body.trim(), by_name: by.trim(), from_floor: !!fromFloor });
+  if (error) fail('The note was not saved', error);
+}
+export async function seenNote(id, by) {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('job_note_seen', { note_id: id, who: by });
+  if (error) fail('Not marked as seen', error);
+}
+export async function deleteNote(id) {
+  const sb = await getSupabase();
+  const { error, count } = await sb.from('job_notes').delete({ count: 'exact' }).eq('id', id);
+  if (error) fail('The note was not removed', error);
+  if (!count) throw new Error('The note was not removed. Only Levi and Mandy can remove notes.');
+}
+
 /* ---------- sales (Levi only): follow-ups on quotes and customers, and the AI email writer ---------- */
 export async function allQuotes() {
   const s = await spLists();
@@ -442,6 +467,37 @@ export async function setEnquiry(id, p) {
   if ('status' in p) { row.handled_by = p.by || null; row.handled_at = p.status === 'new' ? null : new Date().toISOString(); }
   const { error } = await sb.from('enquiries').update(row).eq('id', id);
   if (error) fail('The enquiry was not updated', error);
+}
+/* ---------- ideas (Levi only): customers' websites read by AI, and ideas for winning more work ---------- */
+const researchRow = r => ({ key: r.customer_key, customer: r.customer, website: r.website, about: r.about, news: r.news || [], openings: r.openings || [], sources: r.sources || [], at: r.created_at });
+export async function loadResearch() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('customer_research').select('*').order('created_at', { ascending: false });
+  if (error) fail('Could not load the customer research', error);
+  return data.map(researchRow);
+}
+export async function saveResearch(key, customer, website, x, model, cost) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('customer_research').upsert({ customer_key: key, customer, website: website || '', about: x.about || '', news: x.news || [], openings: x.openings || [],
+    sources: x.sources || [], model: model || '', cost_usd: cost ?? null, created_at: new Date().toISOString() });
+  if (error) fail('The research was not saved', error);
+}
+const ideaRow = r => ({ id: r.id, title: r.title, why: r.why, action: r.action, angle: r.angle, key: r.customer_key, customer: r.customer, status: r.status, batchAt: r.batch_at });
+export async function loadIdeas() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('sales_ideas').select('*').order('batch_at', { ascending: false }).limit(200);
+  if (error) fail('Could not load the ideas', error);
+  return data.map(ideaRow);
+}
+export async function saveIdeas(list) {
+  const sb = await getSupabase(), at = new Date().toISOString();
+  const { error } = await sb.from('sales_ideas').insert(list.map(i => ({ title: i.title, why: i.why || '', action: i.action || 'other', angle: i.angle || '', customer_key: i.key || null, customer: i.customer || '', batch_at: at })));
+  if (error) fail('The ideas were not saved', error);
+}
+export async function setIdea(id, status) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('sales_ideas').update({ status }).eq('id', id);
+  if (error) fail('Not saved', error);
 }
 export async function loadInsight(key) {
   const sb = await getSupabase();
@@ -718,7 +774,7 @@ export async function deleteJob(jobId) {
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes', 'quote_follow', 'sales_actions', 'tasks', 'enquiries']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes', 'quote_follow', 'sales_actions', 'tasks', 'enquiries', 'job_notes']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

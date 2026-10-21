@@ -307,7 +307,7 @@ body.tv-mode{background:#fff;overflow:hidden} body.tv-mode #app{max-width:none;p
 .tvgrid{flex:1;width:100%;border-collapse:collapse;table-layout:fixed;border:.3vh solid #8E949C}
 .tvgrid th,.tvgrid td{border:1px solid var(--tv-line);padding:0 .6vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tvgrid thead th{font-size:1.5vh;font-weight:700;text-transform:uppercase;letter-spacing:0;text-overflow:clip;padding:0 .3vw;color:#3A4048;height:7vh;line-height:1.15;white-space:normal;background:#F4F5F7;border-bottom:.3vh solid #8E949C}
-.tvgrid th.cu,.tvgrid td.cu{width:22%;text-align:left} .tvgrid th.so,.tvgrid td.so{width:6.5%} .tvgrid th.due,.tvgrid td.due{width:8.5%} .tvgrid th.note,.tvgrid td.note{width:14%;text-align:left}
+.tvgrid th.cu,.tvgrid td.cu{width:18%;text-align:left} .tvgrid th.so,.tvgrid td.so{width:6.5%} .tvgrid th.due,.tvgrid td.due{width:8.5%} .tvgrid th.note,.tvgrid td.note{width:20%;text-align:left}
 .tvgrid tbody tr{height:calc((100vh - 26vh) / var(--rows))}
 .tvgrid td{font-size:2.5vh;text-align:center} .tvgrid td.cu{font-weight:700;font-size:2.6vh} .tvgrid td.so{font-family:var(--mono);font-size:2.4vh;font-weight:600}
 .tvgrid td.c svg{width:3.6vh;height:3.6vh;vertical-align:middle} .tvgrid td.done{color:var(--tv-tick)} .tvgrid td.todo{color:var(--tv-star)} .tvgrid td.next{color:#fff;background:var(--tv-star)}
@@ -321,6 +321,24 @@ body.tv-mode{background:#fff;overflow:hidden} body.tv-mode #app{max-width:none;p
 /* Sent out (powder coat, plating at other companies) */
 .kiosk .outline{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:18px;color:var(--muted)} .kiosk .outline .tag{margin:0} .kiosk .outline b{color:var(--bad)}
 .kiosk .outline .btn{min-height:52px;font-size:17px;padding:0 18px;border-radius:12px}
+/* notes on a job (21 Oct): the conversation on the job's details, the strip on shop floor cards, the TV */
+.jnotes .jnl{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:8px}
+.jn{max-width:85%;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface)} .jn.office{align-self:flex-start} .jn.floor{align-self:flex-end;background:var(--info-soft);border-color:transparent}
+.jn.new{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn-soft)} .jnb{white-space:pre-wrap;font-size:15px} .jnm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:4px} .jns{color:var(--ok);font-weight:600}
+.jnf textarea{width:100%;font:inherit} .jnf .jnname{max-width:240px} .kiosk-mode .jnotes .jnb{font-size:18px} .kiosk-mode .jnotes .btn{min-height:48px}
+.kiosk .fnote{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:18px;padding:8px 12px;border-radius:12px;background:var(--surface-2,rgba(127,127,127,.08))} .kiosk .fnote.new{background:var(--warn-soft)}
+.kiosk .fnote .tag{margin:0} .kiosk .fnote .fnb{flex:1;min-width:200px} .kiosk .fnote small{color:var(--muted);font-size:14px;margin-left:6px} .kiosk .fnote .btn{min-height:52px;font-size:17px;padding:0 18px;border-radius:12px}
+.kiosk .fnotebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%;text-align:left;font:inherit;font-size:18px;padding:14px 18px;margin:0 0 14px;border-radius:14px;border:2px solid var(--warn);background:var(--warn-soft);color:var(--ink);cursor:pointer} .kiosk .fnotebar span{margin-left:auto;font-weight:600;color:var(--warn)}
+.tvgrid td.note.jnote{color:var(--tv-ink,inherit)} .tvgrid td.note.jnote{white-space:normal;line-height:1.15} .tvgrid td.note.jnote .tvn{font-size:1.9vh;font-weight:700;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical} .tvgrid td.note.jnote.new{background:#FFF1A8}
+.fnotes ul.tasks li b{flex:1;min-width:180px}
+/* CRM: Follow-ups | Ideas, the ideas list and customer research (21 Oct) */
+.crmswitch{margin:0 0 14px} .crmswitch .seg svg{width:16px;height:16px} .crmswitch em{font-style:normal;background:var(--warn-soft);color:var(--warn);border-radius:999px;padding:0 7px;font-size:12px}
+#v-sales .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap} #v-sales .ph h3,#v-sales .ph h4{margin:0} #v-sales .ph .btn:last-child{margin-left:auto}
+ul.ideas{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.idea{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)} .idea .ih{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .idea p{margin:4px 0}
+.idea .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px} .idea .acts .sp{flex:1} .idea.st-done,.idea.st-no{opacity:.6}
+.rsform{align-items:end} .rcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:12px}
+.rcard{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)} .rcard h5{margin:10px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)} .rcard ul{margin:0;padding-left:18px} .rcard ul.ideas{padding:0}
 .kiosk .ogroup{display:flex;flex-direction:column;gap:12px}
 .kiosk .ogroup h3{font-family:var(--display);font-size:28px;font-weight:600;letter-spacing:-.02em;margin:6px 0 0} .kiosk .ogroup h3 small{font:500 17px var(--body);color:var(--muted);margin-left:8px}
 .kiosk .orow .side .tag{margin:0}
@@ -835,7 +853,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

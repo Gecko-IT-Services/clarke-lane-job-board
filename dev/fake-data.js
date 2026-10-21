@@ -179,6 +179,25 @@ const fakeItems = [{ code: 'BR3', description: 'Bracket — 3mm S275', price: 12
 // Work sent out: one job out at a made-up coater, a few days overdue.
 const outwork = [{ id: 1, jobId: 2, process: 'P/Coat Paint', supplier: 'Example Coaters Ltd', items: '5 × Cabinet', finish: 'RAL 7035', sentOn: '2026-10-12', dueBack: '2026-10-16', backOn: null, note: '', sentBy: 'Shop Floor', backBy: null }];
 let outNo = 2;
+let notes = [{ id: 1, jobId: 1, body: 'Customer has asked for these to be packed in boxes of 10, not bagged.', byName: 'Mandy', fromFloor: false, seenBy: null, seenAt: null, at: new Date(Date.now() - 3 * 36e5).toISOString() },
+  { id: 2, jobId: 3, body: 'Short of 3mm sheet for the last 20. Can we get more in by Thursday?', byName: 'Dave', fromFloor: true, seenBy: null, seenAt: null, at: new Date(Date.now() - 50 * 6e4).toISOString() }];
+let noteNo = 3;
+export const loadNotes = async () => structuredClone(notes);
+export const addNote = async ({ jobId, body, by, fromFloor }) => { notes.push({ id: noteNo++, jobId, body: body.trim(), byName: by.trim(), fromFloor: !!fromFloor, seenBy: null, seenAt: null, at: new Date().toISOString() }); };
+export const seenNote = async (id, by) => { const n = notes.find(x => x.id === id); if (n && !n.seenBy && n.fromFloor === (role !== 'floor')) Object.assign(n, { seenBy: by, seenAt: new Date().toISOString() }); };
+export const deleteNote = async id => { if (role === 'floor') throw new Error('The note was not removed. Only Levi and Mandy can remove notes.'); notes = notes.filter(x => x.id !== id); };
+let research = [{ key: 'examplecustomer', customer: 'Example Customer Ltd', website: 'example.com', about: 'Example Customer makes outdoor electrical enclosures and kiosks for councils and utilities, from a works in Hampshire.',
+  news: [{ text: 'Opened a second assembly unit in the spring and is hiring two fitters.', url: 'https://example.com/news' }, { text: 'Won a framework to supply EV charging kiosks.', url: 'https://example.com/ev' }],
+  openings: [{ idea: 'Offer to quote the kiosk frames and doors for the EV contract', why: 'They won an EV kiosk framework; they already buy brackets from us.', angle: 'Congratulate them on the EV framework and offer to quote the frames and doors, laser cut, folded, welded and powder coated in one place.' },
+    { idea: 'Ask about the new assembly unit', why: 'A second unit usually means more parts.', angle: 'Ask whether the new unit will need its own regular parts and whether we could hold stock for call-off.' }],
+  sources: ['https://example.com'], at: new Date(Date.now() - 864e5).toISOString() }];
+let ideas = [];
+let ideaNo = 1;
+export const loadResearch = async () => structuredClone(research);
+export const saveResearch = async (key, customer, website, x) => { research = [{ key, customer, website, about: x.about, news: x.news, openings: x.openings, sources: x.sources, at: new Date().toISOString() }, ...research.filter(r => r.key !== key)]; };
+export const loadIdeas = async () => structuredClone(ideas);
+export const saveIdeas = async list => { const at = new Date().toISOString(); list.forEach(i => ideas.push({ id: ideaNo++, title: i.title, why: i.why, action: i.action, angle: i.angle, key: i.key || null, customer: i.customer || '', status: 'new', batchAt: at })); };
+export const setIdea = async (id, status) => { ideas.find(x => x.id === id).status = status; };
 export const loadOutwork = async () => structuredClone(outwork);
 export const sendOut = async f => { const id = outNo++; outwork.push({ id, ...f, supplier: f.supplier.trim(), dueBack: f.dueBack || null, backOn: null, sentBy: f.by, backBy: null }); return id; };
 export const updateOutwork = async (id, f) => { const r = outwork.find(x => x.id === id); Object.assign(r, f); if ('backOn' in f && !f.backOn) { r.backOn = null; r.backBy = null; } };
@@ -233,6 +252,13 @@ export const salesAi = async (facts, kind = 'checkin') => {
     : { kind: 'other', summary: 'A sales pitch.', company: '', person: facts.fromName, phone: '', wants: '', hasDrawings: false };
   if (kind === 'reply') return { subject: 'Re: ' + facts.subject, greeting: 'Hi ' + String(facts.fromName || '').split(' ')[0] + ',', paragraphs: ['Made-up AI reply for the practice page: thank you for your enquiry about ' + facts.wants + '.', 'We will price this and come back to you. Could you confirm when you need them and the delivery address?'], model: 'practice' };
   if (kind === 'summary') return { summary: 'Made-up AI summary: a regular customer for brackets, ordering about every two weeks and steady on last year.', nextStep: 'Ask whether they would like their brackets powder coated by us next time.', model: 'practice' };
+  if (kind === 'research') return { found: true, about: `Made-up research for the practice page: ${facts.customer} designs and builds equipment from a works in the south of England.`,
+    news: [{ text: 'Posted on LinkedIn about a new product range launching next spring.', url: 'https://www.linkedin.com/company/example' }],
+    openings: [{ idea: 'Offer to prototype parts for the new range', why: 'A new range is launching and they already buy laser cut parts from us.', angle: 'Mention their new range and offer quick prototypes, cut, folded and finished in one place.' }],
+    sources: ['https://example.com'], model: 'practice', costUsd: 0.12 };
+  if (kind === 'ideas') return { ideas: (facts.customers || []).slice(0, 4).map((c, i) => ({ title: ['Ask about their next batch', 'Offer powder coating', 'Book a visit', 'Send a short catch-up'][i] + ': ' + c.customer,
+    why: `Made-up idea for the practice page: they are ${c.trend} and buy ${(c.theyBuy || []).join(', ') || 'parts'}.`, action: ['call', 'email', 'visit', 'email'][i], customer: c.customer,
+    angle: 'Made-up angle: a short, friendly note about what they usually order.' })).concat([{ title: 'Ask your three best customers who else they know', why: 'Made-up: referrals from happy regulars.', action: 'other', customer: '', angle: '' }]), model: 'practice', costUsd: 0.03 };
   return salesAiCheckin(facts);
 };
 const staffRows = [{ email: 'levi@clarke-lane.example', name: 'Levi', role: 'md' }, { email: 'mandy@clarke-lane.example', name: 'Mandy', role: 'office' }, { email: 'workshop@clarke-lane.example', name: 'Shop Floor', role: 'floor' }];
