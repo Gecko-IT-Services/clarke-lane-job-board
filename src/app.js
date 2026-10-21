@@ -29,6 +29,7 @@ import { renderFilesTab, foundDrawingsHtml, certsHtml, quoteHistWords } from './
 import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob, certFolders } from './core/spfiles.js';
 import { CONFIG } from './config.js';
 import { searchAll } from './core/search.js';
+import { newDispatches } from './core/mood.js';
 import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
@@ -1662,7 +1663,11 @@ function orderFromQuote(qid) {
 
 /* ---------- the workshop TV: the whiteboard on a big screen, display only ---------- */
 function renderTvView() {
-  $('v-tv').innerHTML = renderTv({ jobs: S.jobs, outwork: S.outwork || [], notes: S.notes || [], today: todayIso(), now: new Date(), page: S.tvPage || 0 }, { esc, fmt });
+  // A delivery note made since the last look gets a short cheer on the TV (never when the TV first starts).
+  const d = newDispatches(S.jobs, S.tvSeen || null); S.tvSeen = d.now;
+  if (d.fresh.length) { S.tvCheer = { ...d.fresh[d.fresh.length - 1], until: Date.now() + 10000 }; setTimeout(() => { if (S.tab === 'tv') renderTvView(); }, 10200); }
+  const cheer = S.tvCheer && S.tvCheer.until > Date.now() ? S.tvCheer : null;
+  $('v-tv').innerHTML = renderTv({ jobs: S.jobs, outwork: S.outwork || [], notes: S.notes || [], today: todayIso(), now: new Date(), page: S.tvPage || 0, cheer }, { esc, fmt });
 }
 // Next page every 15 seconds when there are more jobs than fit, and the clock.
 setInterval(() => { if (S.tab !== 'tv' || !S.me) return; S.tvPage = (S.tvPage || 0) + 1; renderTvView(); }, 15000);

@@ -325,9 +325,9 @@ body.tv-mode{background:#fff;overflow:hidden} body.tv-mode #app{max-width:none;p
 .tvgrid{flex:1;width:100%;border-collapse:collapse;table-layout:fixed;border:.3vh solid #8E949C}
 .tvgrid th,.tvgrid td{border:1px solid var(--tv-line);padding:0 .6vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tvgrid thead th{font-size:1.5vh;font-weight:700;text-transform:uppercase;letter-spacing:0;text-overflow:clip;padding:0 .3vw;color:#3A4048;height:7vh;line-height:1.15;white-space:normal;background:#F4F5F7;border-bottom:.3vh solid #8E949C}
-.tvgrid th.cu,.tvgrid td.cu{width:25%;text-align:left} .tvgrid th.so,.tvgrid td.so{width:6.5%} .tvgrid th.due,.tvgrid td.due{width:8.5%} .tvgrid th.note,.tvgrid td.note{width:15%;text-align:left}
+.tvgrid th.cu,.tvgrid td.cu{width:24%;text-align:left} .tvgrid th.so,.tvgrid td.so{width:6.5%} .tvgrid th.due,.tvgrid td.due{width:11%} .tvgrid th.note,.tvgrid td.note{width:14%;text-align:left}
 .tvgrid td.cu{white-space:normal} .tvgrid td.cu .tvcu{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.08}   /* long names on two lines, not cut off (Philip, 21 Oct) */
-.tvgrid tbody tr{height:calc((100vh - 26vh) / var(--rows))}
+.tvgrid tbody tr{height:calc((100vh - 29vh) / var(--rows))}
 .tvgrid td{font-size:2.5vh;text-align:center} .tvgrid td.cu{font-weight:700;font-size:2.6vh} .tvgrid td.so{font-family:var(--mono);font-size:2.4vh;font-weight:600}
 .tvgrid td.c svg{width:3.6vh;height:3.6vh;vertical-align:middle} .tvgrid td.done{color:var(--tv-tick)} .tvgrid td.todo{color:var(--tv-star)} .tvgrid td.next{color:#fff;background:var(--tv-star)}
 .tvgrid td.out span{display:inline-block;font-size:1.6vh;font-weight:800;letter-spacing:.06em;border:.25vh solid var(--tv-star);color:var(--tv-star);border-radius:.6vh;padding:.2vh .5vw} .tvgrid td.out.late span{border-color:var(--tv-red);color:#fff;background:var(--tv-red)}
@@ -337,6 +337,37 @@ body.tv-mode{background:#fff;overflow:hidden} body.tv-mode #app{max-width:none;p
 .tvfoot{display:flex;align-items:center;gap:2.2vw;font-size:1.9vh;color:var(--tv-mute)} .tvfoot .k{display:inline-flex;align-items:center;gap:.4vw} .tvfoot svg{width:2.6vh;height:2.6vh}
 .tvfoot .done{color:var(--tv-tick)} .tvfoot .todo{color:var(--tv-star)} .tvfoot .next svg{color:#fff;background:var(--tv-star);border-radius:.4vh;padding:.2vh} .tvfoot .out>span{font-size:1.3vh;font-weight:800;border:.2vh solid var(--tv-star);color:var(--tv-star);border-radius:.5vh;padding:0 .4vw}
 .tvfoot .tvpage{margin-left:auto;font-weight:700;color:var(--tv-ink)}
+/* ---------- personality (Philip, 21 Oct): small animated marks, the TV's mood line, the cheer when a job goes out ---------- */
+.mi{width:1.4em;height:1.4em;flex:none;overflow:visible;vertical-align:middle}
+.m-late{color:#C8321E} .m-late .hand{transform-origin:12px 13.5px;animation:mi-tick 1.2s steps(12) infinite} .m-late{animation:mi-shake 2.4s ease-in-out infinite}
+.m-soon{color:#E8641E} .m-soon .glass{transform-origin:12px 12px;animation:mi-turn 4s ease-in-out infinite}
+.m-ok{color:#2F5FD0} .m-ok .face{transform-origin:12px 20px;animation:mi-nod 6s ease-in-out infinite}
+.m-ready{color:#1F7A45} .m-ready .lorry{animation:mi-rumble .35s ease-in-out infinite alternate}
+.m-held{color:#8E949C} .m-held text{animation:mi-float 3s ease-in-out infinite} .m-held .z2{animation-delay:.5s} .m-held .z3{animation-delay:1s}
+.m-rush{color:#C8321E} .m-rush .runner{animation:mi-run .5s ease-in-out infinite alternate} .m-rush .speed{animation:mi-blink .5s steps(2) infinite}
+.m-clear{color:#1F7A45} .m-clear .steam{animation:mi-steam 2.5s ease-in-out infinite} .m-clear .s2{animation-delay:1.2s}
+@keyframes mi-tick{to{transform:rotate(360deg)}}
+@keyframes mi-shake{0%,80%,100%{transform:rotate(0)}84%{transform:rotate(-12deg)}88%{transform:rotate(12deg)}92%{transform:rotate(-8deg)}96%{transform:rotate(6deg)}}
+@keyframes mi-turn{0%,75%{transform:rotate(0)}95%,100%{transform:rotate(180deg)}}
+@keyframes mi-nod{0%,85%,100%{transform:rotate(0)}90%{transform:rotate(-7deg)}95%{transform:rotate(5deg)}}
+@keyframes mi-rumble{from{transform:translateY(0)}to{transform:translateY(-.7px)}}
+@keyframes mi-float{0%,100%{opacity:.35;transform:translateY(0)}50%{opacity:1;transform:translateY(-1.5px)}}
+@keyframes mi-run{from{transform:translateY(0)}to{transform:translateY(-1.2px)}}
+@keyframes mi-blink{50%{opacity:.25}}
+@keyframes mi-steam{0%{opacity:0;transform:translateY(1px)}40%{opacity:1}100%{opacity:0;transform:translateY(-2.5px)}}
+.tvgrid td.due .duein{display:flex;align-items:center;justify-content:center;gap:.6vw} .tvgrid td.due .mi{width:3.4vh;height:3.4vh}
+.tvmid{display:flex;flex-direction:column;gap:.6vh}
+.tvmood{display:flex;align-items:center;gap:.8vw;font-size:2.2vh;font-weight:700;color:var(--tv-ink)} .tvmood .mi{width:3.6vh;height:3.6vh}
+.tvmood.mood-push,.tvmood.mood-rush{color:#C8321E} .tvmood.mood-calm,.tvmood.mood-clear{color:#1F7A45}
+.tvcheer{position:fixed;inset:0;pointer-events:none;z-index:60;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8vh;overflow:hidden}
+.tvcheer i{position:absolute;top:-4vh;left:var(--x);width:1.4vh;height:2.2vh;background:var(--c);border-radius:.3vh;animation:mi-fall 3.2s var(--d) ease-in forwards}
+.cheerbox{display:flex;align-items:center;gap:1.6vw;background:#fff;border:.4vh solid #1F7A45;border-radius:2vh;padding:2vh 3vw;box-shadow:0 2vh 6vh rgba(0,0,0,.2);animation:mi-pop .5s cubic-bezier(.2,1.4,.4,1) both}
+.cheerbox .mi{width:9vh;height:9vh} .cheerbox b{display:block;font-size:4.4vh;color:#1F7A45} .cheerbox span{font-size:2.6vh;font-weight:600;color:var(--tv-ink)}
+@keyframes mi-fall{to{transform:translateY(110vh) rotate(540deg)}}
+@keyframes mi-pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.fcard .fmood{display:inline-flex;align-items:center} .fcard .fmood .mi{width:32px;height:32px}
+@media (prefers-reduced-motion:reduce){.mi,.mi *,.tvcheer i,.cheerbox{animation:none!important}}
+
 /* Sent out (powder coat, plating at other companies) */
 .kiosk .outline{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:18px;color:var(--muted)} .kiosk .outline .tag{margin:0} .kiosk .outline b{color:var(--bad)}
 .kiosk .outline .btn{min-height:52px;font-size:17px;padding:0 18px;border-radius:12px}
@@ -873,7 +904,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;
