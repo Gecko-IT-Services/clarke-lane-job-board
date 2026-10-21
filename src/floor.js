@@ -4,6 +4,8 @@
  * floorQueue() / floorStations() in core/jobs.js (tested); this file only draws it.
  * h: the formatting helpers from app.js. Never shows prices.
  */
+import { jobMood } from './core/mood.js';
+import { moodIcon } from './mood.js';
 import { floorQueue, floorStations, nextStep, partsLeft, dayNo, needed, allDone, nextDue, deliveryLabel, SHORT } from './core/jobs.js';
 import { OUT_PROCESSES, outBoard, outNow, suppliersUsed } from './core/outwork.js';
 import { noteSummary, newNotes } from './core/notes.js';
@@ -52,7 +54,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
     const late = due && due < today, days = late ? dayNo(today) - dayNo(due) : 0, soon = !late && due && dayNo(due) - dayNo(today) <= 7;
     const ahead = (j.priority != null && open.slice(open.indexOf(j) + 1).some(o => nextDue(o) < due))   // above a job due sooner
       || (!isAll && j.procs[station].place != null && list.slice(i + 1).some(o => nextDue(o) < due));
-    const chips = [late ? `<span class="tag late">${count(days, 'day')} late</span>` : due ? `<span class="tag${soon ? ' soon' : ''}">Due ${fmt(due)}</span>` : '',
+    const chips = [`<span class="fmood">${moodIcon(jobMood({ held, ready, late, soon }))}</span>`, late ? `<span class="tag late">${count(days, 'day')} late</span>` : due ? `<span class="tag${soon ? ' soon' : ''}">Due ${fmt(due)}</span>` : '',
       deliveryLabel(j) ? `<span class="tag">${deliveryLabel(j)}</span>` : '', ahead ? '<span class="tag late">Brought forward</span>' : ''].join('');
     const steps = needed(j).map(p => {
       const s = j.procs[p], label = s.done ? `${p} done ${fmtTime(s.at)}. Tap to undo.` : `Tap when ${p} is done`;
