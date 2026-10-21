@@ -6,7 +6,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 const dir = new URL('../supabase/migrations/', import.meta.url);
 const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort()
   .map(f => readFileSync(new URL(f, dir), 'utf8')).join('\n').toLowerCase();
-const created = [...sql.matchAll(/create table (public\.\w+)/g)].map(m => m[1]);
+const created = [...sql.matchAll(/create table (?:if not exists )?(public\.\w+)/g)].map(m => m[1]);
 const dropped = new Set([...sql.matchAll(/drop table (public\.\w+)/g)].map(m => m[1]));
 const live = created.filter(t => !dropped.has(t));
 assert.ok(live.includes('public.staff'), 'staff table exists');

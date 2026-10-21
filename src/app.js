@@ -27,6 +27,9 @@ import { reorderRound, reorderTally, roundNudge, reorderNote, snoozeNote, SNOOZE
 import { renderIdeas } from './ideas.js';
 import { ideasFacts, websiteGuess, ideaBoard } from './core/ideas.js';
 import { renderToday, taskForm, renderEnquiries, renderCustomerPage } from './customer.js';
+import { renderDigest } from './digest.js';
+import { digestPicks, samePicks, fallbackLine, digestFacts } from './core/digest.js';
+import { packFacts, cleanPack, quotePackText, docMediaType } from './core/quotepack.js';
 import { renderFilesTab, foundDrawingsHtml, certsHtml, quoteHistWords } from './spfiles.js';
 import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob, certFolders } from './core/spfiles.js';
 import { CONFIG } from './config.js';
@@ -1132,17 +1135,101 @@ setInterval(() => { if (!document.hidden && S.me && office()) syncEnquiries(); }
 function enquiriesHtml() {
   if (!office()) return '';
   return renderEnquiries({ list: enquiryList(S.enq || [], new Date().toISOString()), funnel: enquiryFunnel(S.enq || [], todayIso()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
-    open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply, checkedAt: S.enqCheckedAt, settings: S.enqSettings }, { esc, fmt, fmtTime });
+    open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply, checkedAt: S.enqCheckedAt, settings: S.enqSettings, packBusy: S.packBusy }, { esc, fmt, fmtTime });
 }
-async function replyEnquiry(id) {
+/** The AI reply to an enquiry; questions (from the quote pack's Ask these questions) are what the reply must ask. */
+async function replyEnquiry(id, questions = []) {
   const e = (S.enq || []).find(x => x.id === id); if (!e) return;
   S.enqBusy = id; render();
   try {
-    const d = await data.salesAi({ from: e.fromEmail, fromName: e.person || e.fromName, subject: e.subject, company: e.company, wants: e.wants, summary: e.summary, hasDrawings: e.hasDrawings }, 'reply');
+    const d = await data.salesAi({ from: e.fromEmail, fromName: e.person || e.fromName, subject: e.subject, company: e.company, wants: e.wants, summary: e.summary, hasDrawings: e.hasDrawings,
+      questions: (questions || []).slice(0, 12) }, 'reply');
     S.enqReply = { id, draft: { subject: d.subject, greeting: d.greeting, paragraphs: d.paragraphs || [] } };
   } catch (x) { toast(x.message, null, true); }
   S.enqBusy = null; render();
 }
+/**
+ * The quote pack (Philip, 21 Oct): the enquiry's email and its PDFs and pictures (each PDF's text read here too, with
+ * pdf.js, so the AI has the words as well as the drawing) read by AI into the parts, the questions to ask and what to
+ * watch out for, and kept on the enquiry. No attachments, or none it can read: it still reads the email on its own.
+ */
+const bytesOf = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+async function prepareQuotePack(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e || S.packBusy) return;
+  S.packBusy = id; render();
+  try {
+    const box = e.mailbox || enquiryMailbox();
+    let attErr = null;
+    const [text, files] = e.graphId ? await Promise.all([data.enquiryText(box, e.graphId).catch(() => ''),
+      data.enquiryAttachments(box, e.graphId).catch(x => { attErr = x; return []; })]) : ['', []];
+    const read = [];
+    for (const f of files) read.push({ name: f.name, text: docMediaType(f.name, f.contentType) === 'application/pdf' ? await pdfText(bytesOf(f.base64)).catch(() => '') : '' });
+    const documents = files.map(f => ({ name: f.name, mediaType: docMediaType(f.name, f.contentType), base64: f.base64 }));
+    const x = await data.salesAi(packFacts({ ...e, text: plainText(text) }, read), 'quotepack', documents.length ? { documents } : {});
+    await data.setEnquiry(id, { quotePack: { ...cleanPack(x), files: files.map(f => f.name), model: x.model || '' } });
+    S.enq = await data.loadEnquiries();
+    if (attErr && e.hasDrawings) toast(`The attachments could not be opened (${attErr.message}), so this was read from the email alone.`, null, true);
+  } catch (x) { toast(x.message, null, true); }
+  S.packBusy = null; render();
+}
+function copyQuotePack(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e?.quotePack) return;
+  const t = quotePackText(e.quotePack, { company: e.company || e.fromName });
+  (navigator.clipboard?.writeText(t) || Promise.reject()).then(() => toast('Copied. Paste it into the quote calculator or a note.'), () => toast('Could not copy here. Select the parts table and copy it by hand.', null, true));
+}
+
+/**
+ * Three things today (Philip, 21 Oct): built once a day when Levi or Mandy first open Home, when the board has read
+ * what it needs (enquiries, tasks, quotes, Xero), or after 8 seconds with whatever it has. Kept per person per day
+ * (daily_digests), so a reload shows the same three unless the picks have changed. If the AI cannot be reached the
+ * picks still show with plain lines; nothing waits on it.
+ */
+let digestWait = null;
+const digestHidden = day => { if (S.digestHidden === day) return true; try { return localStorage.getItem('clj.digest.' + day) === 'hidden'; } catch { return false; } };
+function digestPicksNow() {
+  const today = todayIso(), m = S.salesQ && S.salesF ? salesModel() : null, rm = reorderModel();
+  return digestPicks({ role: md() ? 'md' : 'office', enquiries: S.enq || [], chase: m ? m.chase : [], reorders: rm ? rm.round.filter(r => r.state === 'due') : [],
+    late: dashboard(S.jobs.filter(j => !j.preview), today).late, tasks: (S.tasks || []).filter(t => t.assignedTo === S.me.email), today, now: new Date().toISOString(),
+    jobValue: md() ? j => value(j, { remaining: true }) : null });   // money for Levi only
+}
+function ensureDigest() {
+  if (!office() || !S.me) return;
+  const day = todayIso();
+  if (S.digest?.day === day || digestHidden(day)) return;
+  const ready = S.tasks && S.enq && S.enqState !== 'reading' && ((S.salesQ && S.salesF) || S.salesErr) && (S.hist || !S.xero || S.histErr);
+  if (!ready && digestWait !== 'done') { digestWait ??= setTimeout(() => { digestWait = 'done'; if (S.tab === 'home') render(); }, 8000); return; }
+  buildDigest();
+}
+async function buildDigest(force) {
+  const day = todayIso(), picks = digestPicksNow(), role = md() ? 'md' : 'office';
+  S.digest = { day, picks, greeting: '', lines: [], busy: !!picks.length };
+  await null;   // never render from inside a render
+  const done = x => { if (S.digest?.day === day) S.digest = { day, picks, greeting: '', lines: [], ...x, busy: false }; if (S.tab === 'home') render(); };
+  if (!picks.length) return done({});
+  if (!force) {
+    const cached = await data.loadDigest(day).catch(() => null);
+    if (cached && samePicks(cached.picks, picks)) return done({ greeting: cached.greeting, lines: cached.lines });
+  }
+  try {
+    const r = await data.salesAi(digestFacts(S.me.name, role, picks), 'digest');
+    const lines = picks.map((p, i) => String(r.lines?.[i] || '').trim() || fallbackLine(p));
+    data.saveDigest(day, { picks, greeting: r.greeting || '', lines, model: r.model || '' }).catch(() => {});
+    done({ greeting: r.greeting || '', lines });
+  } catch { done({ lines: picks.map(fallbackLine), fallback: true }); }   // no toast: the picks are still useful
+}
+function digestHtml() {
+  if (!office() || !S.me) return '';
+  ensureDigest();
+  const day = todayIso(), d = S.digest;
+  return d?.day === day && !digestHidden(day) ? renderDigest(d, { esc }) : '';
+}
+function hideDigest() {
+  const day = todayIso(); S.digestHidden = day;
+  try { localStorage.setItem('clj.digest.' + day, 'hidden'); } catch { /* this visit only */ }
+  toast('Hidden until tomorrow.', () => { S.digestHidden = null; try { localStorage.removeItem('clj.digest.' + day); } catch { /* ok */ } render(); });
+  render();
+}
+
 async function sendEnquiryReply(id) {
   const e = (S.enq || []).find(x => x.id === id); if (!e) return;
   const subject = $('er-subj').value.trim(), parts = $('er-body').value.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
@@ -2181,9 +2268,10 @@ function loadPdfJs() {
   });
   return pdfReader;
 }
-async function pdfText(blob) {
+/** The text of a PDF (a Blob, or its bytes: the quote pack's attachments come as bytes), first 6 pages. */
+async function pdfText(src) {
   const lib = await loadPdfJs();
-  const doc = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+  const doc = await lib.getDocument({ data: src instanceof Uint8Array ? src : new Uint8Array(await src.arrayBuffer()) }).promise;
   const out = [];
   for (let i = 1; i <= Math.min(doc.numPages, 6); i++) out.push((await (await doc.getPage(i)).getTextContent()).items.map(x => x.str).join(' '));
   return out.join(' \n ');
@@ -2668,7 +2756,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: wonWaiting(),
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
@@ -2771,7 +2859,7 @@ function onClick(e) {
   if (d.wondrill) return wonDrill(d.wondrill, d.key);
   if (d.wonlines) { S.wonOpen = S.wonOpen === d.wonlines ? null : d.wonlines; return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
-  if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; if ('gosmart' in d) S.crmView = 'main'; render(); setTimeout(() => $('goenq' in d ? 'enquiries' : 'smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
+  if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; if ('gosmart' in d) S.crmView = 'main'; if (d.goenqid) { S.cust = null; S.enqOpen = +d.goenqid; } render(); setTimeout(() => $('goenq' in d ? 'enquiries' : 'smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if (d.sendout) { e.stopPropagation(); return sendOutForm(+d.job, d.sendout); }
@@ -2800,6 +2888,11 @@ function onClick(e) {
   if ('taskcancel' in d) { S.taskForm = null; return closeDoc(); }
   if (d.enqopen) { S.enqOpen = S.enqOpen === +d.enqopen ? null : +d.enqopen; return render(); }
   if (d.enqreply) return replyEnquiry(+d.enqreply);
+  if (d.packread) return prepareQuotePack(+d.packread);
+  if (d.packcopy) return copyQuotePack(+d.packcopy);
+  if (d.enqask) return replyEnquiry(+d.enqask, (S.enq || []).find(x => x.id === +d.enqask)?.quotePack?.questions || []);
+  if ('digestrefresh' in d) { buildDigest(true); return render(); }
+  if ('digesthide' in d) return hideDigest();
   if (d.enqsend) return sendEnquiryReply(+d.enqsend);
   if (d.enqnewcust) return enquiryToCustomer(+d.enqnewcust);
   if ('enqsync' in d) return syncEnquiries(true);

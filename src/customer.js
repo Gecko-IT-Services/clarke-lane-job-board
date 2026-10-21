@@ -64,7 +64,7 @@ export function taskForm(f, { staff, customers }, h) {
  * the last 90 days as four figures, the new enquiries first with how long they have waited, customers writing about
  * their orders as their own short list, and the mailbox setting tucked away.
  */
-export function renderEnquiries({ list, funnel, state, mailbox, open, busy, reply, checkedAt, settings }, h) {
+export function renderEnquiries({ list, funnel, state, mailbox, open, busy, reply, checkedAt, settings, packBusy = null }, h) {
   const { esc, fmt, fmtTime } = h;
   const st = { new: '<span class="chip late">Not answered</span>', replied: '<span class="chip soon">Replied</span>', quoted: '<span class="chip soon">Quoted</span>', won: '<span class="chip ok">Won</span>',
     lost: '<span class="chip">Lost</span>', ignored: '<span class="chip">Not an enquiry</span>' };
@@ -72,10 +72,28 @@ export function renderEnquiries({ list, funnel, state, mailbox, open, busy, repl
     : state === 'noaccess' ? `<div class="warn">Your Microsoft account cannot open ${esc(mailbox)}. Ask for access to that mailbox (Read and manage) in Microsoft 365.</div>`
     : state?.startsWith?.('error:') ? `<div class="err">${esc(state.slice(6))}</div>` : '';
   const enq = list.filter(e => e.kind === 'enquiry'), cust = list.filter(e => e.kind === 'customer' && e.status === 'new');
+  // The quote pack (Philip, 21 Oct): the enquiry and its drawings read by AI into what Levi needs to price it.
+  const packBox = e => {
+    const k = e.quotePack, reading = packBusy === e.id;
+    const intro = `<div class="qp-h"><h4>${icon('doc')}Ready for quoting</h4>${k ? '' : '<span class="note">AI reads the email and its drawings (PDFs and pictures) and lists each part, what the drawing says, the questions to ask and anything to watch out for. About 10p. No prices are sent.</span>'}</div>`;
+    if (!k) return `<div class="qpack">${intro}<div class="actions"><button class="btn sm pri" type="button" data-packread="${e.id}" ${reading ? 'disabled' : ''}>${reading ? 'Reading the drawings…' : 'Prepare for quoting'}</button></div></div>`;
+    const list = (xs, empty) => xs?.length ? `<ul>${xs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : `<p class="note">${empty}</p>`;
+    const parts = k.parts?.length ? `<div class="tbl-wrap"><table class="lines qp-parts"><thead><tr><th>Part</th><th>Description</th><th>Material</th><th>Thickness</th><th>Qty</th><th>Finish</th><th>Processes</th></tr></thead><tbody>
+        ${k.parts.map(x => `<tr><td class="mono">${esc(x.partNo)}</td><td>${esc(x.description)}${x.notes ? `<small>${esc(x.notes)}</small>` : ''}</td><td>${esc(x.material)}</td><td>${esc(x.thickness)}</td><td>${esc(x.qty)}</td><td>${esc(x.finish)}</td>
+          <td><div class="echips">${(x.processes || []).map(q => `<span class="chip">${esc(q)}</span>`).join('')}</div></td></tr>`).join('')}</tbody></table></div>` : '<p class="note">No separate parts could be listed.</p>';
+    const from = k.files?.length ? `from ${k.files.map(esc).join(', ')}` : 'from the email alone (no PDFs or pictures attached)';
+    return `<div class="qpack">${intro}${k.summary ? `<p>${esc(k.summary)}</p>` : ''}${parts}
+      <div class="qp-lists"><div><h5>Questions to ask</h5>${list(k.questions, 'Nothing to ask: the drawings answer it.')}</div><div><h5>Watch out</h5>${list(k.watchOut, 'Nothing unusual spotted.')}</div></div>
+      <p class="note">Read by AI on ${esc(fmt(String(e.quotePackAt || '').slice(0, 10)))} ${from}. Check it against the drawings before you price.</p>
+      <div class="actions"><button class="btn sm pri" type="button" data-packcopy="${e.id}">${icon('copy')}Copy for the quote calculator</button>
+        ${k.questions?.length ? `<button class="btn sm" type="button" data-enqask="${e.id}" ${busy === e.id ? 'disabled' : ''}>${icon('mail')}Ask these questions</button>` : ''}
+        <button class="btn sm" type="button" data-packread="${e.id}" ${reading ? 'disabled' : ''}>${reading ? 'Reading the drawings…' : 'Read again'}</button></div></div>`;
+  };
   const row = e => `<tr class="${open === e.id ? 'open' : ''}${e.status === 'new' ? ' waiting' : ''}" data-enqopen="${e.id}" tabindex="0"><td class="ewait">${e.status === 'new' ? `<b>${esc(waited(e.waitHours))}</b><small>waiting</small>` : `${esc(fmt(e.receivedAt.slice(0, 10)))}`}</td>
       <td><b>${esc(e.company || e.fromName || e.fromEmail)}</b><small>${esc(e.person || e.fromName)}${e.phone ? ' · ' + esc(e.phone) : ''}</small></td>
-      <td>${esc(e.wants || e.subject)}<div class="echips">${e.hasDrawings ? '<span class="chip ok">drawings</span>' : ''}${e.customerKey ? '<span class="chip">customer</span>' : '<span class="chip soon">new customer</span>'}</div></td><td class="est">${st[e.status] || ''}</td></tr>
+      <td>${esc(e.wants || e.subject)}<div class="echips">${e.hasDrawings ? '<span class="chip ok">drawings</span>' : ''}${e.quotePack ? '<span class="chip qp">quote pack</span>' : ''}${e.customerKey ? '<span class="chip">customer</span>' : '<span class="chip soon">new customer</span>'}</div></td><td class="est">${st[e.status] || ''}</td></tr>
     ${open === e.id ? `<tr class="edetail"><td colspan="4"><p>${esc(e.summary)}</p><p class="note">From ${esc(e.fromName)} &lt;${esc(e.fromEmail)}&gt; · ${esc(fmtTime(e.receivedAt))} · “${esc(e.subject)}”</p>
+      ${packBox(e)}
       ${reply?.id === e.id && reply.draft ? `<div class="saibox"><label class="fl">Subject<input type="text" id="er-subj" value="${esc(reply.draft.subject)}"></label>
           <label class="fl">Reply (edit anything)<textarea id="er-body" rows="7">${esc([reply.draft.greeting, ...reply.draft.paragraphs].join('\n\n'))}</textarea></label>
           <div class="actions"><button class="btn pri sm" type="button" data-enqsend="${e.id}">${icon('mail')}Put in my Outlook Drafts</button><button class="btn sm" type="button" data-enqreply="${e.id}">Write it again</button></div></div>` : ''}
