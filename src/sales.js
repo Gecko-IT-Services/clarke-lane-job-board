@@ -1,5 +1,5 @@
 /**
- * Sales (Levi only): the month against his target, quotes to chase today, every open quote by stage, what his
+ * CRM, was Sales (Levi only; renamed 21 Oct): the month against his target, quotes to chase today, every open quote by stage, what his
  * quote history says, and customers to get back in touch with (from Xero's invoices), with emails drafted by
  * the board or written by AI from the facts. Logic in core/sales.js (tested); this file only draws.
  */
@@ -12,8 +12,8 @@ const later = x => x <= 0.01 ? 'almost none are ordered' : pc(x) + ' are ordered
 
 export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today, reorders = [], more = [], news = null, enquiriesBox = '' }, h) {
   const { esc, fmt, gbp } = h;
-  if (err) return `<div class="hhead"><div><h2>Sales</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
-  if (loading) return `<div class="hhead"><div><h2>Sales</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
+  if (err) return `<div class="hhead"><div><h2>CRM</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
+  if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
   const days = n => `${n} day${n === 1 ? '' : 's'}`;
   const touched = q => q.lastAction ? `${{ email: 'Emailed', call: 'Called', note: 'Note', reopen: 'Reopened', lost: 'Lost' }[q.lastAction.kind] || 'Touched'} ${esc(fmt(q.lastAction.at.slice(0, 10)))}` : 'Not chased yet';
   const stageChip = q => `<span class="chip ${{ due: 'late', follow: 'soon', cold: 'soon', dead: '', fresh: 'ok', booked: 'ok' }[q.stage]}">${esc(STAGES[q.stage])}${q.stage === 'booked' && q.nextOn ? ' ' + esc(fmt(q.nextOn)) : ''}</span>`;
@@ -108,7 +108,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
     <div class="snewslist">${active.slice(0, 60).map((c, i) => `<label><input type="checkbox" data-newspick="${esc(c.key)}" ${(news?.picked ? news.picked.includes(c.key) : i < 15) ? 'checked' : ''}> ${esc(c.customer)}</label>`).join('')}</div>
     <div class="actions"><button class="btn pri" type="button" data-newsgo ${news?.busy ? 'disabled' : ''}>${news?.busy ? esc(news.busy) : `${icon('mail')}Draft the emails`}</button></div></section>`;
 
-  return `<div class="hhead"><div><h2>Sales</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with. Only you see this page.</p></div>
+  return `<div class="hhead"><div><h2>CRM</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with. Only you see this page.</p></div>
       <div class="hbtns"><button class="btn" type="button" data-salesreload>${icon('refresh')}Refresh</button></div></div>
     ${monthBox}${enquiriesBox}${aiBox}${chaseBox}${listBox}${reorderBox}${moreBox}${custBox}${newsBox}${says}`;
 }

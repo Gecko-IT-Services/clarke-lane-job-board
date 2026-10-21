@@ -6,11 +6,13 @@
  */
 import { floorQueue, floorStations, nextStep, partsLeft, dayNo, needed, allDone, nextDue, deliveryLabel, SHORT } from './core/jobs.js';
 import { OUT_PROCESSES, outBoard, outNow, suppliersUsed } from './core/outwork.js';
+import { noteSummary, newNotes } from './core/notes.js';
+import { floorNoteStrip } from './notes.js';
 
 const count = (n, w, many = w + 's') => `${n} ${n === 1 ? w : many}`;
 export const clockHtml = now => `<b>${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</b>${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
 
-export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = false, outwork = [], outForm = null, canRemove = false }, h) {
+export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = false, outwork = [], outForm = null, canRemove = false, notes = [], office = false }, h) {
   const { esc, fmt, fmtTime, TICK } = h;
   const bar = inner => `<div class="kbar">${inner}<div class="clock" id="fclock">${clockHtml(now)}</div></div>`;
 
@@ -25,7 +27,9 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
     const tiles = floorStations(jobs, today).map(s => `<button type="button" class="tile${s.late ? ' hot' : ''}${s.waiting ? '' : ' idle'}" data-station="${esc(s.p)}">
       <span class="nm">${esc(s.p)}</span><span><span class="ct"><b>${s.waiting}</b>${s.waiting === 1 ? 'job' : 'jobs'} waiting</span>
       ${s.late ? `<span class="tag late">${s.late} late</span>` : s.waiting ? '<span class="tag ok">On time</span>' : '<span class="tag">Nothing waiting</span>'}</span></button>`).join('');
-    return `<div class="kiosk">${bar('<div><h2>Shop floor</h2><p class="sub">Tap your station</p></div>')}
+    const fresh = newNotes(notes, office, floorQueue(jobs, 'all'));
+    const noteBar = fresh.length ? `<button type="button" class="fnotebar" data-station="all"><b>${fresh.length === 1 ? '1 new note' : fresh.length + ' new notes'}</b> from ${office ? 'the shop floor' : 'the office'}: “${esc(fresh[0].body)}”<span>See all jobs →</span></button>` : '';
+    return `<div class="kiosk">${bar('<div><h2>Shop floor</h2><p class="sub">Tap your station</p></div>')}${noteBar}
       <div class="tiles">${tiles}${outTile}</div>
       <div class="kfoot"><button type="button" class="btn" data-station="all">All jobs <em>${floorQueue(jobs, 'all').length}</em></button>
         <button type="button" class="btn" data-kiosk="${kiosk ? 'off' : 'on'}" aria-pressed="${!!kiosk}">${kiosk ? 'Leave kiosk mode' : 'Kiosk mode'}</button>
@@ -71,7 +75,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
     return `<article class="fcard${late ? ' late' : ''}${held ? ' held' : ''}${ready ? ' ready' : ''}">
       <div class="ftop">${move(j, i)}<div><div class="cu">${esc(j.customer)}<span class="so">${esc(j.so)}</span></div><div class="parts">${parts(j)}</div></div>
         <div class="side">${chips}${j.files?.length ? `<button type="button" class="btn" data-drawing="${j.files[0].id}" data-job="${j.id}">${j.files.length > 1 ? `Drawings (${j.files.length})` : 'Drawing'}</button>` : ''}<button type="button" class="btn" data-open="${j.id}">Job details</button></div></div>
-      <div class="route">${steps}</div>${outs}<p class="fstat">${status}</p></article>`;
+      <div class="route">${steps}</div>${outs}${floorNoteStrip(noteSummary(notes, j.id, office), j.id, h)}<p class="fstat">${status}</p></article>`;
   };
   const sub = isAll ? 'Tap any step when it is finished · tap a green step to undo it' : `${count(list.length, 'job')} waiting for ${esc(station)} · do them in this order`;
   const empty = isAll ? 'No open jobs.' : `Nothing waiting for ${esc(station)}.`;

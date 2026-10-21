@@ -6,9 +6,10 @@
  */
 import { PROCESSES, floorQueue, needed, nextStep, allDone, nextDue, deliveryLabel, dayNo } from './jobs.js';
 import { outNow } from './outwork.js';
+import { noteSummary } from './notes.js';
 
 /** A cell: 'none' (not needed), 'done', 'next' (the job's next step), 'todo', or 'out' (at another company). */
-export function tvRows(jobs, outwork, today) {
+export function tvRows(jobs, outwork, today, notes = []) {
   return floorQueue(jobs || [], 'all').map(j => {
     const next = nextStep(j), held = j.status === 'held';
     const cells = Object.fromEntries(PROCESSES.map(p => {
@@ -23,7 +24,8 @@ export function tvRows(jobs, outwork, today) {
     const out = PROCESSES.map(p => cells[p]).find(c => c.state === 'out');
     const note = held ? 'On hold' : allDone(j) ? 'Ready to dispatch'
       : out ? `At ${out.supplier}` : deliveryLabel(j);
-    return { id: j.id, so: j.so, customer: j.customer, cells, due, late, soon: !late && due && dayNo(due) - dayNo(today) <= 3, held, ready: !held && allDone(j),
+    const js = noteSummary(notes, j.id, false);   // as the shop floor sees it: new = not yet Got it
+    return { id: j.id, jobNote: js ? { body: js.last.body, by: js.last.byName, fresh: js.fresh > 0 } : null, so: j.so, customer: j.customer, cells, due, late, soon: !late && due && dayNo(due) - dayNo(today) <= 3, held, ready: !held && allDone(j),
       outLate: !!out?.late, outBack: out?.dueBack || null, note, steps: needed(j).length };
   });
 }
