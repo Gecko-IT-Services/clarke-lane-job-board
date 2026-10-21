@@ -44,8 +44,12 @@ export function taskForm(f, { staff, customers }, h) {
     <div class="actions"><button class="btn pri" type="submit">Save the task</button><button class="btn" type="button" data-taskcancel>Cancel</button></div></form>`;
 }
 
-/** Enquiries from info@: the new ones first with how long they have waited, then what happened to the rest. */
-export function renderEnquiries({ list, funnel, state, mailbox, open, busy, reply }, h) {
+/**
+ * Enquiries from info@ (redesigned 21 Oct: "looks very basic"): a header with when it was last checked and Check now,
+ * the last 90 days as four figures, the new enquiries first with how long they have waited, customers writing about
+ * their orders as their own short list, and the mailbox setting tucked away.
+ */
+export function renderEnquiries({ list, funnel, state, mailbox, open, busy, reply, checkedAt, settings }, h) {
   const { esc, fmt, fmtTime } = h;
   const st = { new: '<span class="chip late">Not answered</span>', replied: '<span class="chip soon">Replied</span>', quoted: '<span class="chip soon">Quoted</span>', won: '<span class="chip ok">Won</span>',
     lost: '<span class="chip">Lost</span>', ignored: '<span class="chip">Not an enquiry</span>' };
@@ -53,9 +57,9 @@ export function renderEnquiries({ list, funnel, state, mailbox, open, busy, repl
     : state === 'noaccess' ? `<div class="warn">Your Microsoft account cannot open ${esc(mailbox)}. Ask for access to that mailbox (Read and manage) in Microsoft 365.</div>`
     : state?.startsWith?.('error:') ? `<div class="err">${esc(state.slice(6))}</div>` : '';
   const enq = list.filter(e => e.kind === 'enquiry'), cust = list.filter(e => e.kind === 'customer' && e.status === 'new');
-  const row = e => `<tr class="${open === e.id ? 'open' : ''}" data-enqopen="${e.id}" tabindex="0"><td>${e.status === 'new' ? `<b>${esc(waited(e.waitHours))}</b>` : esc(fmt(e.receivedAt.slice(0, 10)))}</td>
+  const row = e => `<tr class="${open === e.id ? 'open' : ''}${e.status === 'new' ? ' waiting' : ''}" data-enqopen="${e.id}" tabindex="0"><td class="ewait">${e.status === 'new' ? `<b>${esc(waited(e.waitHours))}</b><small>waiting</small>` : `${esc(fmt(e.receivedAt.slice(0, 10)))}`}</td>
       <td><b>${esc(e.company || e.fromName || e.fromEmail)}</b><small>${esc(e.person || e.fromName)}${e.phone ? ' · ' + esc(e.phone) : ''}</small></td>
-      <td>${esc(e.wants || e.subject)}${e.hasDrawings ? ' <span class="chip ok">drawings</span>' : ''}${e.customerKey ? ' <span class="chip">customer</span>' : ' <span class="chip soon">new</span>'}</td><td>${st[e.status] || ''}</td></tr>
+      <td>${esc(e.wants || e.subject)}<div class="echips">${e.hasDrawings ? '<span class="chip ok">drawings</span>' : ''}${e.customerKey ? '<span class="chip">customer</span>' : '<span class="chip soon">new customer</span>'}</div></td><td class="est">${st[e.status] || ''}</td></tr>
     ${open === e.id ? `<tr class="edetail"><td colspan="4"><p>${esc(e.summary)}</p><p class="note">From ${esc(e.fromName)} &lt;${esc(e.fromEmail)}&gt; · ${esc(fmtTime(e.receivedAt))} · “${esc(e.subject)}”</p>
       ${reply?.id === e.id && reply.draft ? `<div class="saibox"><label class="fl">Subject<input type="text" id="er-subj" value="${esc(reply.draft.subject)}"></label>
           <label class="fl">Reply (edit anything)<textarea id="er-body" rows="7">${esc([reply.draft.greeting, ...reply.draft.paragraphs].join('\n\n'))}</textarea></label>
@@ -65,14 +69,22 @@ export function renderEnquiries({ list, funnel, state, mailbox, open, busy, repl
         <button class="btn sm" type="button" data-taskadd="enquiry:${e.id}">Add a task</button>
         ${e.customerKey ? `<button class="btn sm" type="button" data-custpage="${esc(e.customerKey)}">Customer page</button>` : `<button class="btn sm" type="button" data-enqnewcust="${e.id}">Add as a customer</button>`}
         <label class="sinline">Mark as <select data-enqstatus="${e.id}"><option value="">…</option>${['replied', 'quoted', 'won', 'lost', 'ignored', 'new'].map(s => `<option value="${s}">${{ replied: 'Replied', quoted: 'Quoted', won: 'Won', lost: 'Lost', ignored: 'Not an enquiry', new: 'Not answered' }[s]}</option>`).join('')}</select></label></div></td></tr>` : ''}`;
-  const f = funnel;
-  return `<section class="panel enquiries" id="enquiries"><h3>Enquiries <small>from ${esc(mailbox)}, read by AI</small></h3>${head}
-    ${f.received ? `<p class="note">Last 90 days: <b>${f.received}</b> enquir${f.received === 1 ? 'y' : 'ies'}, ${f.answered} answered, ${f.quoted} quoted, <b>${f.won} won</b>${f.waiting ? ` · <b class="bad">${f.waiting} waiting for an answer</b>` : ''}. A quick first reply wins more of them.</p>` : ''}
-    ${enq.length ? `<div class="tbl-wrap"><table class="lines elist"><thead><tr><th>Waiting</th><th>Who</th><th>What they want</th><th></th></tr></thead><tbody>${enq.slice(0, 40).map(row).join('')}</tbody></table></div>`
-      : state === 'ok' ? '<p class="note">No enquiries yet. New emails to the mailbox are read every 15 minutes while the board is open.</p>' : state === 'reading' ? '<p class="note">Reading the mailbox…</p>' : ''}
-    ${cust.length ? `<p class="note">Also ${cust.length} email${cust.length === 1 ? '' : 's'} from customers about their orders: ${cust.slice(0, 5).map(e => `<a href="${esc(e.webLink)}" target="_blank" rel="noopener">${esc(e.company || e.fromName)}</a>`).join(', ')}.
-      <button class="btn link sm" type="button" data-enqdoneall>Mark them seen</button></p>` : ''}
-    <p class="note">Mailbox: <input type="email" id="enq-mailbox" value="${esc(mailbox)}" style="width:240px"> <button class="btn sm" type="button" data-enqmailbox>Save</button> <button class="btn sm" type="button" data-enqsync>Check now</button></p></section>`;
+  const f = funnel, stat = (n, label, cls = '') => `<div class="estat${cls}"><b>${n}</b><span>${label}</span></div>`;
+  const stats = `<div class="estats">${stat(f.waiting, 'waiting for a reply', f.waiting ? ' hot' : '')}${stat(f.received, 'enquiries, last 90 days')}${stat(f.answered, 'answered')}${stat(f.quoted, 'quoted')}${stat(f.won, 'won', f.won ? ' good' : '')}</div>`;
+  const checked = state === 'reading' ? 'Checking the mailbox…' : checkedAt ? `Checked ${esc(fmtTime(checkedAt))}` : '';
+  const enqBox = enq.length ? `<div class="tbl-wrap"><table class="lines elist"><thead><tr><th>Waiting</th><th>Who</th><th>What they want</th><th></th></tr></thead><tbody>${enq.slice(0, 40).map(row).join('')}</tbody></table></div>`
+    : state === 'ok' ? `<div class="eempty">${icon('mail')}<div><b>No enquiries waiting</b><span>New emails asking for a price or a quote appear here, read and sorted by AI, with how long each has waited.</span></div></div>`
+    : state === 'reading' ? '<p class="note">Reading the mailbox…</p>' : '';
+  const custBox = cust.length ? `<div class="ecust"><div class="ecust-h"><h4>Customers writing about their orders <span class="note">${cust.length}</span></h4><button class="btn sm" type="button" data-enqdoneall>Mark all seen</button></div>
+      <ul>${cust.slice(0, 8).map(e => `<li><b>${esc(e.company || e.fromName)}</b><span class="esub">${esc(e.summary || e.subject)}</span><span class="note">${esc(fmtTime(e.receivedAt))}</span>
+        ${e.webLink ? `<a class="btn sm" href="${esc(e.webLink)}" target="_blank" rel="noopener">Open</a>` : ''}${e.customerKey ? `<button class="btn sm link" type="button" data-custpage="${esc(e.customerKey)}">Customer</button>` : ''}</li>`).join('')}</ul>
+      ${cust.length > 8 ? `<p class="note">and ${cust.length - 8} more.</p>` : ''}</div>` : '';
+  return `<section class="panel enquiries" id="enquiries">
+    <div class="ehead"><div><h3>${icon('mail')}Enquiries</h3><span class="note">from <b>${esc(mailbox)}</b>, read and sorted by AI${checked ? ' · ' + checked : ''}</span></div>
+      <div class="eact"><button class="btn sm" type="button" data-enqsync>${icon('refresh')}Check now</button><button class="btn sm link" type="button" data-enqsettings aria-expanded="${!!settings}">Mailbox</button></div></div>
+    ${settings ? `<div class="eset"><label class="fl">Mailbox to read<input type="email" id="enq-mailbox" value="${esc(mailbox)}"></label><button class="btn sm pri" type="button" data-enqmailbox>Save</button><span class="note">Read every 15 minutes while the board is open.</span></div>` : ''}
+    ${head}${state === 'ok' || f.received ? stats : ''}
+    ${enqBox}${custBox}</section>`;
 }
 
 /** A customer's page, all but the Contacts tab (drawn by app.js from the contact book). */
