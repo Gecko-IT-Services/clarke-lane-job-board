@@ -13,7 +13,8 @@ const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => rea
 // matters only while the hole is open: these arguments fail before any row changes (no such id,
 // empty list, no such process). set_running_order is left out because any argument rewrites
 // priorities; the static test covers its grant.
-const dummy = { bigint: 0, integer: 0, text: '', date: '2026-01-01', jsonb: {}, 'bigint[]': [], timestamptz: '2026-01-01T00:00:00Z' };
+const dummy = { bigint: 0, integer: 0, int: 0, smallint: 0, numeric: 0, double: 0, real: 0, boolean: false, text: '', varchar: '', uuid: '00000000-0000-0000-0000-000000000000',
+  date: '2026-01-01', jsonb: {}, json: {}, 'bigint[]': [], 'text[]': [], timestamptz: '2026-01-01T00:00:00Z', timestamp: '2026-01-01T00:00:00' };   // 'double precision' parses as 'double'
 const fns = [...new Set([...sql.matchAll(/create(?: or replace)? function public\.(\w+)\(([^)]*)\)\s+returns\s+(\w+)/g)].filter(m => m[3] !== 'trigger').map(m => m[1] + '|' + m[2]))]
   .map(s => { const [name, params] = s.split('|'); return { name, params }; })
   .filter(f => f.name !== 'set_running_order');
@@ -34,7 +35,8 @@ const probe = async f => {
       body: JSON.stringify(args) });
   } catch (e) { throw Object.assign(new Error('offline'), { offline: true, cause: e }); }
   const body = (await res.json().catch(() => null)) || {};   // a function returning null is the literal "null"
-  return { name: f.name, status: res.status, code: body.code, message: body.message };
+  // PGRST202: not in the database yet (a migration in the checkout that has not been applied). Nothing to probe.
+  return { name: f.name, status: res.status, code: body.code === 'PGRST202' ? '42501' : body.code, message: body.message, missing: body.code === 'PGRST202' };
 };
 
 let results;
@@ -43,4 +45,5 @@ catch (e) { if (!e.offline) throw e; console.log(`rpc-anon: skipped (no network:
 const open = results.filter(r => r.code !== '42501');
 for (const r of open) console.log(`  OPEN to anon: ${r.name} → ${r.status} ${r.code || ''} ${r.message || ''}`);
 assert.equal(open.length, 0, `${open.length} of ${results.length} functions answer to the publishable key`);
-console.log(`rpc-anon: ok (${results.length} functions refuse anon)`);
+const missing = results.filter(r => r.missing).map(r => r.name);
+console.log(`rpc-anon: ok (${results.length - missing.length} functions refuse anon${missing.length ? `; not deployed yet: ${missing.join(', ')}` : ''})`);
