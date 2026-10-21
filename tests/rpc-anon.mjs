@@ -14,9 +14,9 @@ const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => rea
 // empty list, no such process). set_running_order is left out because any argument rewrites
 // priorities; the static test covers its grant.
 const dummy = { bigint: 0, integer: 0, text: '', date: '2026-01-01', jsonb: {}, 'bigint[]': [], timestamptz: '2026-01-01T00:00:00Z' };
-const fns = [...new Set([...sql.matchAll(/create(?: or replace)? function public\.(\w+)\(([^)]*)\)/g)].map(m => m[1] + '|' + m[2]))]
+const fns = [...new Set([...sql.matchAll(/create(?: or replace)? function public\.(\w+)\(([^)]*)\)\s+returns\s+(\w+)/g)].filter(m => m[3] !== 'trigger').map(m => m[1] + '|' + m[2]))]
   .map(s => { const [name, params] = s.split('|'); return { name, params }; })
-  .filter(f => f.name !== 'touch_modified_at' && f.name !== 'set_running_order');
+  .filter(f => f.name !== 'set_running_order');
 assert.ok(fns.some(f => f.name === 'amend_job') && fns.some(f => f.name === 'me'), 'found the RPCs');
 
 const probe = async f => {
