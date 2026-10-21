@@ -46,7 +46,7 @@ export function monthGauge(mp, breakeven, target, st, money) {
  * The "This month" panel for Home and Jobs. mp: monthProgress(); settings: { breakeven, target };
  * edit: show the form (Jobs only); compact: Home's short version with a link to Jobs.
  */
-export function monthPanel({ mp, breakeven, target, name, edit = false, compact = false, xeroNote = '' }, { gbp, esc, fmt }) {
+export function monthPanel({ mp, breakeven, target, name, edit = false, compact = false, xeroNote = '', xeroStale = '' }, { gbp, esc, fmt }) {
   if (mp.dispatched == null) return '';
   const set = breakeven || target;
   const st = set ? monthState(mp, breakeven, target) : null;
@@ -58,7 +58,7 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
     // Where the invoiced figure comes from: the board's dispatch notes, plus Xero invoices raised outside it.
   const from = xeroNote === 'checking' ? 'Checking Xero for invoices raised outside the board…'
     : xeroNote ? `Not counting invoices raised in Xero outside the board: ${xeroNote}`
-    : mp.fromXero ? `${gbp(mp.fromXero)} invoiced in Xero (${mp.xeroCount} invoice${mp.xeroCount === 1 ? '' : 's'}) and ${gbp(mp.onBoard)} dispatched on the board.` : '';
+    : mp.fromXero ? `${gbp(mp.fromXero)} invoiced in Xero (${mp.xeroCount} invoice${mp.xeroCount === 1 ? '' : 's'}) and ${gbp(mp.onBoard)} dispatched on the board.${xeroStale ? ` ${esc(xeroStale)}.` : ''}` : '';
   const figs = `<div class="mfigs">
       <div class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}"><span>Invoiced</span><b>${gbp(mp.dispatched)}</b><small>so far this month</small></div>
       <div class="mfig f-wip"><span>Work in progress</span><b>${gbp(wip)}</b><small>due by ${fmt(mp.end)}</small></div>

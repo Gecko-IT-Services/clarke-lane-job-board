@@ -57,7 +57,7 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
   ].join('') : '';
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
-  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), xeroNote: monthXero.note, breakeven, target, edit: editTarget,
+  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), xeroNote: monthXero.note, xeroStale: monthXero.stale || '', breakeven, target, edit: editTarget,
     name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
@@ -115,7 +115,7 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
     <td>${fmt(c.oldest.date)} <span class="chip late">${c.oldest.age} days</span></td><td class="mono">${esc(c.oldest.number)}</td><td>${chased(c)}</td>${money(c.over)}
     <td class="act"><button class="btn sm" type="button" data-chase="${esc(c.key)}">Draft a chase email</button> <a class="btn sm" href="${xeroLink(c.oldest.id)}" target="_blank" rel="noopener" title="Open the oldest invoice in Xero">${XERO}</a></td></tr>`;
   const DRILL = {
-    debts: { title: 'Over 60 days', sub: 'customers with invoices more than 60 days old and past due in Xero · most owed first · the chase email is an Outlook draft, copied to Keith',
+    debts: { title: 'Over 60 days', sub: 'customers with invoices more than 60 days old and past due in Xero · most owed first · the chase email is an Outlook draft, copied to Keith' + (debts.note ? ` · ${esc(debts.note)}` : ''),
       list: (debts.list || []).map(debtRow), empty: 'Nobody has invoices over 60 days.', cols: ['Customer', 'Oldest invoice', 'Invoice', 'Chased'] },
     late: { title: 'Running late', sub: 'worst first', list: d.late.map(r => ROW.late(r)), empty: 'Nothing is late.' },
     soon: { title: 'Due in the next 7 days', sub: 'soonest first', list: d.soon.map(j => jobRow(j, until(j) + heldChip(j), j.status === 'open' && allDone(j) ? dispatchBtn(j) : openBtn(j))), empty: 'Nothing due in the next 7 days.' },
