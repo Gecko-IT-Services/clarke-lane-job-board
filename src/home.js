@@ -1,12 +1,13 @@
 /**
- * Home: problems first. Four summary cards (and, for the office, two invoicing cards), the stations with work waiting, then one table that
- * switches between "Needs attention" and "Going out". The numbers and the row order come from
+ * Home: problems first. Mandy (office): Today and Sales this week side by side, two rows of four cards (the work, then
+ * invoicing and what is out), the shop floor's notes, the reorder round, the stations with work waiting, then one table that
+ * switches between "Needs attention" and "Going out". Levi (md): see the note above `main` below. The numbers and the row order come from
  * dashboard() and attention() in core/jobs.js (tested); this file only draws them.
  * h: the formatting helpers from app.js.
  */
 import { icon, XERO } from './icons.js';
 import { monthPanel } from './gauge.js';
-import { monthProgress, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue } from './core/jobs.js';
+import { monthProgress, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue, homeGaps } from './core/jobs.js';
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** A summary card. It only takes its colour when there is something to see. label/shown are HTML: escape before passing. */
@@ -48,10 +49,11 @@ export function renderHome({ todayBox = '', notesBox = '', reorderBox = '', jobs
       : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
       : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
         'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
-    debtCard,
-    // Work at other companies (powder coat, plating): opens the Sent out whiteboard on the Shop floor.
-    sentOut && (sentOut.out || sentOut.ready) ? card(sentOut.late ? 'bad' : 'info', 'truck', sentOut.out, sentOut.late ? `Sent out · ${sentOut.late} overdue back` : sentOut.ready ? `Sent out · ${sentOut.ready} ready to go` : 'Sent out to other companies',
-      sentOut.out > 0 || sentOut.ready > 0, 'data-gostation="out" title="Show what is at other companies for powder coat or plating"') : '',
+    // Always four on Mandy's second row (Philip, 21 Oct: no gaps): without Xero the debt card says so.
+    debtCard || card('info', 'late', '—', 'Over 60 days · Xero not connected', false),
+    // Work at other companies (powder coat, plating): opens the Sent out whiteboard on the Shop floor. Always shown, silver at 0.
+    (o => card(o.late ? 'bad' : 'info', 'truck', o.out, o.late ? `Sent out · ${o.late} overdue back` : o.ready ? `Sent out · ${o.ready} ready to go` : o.out ? 'Sent out to other companies' : 'Sent out · nothing at other companies',
+      o.out > 0 || o.ready > 0, 'data-gostation="out" title="Show what is at other companies for powder coat or plating"'))(sentOut || { out: 0, late: 0, ready: 0 }),
   ].join('') : '';
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
@@ -123,6 +125,8 @@ export function renderHome({ todayBox = '', notesBox = '', reorderBox = '', jobs
     uninv: { title: 'Delivered, not invoiced', sub: 'oldest delivery first · send them from Dispatch › Waiting for Xero',
       list: d.toXero.slice().sort((a, b) => String(a.d.deliveredOn).localeCompare(String(b.d.deliveredOn))).map(x => ROW.invoice({ job: x.job, despatch: x.d })),
       empty: 'Every delivered note is in Xero.', cols: ['Customer', 'Delivered', 'Next step', 'Status'] },
+    nodrawing: { title: 'Open orders with no drawing', sub: 'nothing attached yet · soonest due first · attach one on the job',
+      list: homeGaps(jobs).noDrawing.map(j => jobRow(j, `<span class="chip soon">No drawing</span>${heldChip(j)}`, openBtn(j))), empty: 'Every open order has a drawing.' },
     drafts: { title: 'In Xero, not approved', sub: 'draft invoices the board made, still waiting to be approved in Xero · oldest first',
       list: (ap.list || []).map(draftRow), empty: 'Nothing waiting: every invoice the board made has been approved in Xero.', cols: ['Customer', 'Sent', 'Invoice', 'Status'] },
   };
@@ -145,11 +149,13 @@ export function renderHome({ todayBox = '', notesBox = '', reorderBox = '', jobs
   const main = md ? `<div class="hmd">${month}${todayBox}</div>
     <div class="hcards">${[cards.book, cards.late, cards.soon, debtCard].join('')}</div>
     ${notesBox}${reorderBox}`
-  : `${todayBox}${notesBox}
-    <div class="hcards">${Object.values(cards).join('')}</div>
-    ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}
-    ${reorderBox}
-    <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>`;
+  // Mandy's Home (Philip, 21 Oct: "remove the areas that don't matter, align the ones that do"): Today and Sales this
+  // week side by side at the same height, then two rows of four cards (the work; invoicing and what is out), the shop
+  // floor's notes, the reorder round and the station snapshot, every box on the same gutters.
+  : `${todayBox ? `<div class="hmd">${todayBox}</div>` : ''}
+    <div class="hcards hcards8">${Object.values(cards).join('')}${money2}</div>
+    ${notesBox}${reorderBox}
+    <section class="panel snapbox"><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><button class="btn sm link" type="button" data-tab="floor">Open shop floor</button></div>${snap}</section>`;
   return `<div class="home">${top}${main}
     <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;

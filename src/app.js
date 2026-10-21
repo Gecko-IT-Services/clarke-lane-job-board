@@ -39,7 +39,7 @@ import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists, partSuggestions, partMatches, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions, partMatches, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -1402,14 +1402,17 @@ async function toggleTask(id, done) {
   } catch (e) { toast(e.message, null, true); }
   render();
 }
-/** Home's Today panel: enquiries waiting, my tasks, and for Levi the sales prompts. */
+/** Won quotes not yet sales orders (SharePoint's and Xero's), or null until SharePoint's quotes are read. */
+const wonWaiting = () => S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null;
+/** Home's Today panel: for Mandy, Today and Sales this week side by side; for Levi, Sales this week and his tasks. */
 function todayHtml() {
   if (!office()) return '';
   const today = todayIso(), tasks = taskGroups(S.tasks || [], today, S.me.email);
   let chase = [], reorders = [], quiet = [];
   const rm = reorderModel();
   { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { quiet = quietCustomers(customerBase(S.hist.invoices, today)); reorders = rm.round.filter(r => r.state === 'due'); } }
-  const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };   // the tile counts only those still to ask
+  const gaps = md() ? {} : homeGaps(S.jobs, S.book?.people || []);   // Mandy's Today and Sales tiles (21 Oct)
+  const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet, won: wonWaiting(), ...gaps }), today };   // the tile counts only those still to ask
   return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList(), panel: md() }, { esc, fmt });
 }
 const floorNotesHtml = () => office() ? floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc }) : '';
@@ -2667,7 +2670,7 @@ function render() {
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
   ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
-      wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
+      wonQuotes: wonWaiting(),
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();

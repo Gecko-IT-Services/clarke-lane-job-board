@@ -136,8 +136,11 @@ export function trendWords(c) {
   return r > 1.15 ? 'growing on the year before' : r < 0.85 ? 'down on the year before' : 'steady on the year before';
 }
 
-/** The morning list for Home: what is waiting for someone today. */
-export function morning({ enquiries = [], tasks, chase = [], reorders = [], quiet = [] }) {
+/**
+ * The morning list for Home: what is waiting for someone today. won: won quotes not yet orders (a count, or null while
+ * SharePoint is read); noDrawing/noContact: open orders with no drawing, or no contact saved (homeGaps in core/jobs.js).
+ */
+export function morning({ enquiries = [], tasks, chase = [], reorders = [], quiet = [], won = null, noDrawing = [], noContact = [] }) {
   return { enquiries: enquiries.filter(e => e.kind === 'enquiry' && e.status === 'new').length, overdueTasks: tasks.overdue.length, todayTasks: tasks.today.length,
-    chase: chase.length, reorders: reorders.length, quiet: quiet.length };
+    chase: chase.length, reorders: reorders.length, quiet: quiet.length, won, noDrawing: noDrawing.length, noContact: noContact.length };
 }
