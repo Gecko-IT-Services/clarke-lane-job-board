@@ -5,7 +5,7 @@
  * Suggestions only: Levi or Mandy add them. Bends that are only drawn (no words) cannot be read here.
  * Pure: no window, no PDF library (app.js extracts the text). Tested in tests/drawing.mjs.
  */
-import { PROCESSES } from './jobs.js';
+import { PROCESSES, lineLabel } from './jobs.js';
 
 // Title blocks repeat the same small print on every drawing; it must not suggest anything.
 const BOILERPLATE = [/remove\s+all\s+burrs?(\s+and\s+sharp\s+edges)?/gi, /de-?burr(\s+all)?(\s+sharp\s+edges)?/gi, /do\s+not\s+scale/gi,
@@ -78,7 +78,8 @@ export function processesFromHistory(jobs, part) {
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const p = norm(part); if (p.length < 4) return null;
   const code = (String(part).match(/\b[A-Z0-9]{2,}[-/][A-Z0-9][A-Z0-9\-/]{2,}\b/i) || [])[0];
-  const hit = j => j.lines.some(l => norm(l.part) === p || (code && String(l.part).toUpperCase().includes(code.toUpperCase())));
+  // part: how the new line reads (lineLabel); earlier lines are compared the same way, part number and all.
+  const hit = j => j.lines.some(l => norm(lineLabel(l)) === p || (code && lineLabel(l).toUpperCase().includes(code.toUpperCase())));
   const j = [...jobs].filter(x => x.status !== 'cancelled' && Object.keys(x.procs || {}).length)
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || b.id - a.id).find(hit);
   return j ? { so: j.so, processes: PROCESSES.filter(x => j.procs[x]) } : null;

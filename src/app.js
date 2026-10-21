@@ -8,7 +8,7 @@ import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
-import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partNumbersIn, partsOnJob } from './core/parts.js';
+import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partsOnJob, lineNumbers } from './core/parts.js';
 import { OUT_PROCESSES, outNow, outBoard, itemsFor, finishFor, defaultDueBack, suppliersUsed, checkSend } from './core/outwork.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
@@ -43,7 +43,7 @@ import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists, partSuggestions, partMatches, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -324,8 +324,9 @@ async function startConvert(spId) {
     S.conv = null;
     openOrderForm({ from: `quote ${q.quoteNo}`, spQuoteId: q.spId, quoteNo: q.quoteNo, customer: q.customer,
       contact: q.contactName, contactEmail: q.contactEmail, due, procs: suggestProcesses(lines),
-      lines: lines.map(l => ({ part: describeLine(l), qty: String(l.qty), price: String(unitPrice(l.sellTotal, l.qty)), due }))
-        .concat(q.carriage > 0 ? [{ part: 'Carriage', qty: '1', price: String(q.carriage), due }] : []) });
+      // QuoteLines has no part number column: Part no. stays empty for Mandy to fill rather than guessed.
+      lines: lines.map(l => ({ partNo: '', part: describeLine(l), qty: String(l.qty), price: String(unitPrice(l.sellTotal, l.qty)), due }))
+        .concat(q.carriage > 0 ? [{ partNo: '', part: 'Carriage', qty: '1', price: String(q.carriage), due }] : []) });
   } catch (e) { S.conv = null; toast(e.message, null, true); render(); }
 }
 
@@ -430,7 +431,7 @@ function renderOrders() {
     { esc, fmt, gbp, dueChip, match: orderMatch });
 }
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
-const blankLine = due => ({ part: '', qty: '', price: '', due: due || '' });
+const blankLine = due => ({ partNo: '', part: '', qty: '', price: '', due: due || '' });
 function openOrderForm(prefill = {}, amendId = null) {
   const due = prefill.due || addWorkingDays(todayIso(), 10);
   S.form = { mode: amendId ? 'amend' : 'new', jobId: amendId, so: '', customer: '', po: '', contact: '', contactEmail: '',
@@ -461,7 +462,7 @@ const partOptions = ps => ps.map(x => `<option value="${esc(x.part)}">${x.from =
 const dnPo = (j, d) => dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po));
 const linePos = j => [...new Set(j.lines.map(l => l.po).filter(Boolean))];
 const orderMatch = (j, q) => [j.so, j.customer, j.po, j.quote, ...linePos(j)].some(s => (s || '').toLowerCase().includes(q));
-const jobMatch = (j, q) => orderMatch(j, q) || j.lines.some(l => (l.part || '').toLowerCase().includes(q));
+const jobMatch = (j, q) => orderMatch(j, q) || j.lines.some(l => lineLabel(l).toLowerCase().includes(q) || (l.partNo || '').toLowerCase().includes(q));
 /** Sage-style "copy order": a new order from an old one. New number, new PO, dates moved forward. */
 function openRepeat(id) {
   const j = job(id);
@@ -474,14 +475,14 @@ function openAmend(id) {
   const j = job(id);
   openOrderForm({ so: j.so, customer: j.customer, po: j.po, contact: j.contactName, contactEmail: j.contactEmail || '', address: j.address, notes: j.notes,
     due: nextDue(j), procs: needed(j),
-    lines: j.lines.map(l => ({ id: l.id, part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, po: l.po || '', sent: sent(j, l) })) }, id);
+    lines: j.lines.map(l => ({ id: l.id, partNo: l.partNo || '', part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, po: l.po || '', sent: sent(j, l) })) }, id);
 }
 /** Copy what is typed into S.form, so adding, removing or splitting lines keeps everything else. */
 function collectForm() {
   const n = S.form, v = id => $(id)?.value ?? '';
   Object.assign(n, { so: v('of-so'), customer: v('of-cust') || n.customer, po: v('of-po'), contact: v('of-contact'), contactEmail: v('of-email'), address: v('of-addr'),
     due: v('of-due') || n.due, notes: v('of-notes') });
-  n.lines = n.lines.map((l, i) => ({ ...l, part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i), po: v('of-lpo' + i) }));
+  n.lines = n.lines.map((l, i) => ({ ...l, partNo: v('of-pno' + i), part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i), po: v('of-lpo' + i) }));
   n.procs = [...document.querySelectorAll('input[name=of-p]:checked')].map(i => i.value);
   n.splitN = v('of-sn'); n.splitEvery = v('of-se'); n.splitFrom = v('of-sf');
   if ($('of-b2b')) n.b2b = $('of-b2b').checked;
@@ -493,7 +494,10 @@ function formTotals(lines) {
 }
 function orderForm() {
   const n = S.form, amend = n.mode === 'amend';
-  const rows = n.lines.map((l, i) => `<tr><td><input type="text" id="of-part${i}" value="${esc(l.part)}" placeholder="Part and spec: type to pick from the list" list="of-parts" autocomplete="off" aria-label="Part, line ${i + 1}"></td>
+  // Two boxes, as in Xero and Sage (Mandy, 22 Oct): Part no. (optional) and Description (required). Both offer the
+  // same list; picking from either fills both.
+  const rows = n.lines.map((l, i) => `<tr><td><input type="text" class="mono pno" id="of-pno${i}" value="${esc(l.partNo || '')}" placeholder="optional" list="of-parts" autocomplete="off" aria-label="Part no., line ${i + 1}"></td>
+    <td><input type="text" id="of-part${i}" value="${esc(l.part)}" placeholder="Description and spec: type to pick from the list" list="of-parts" autocomplete="off" aria-label="Description, line ${i + 1}"></td>
     <td><input type="number" id="of-qty${i}" value="${esc(l.qty)}" min="${l.sent || 1}" step="1" aria-label="Quantity, line ${i + 1}"></td>
     <td><input type="number" id="of-price${i}" value="${esc(l.price)}" min="0" step="any" aria-label="Unit price, line ${i + 1}"></td>
     <td><input type="date" id="of-ldue${i}" value="${esc(l.due)}" aria-label="Due date, line ${i + 1}"></td>
@@ -516,7 +520,7 @@ function orderForm() {
     ${bookFor(n.customer).sites.length > 0 ? `<label class="fl">Saved delivery addresses<select class="f" id="of-site"><option value="">Choose one to fill in the address…</option>${bookFor(n.customer).sites.map(x => `<option value="${x.id}">${esc(x.label || x.address.split('\n')[0])}${x.main ? ' (usual)' : ''}</option>`).join('')}</select></label>` : ''}
     <div class="row2"><label class="fl">Delivery address<textarea id="of-addr" rows="3" placeholder="Leave blank to deliver to the customer's usual address">${esc(n.address)}</textarea></label>
       <label class="fl">Promised delivery<input type="date" id="of-due" value="${esc(n.due)}" data-was="${esc(n.due)}"><span class="note">Changing it moves the lines on the same date (not yet dispatched) with it, and new lines get it.</span></label></div>
-    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th>Part</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th title="Only if the customer sent a separate PO for this delivery. Blank = the order's PO.">Call-off PO</th><th>Net</th>${amend ? '<th>Dispatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="overflow-x:auto"><table class="lines njlines"><thead><tr><th title="The customer's part number, if it has one. Parts and the drawings use it first.">Part no.</th><th>Description</th><th>Qty</th><th>Unit price (£)</th><th>Due</th><th title="Only if the customer sent a separate PO for this delivery. Blank = the order's PO.">Call-off PO</th><th>Net</th>${amend ? '<th>Dispatched</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="actions"><button class="btn sm" type="button" data-oladd>Add a line</button>
       <details class="splitter"><summary class="btn sm">Split into call-offs…</summary>
         <div class="row3"><label class="fl">Deliveries<input type="number" id="of-sn" min="2" max="24" value="${esc(n.splitN || 4)}"></label>
@@ -527,8 +531,8 @@ function orderForm() {
     <p class="note" id="of-tot">${formTotals(n.lines)}</p>
     ${(() => { const ps = formParts(n), c = k => ps.filter(x => x.from === k).length;
       return `<datalist id="of-parts">${partOptions(partMatches(ps, ''))}</datalist>
-      <p class="note">Parts list: ${c('customer')} for this customer, ${c('board')} from other orders${c('parts') ? `, ${c('parts')} in Parts` : ''}${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Type the part number or a word from the description; picking one fills in its price.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
-    <div class="fl">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : n.procNote ? '. ' + esc(n.procNote) : ''}</div>
+      <p class="note">Parts list: ${c('customer')} for this customer, ${c('board')} from other orders${c('parts') ? `, ${c('parts')} in Parts` : ''}${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Type the part number or a word from the description in either box; picking one fills in the part number, the description and its price.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
+    <div class="fl" id="of-pnote">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : n.procNote ? '. ' + esc(n.procNote) : ''}</div>
     <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
     ${amend ? '' : `<label class="b2b"><input type="checkbox" id="of-b2b" ${n.b2b ? 'checked' : ''}> <span><b>Back-to-back:</b> buy these parts in for this order. Once it is saved, the purchase order opens ready, with the same parts (no processes needed if nothing is made here).</span></label>`}
@@ -579,7 +583,7 @@ function splitLines() {
   if (n.lines.some(l => l.sent)) return toast('Some lines have dispatches already. Add new lines for the remaining deliveries instead.', null, true);
   const count = Math.max(2, Math.min(24, +n.splitN || 2));
   const dates = calloffDates(n.splitFrom || n.due, count, n.splitEvery || '7');
-  const real = n.lines.filter(l => l.part.trim() && Number(l.qty) > 0);
+  const real = n.lines.filter(l => (l.part.trim() || (l.partNo || '').trim()) && Number(l.qty) > 0);
   if (!real.length) return toast('Enter the parts and quantities first, then split them.', null, true);
   n.lines = splitIntoCalloffs(real, dates).map(l => ({ ...l, qty: String(l.qty) }));
   n.due = dates[0]; keepInputs = false; render();
@@ -588,19 +592,19 @@ function splitLines() {
 async function submitOrder() {
   collectForm();
   const n = S.form, msg = t => { $('of-msg').textContent = t; };
-  const lines = n.lines.filter(l => l.part.trim() || l.qty || l.price);
+  const lines = n.lines.filter(l => l.part.trim() || (l.partNo || '').trim() || l.qty || l.price);
   if (!n.customer.trim()) return msg('Enter the customer.');
   const mails = emailList(n.contactEmail);
   if (mails.bad.length) return msg(`"${mails.bad[0]}" is not an email address. Put several addresses with a comma between them.`);
   n.contactEmail = mails.ok.join(', ');
   if (!lines.length) return msg('Add at least one line.');
   const bad = lines.find(l => !l.part.trim() || !(Number(l.qty) > 0) || !Number.isInteger(Number(l.qty)) || l.price === '' || Number(l.price) < 0 || !l.due);
-  if (bad) return msg('Every line needs a part, a whole-number quantity, a unit price (0 is allowed) and a due date.');
+  if (bad) return msg('Every line needs a description, a whole-number quantity, a unit price (0 is allowed) and a due date. The part number is optional.');
   const under = lines.find(l => l.sent && Number(l.qty) < l.sent);
-  if (under) return msg(`"${under.part}" has ${under.sent} dispatched already, so its quantity cannot go below that.`);
+  if (under) return msg(`"${lineLabel(under)}" has ${under.sent} dispatched already, so its quantity cannot go below that.`);
   if (!n.procs.length && !n.b2b) return msg('Tick at least one process so the shop floor knows what the order needs (or tick Back-to-back if it is bought in and sent on).');
   if (n.mode === 'new' && n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
-  const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due, customer_po: (l.po || '').trim() }));
+  const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part_no: (l.partNo || '').trim(), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due, customer_po: (l.po || '').trim() }));
   S.busy = true; render();
   try {
     if (n.mode === 'amend') {
@@ -1030,14 +1034,15 @@ function makeJobFromXero(id) {
   const due = q.expiry && q.expiry >= todayIso() ? q.expiry : addWorkingDays(todayIso(), 10);
   openOrderForm({ from: `Xero ${q.number}`, so: q.number.toUpperCase().replace(/^SO(\d)/, 'SO-$1'), customer: q.customer, po: q.reference,
     due, xeroQuoteId: q.id,
-    lines: q.lines.filter(l => l.qty > 0).map(l => ({ part: xeroLinePart(l), qty: String(l.qty), price: String(l.unit), due })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine(due)]) });
+    // Xero's item code into Part no., its description into Description (22 Oct); no code, no part number.
+    lines: q.lines.filter(l => l.qty > 0).map(l => ({ ...xeroLineFields(l), qty: String(l.qty), price: String(l.unit), due })).concat(q.lines.some(l => l.qty > 0) ? [] : [blankLine(due)]) });
 }
 
 /* ---------- shop floor: the touch screen in the factory. Same rows as the job board, bigger boxes. ---------- */
 /** Outstanding parts, one line per part however many delivery lines it is split over. */
 function dispatchParts(j) {
   return partsLeft(j).map(r =>
-    `<div><b>${r.left}</b> × ${esc(r.part)}${r.next && r.next !== r.left ? ` <span class="note">(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
+    `<div><b>${r.left}</b> × ${lineHtml({ partNo: r.partNo, part: r.desc }, esc)}${r.next && r.next !== r.left ? ` <span class="note">(${r.next} for the next delivery)</span>` : ''}</div>`).join('');
 }
 function procButtons(j, focus) {
   return needed(j).map(p => { const s = j.procs[p];
@@ -1422,7 +1427,7 @@ async function unlinkFolder(kind) {
   render();
 }
 /** Does an order name any part numbers (on its lines, or a Parts part of this customer)? Only then are the folders searched. */
-const namesParts = j => j.lines.some(l => partNumbersIn(l.part).length) || partsOnJob(S.parts || [], j).length > 0;
+const namesParts = j => j.lines.some(l => lineNumbers(l).length) || partsOnJob(S.parts || [], j).length > 0;
 function foundOnJob(j) {
   if (!office() || !namesParts(j)) return '';
   const cf = custFiles(normName(j.customer));
@@ -1937,7 +1942,7 @@ function wonDetail(r) {
   if (r.state === 'job' && job(r.jobId)) {
     const j = job(r.jobId);
     return `<p class="note">Now <b>${esc(j.so)}</b>${j.po ? `, customer PO ${esc(j.po)}` : ''}. <button class="btn link sm" type="button" data-open="${j.id}">Open the order</button></p>`
-      + tbl(['Part', 'Qty', 'Due', 'Net'], j.lines.map(l => `<tr><td>${esc(l.part)}</td><td class="num">${l.qty}</td><td class="num">${fmt(l.due)}</td><td class="num">${l.price != null ? gbp(round2(l.qty * l.price), 2) : ''}</td></tr>`));
+      + tbl(['Part', 'Qty', 'Due', 'Net'], j.lines.map(l => `<tr><td>${lineHtml(l, esc)}</td><td class="num">${l.qty}</td><td class="num">${fmt(l.due)}</td><td class="num">${l.price != null ? gbp(round2(l.qty * l.price), 2) : ''}</td></tr>`));
   }
   if (r.kind === 'xero') {
     const x = (S.xeroOrders || []).find(o => o.id === r.xeroId);
@@ -2047,7 +2052,7 @@ function despatchForm(j) {
     ${missing.length ? `<div class="warn">Not ticked yet: ${esc(missing.join(', '))}. Check the parts are finished before they go.</div>` : ''}
     ${deliveryRow(j)}
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Sent</th><th>Left</th><th>This dispatch</th></tr></thead><tbody>
-    ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(l.part)} due ${fmt(l.due)} this dispatch">` : '—'}</td></tr>`).join('')}
+    ${j.lines.filter(l => left(j, l) > 0 || sent(j, l) > 0).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td>${lineHtml(l, esc)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td>${left(j, l)}</td><td>${left(j, l) ? `<input type="number" min="0" max="${left(j, l)}" value="${defaultDespatchQty(j, l)}" id="dq-${l.id}" data-dq="${l.id}" aria-label="Quantity of ${esc(lineLabel(l))} due ${fmt(l.due)} this dispatch">` : '—'}</td></tr>`).join('')}
     </tbody></table></div>
     <div class="actions"><button class="btn pri" type="button" id="mkdn" ${S.busy ? 'disabled' : ''}>Create dispatch note${del ? ` (${del.toLowerCase()})` : ''}</button><button class="btn" type="button" data-despclose>Close</button></div>
     <p class="note" id="dn-msg"></p></div>`;
@@ -2097,7 +2102,7 @@ function renderDrawer() {
     ${j.notes ? `<div class="panel"><div class="note">Order notes</div>${esc(j.notes)}</div>` : ''}
     ${notesPanel({ notes: S.notes || [], job: j, office: office(), name: noteName(), canRemove: office() }, { esc })}
     <div class="panel"><h3>Lines</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Desp.</th><th>Outst.</th>${money ? '<th>Unit</th><th>Net</th>' : ''}</tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+      ${j.lines.map(l => `<tr><td>${lineHtml(l, esc)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
     ${drawingsPanel(j)}${certsPanel(j)}
@@ -2276,8 +2281,8 @@ async function keepForPart(jobId) {
   const partNo = h.reading.facts.part;
   try {
     let p = findPart(S.parts, j.customer, partNo);
-    const line = j.lines.find(l => normPartNo(l.part).includes(normPartNo(partNo)));
-    const id = p ? p.id : await data.addPart({ customer: j.customer, customerKey: normName(j.customer), partNo, description: line ? line.part.replace(new RegExp(partNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim() : '' });
+    const line = j.lines.find(l => l.partNo && normPartNo(l.partNo) === normPartNo(partNo)) || j.lines.find(l => normPartNo(l.part).includes(normPartNo(partNo)));
+    const id = p ? p.id : await data.addPart({ customer: j.customer, customerKey: normName(j.customer), partNo, description: line?.partNo ? line.part : line ? line.part.replace(new RegExp(partNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim() : '' });
     const pfId = await data.addPartFile(id, f);
     await data.markJobFileFromPart(f.id, pfId).catch(() => {});
     S.parts = await data.loadParts();
@@ -2520,14 +2525,17 @@ function pfEditor(j) {
   return `<div class="sheetedit panel"><h3>New pro forma for ${esc(j.so)}</h3>
     <p class="note">Choose what this pro forma asks payment for: everything still to send, or one call-off. Prices are the order's.</p>
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Due</th><th>Ordered</th><th>Outstanding</th><th>Unit</th><th>On this pro forma</th></tr></thead><tbody>
-    ${j.lines.map(l => `<tr><td style="text-align:left">${esc(l.part)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${left(j, l)}</td><td>${unit(l.price)}</td>
-      <td><input type="number" min="0" max="${l.qty}" step="1" value="${S.pfDraft.qty[l.id] || 0}" data-pq="${l.id}" style="width:90px" aria-label="Quantity on this pro forma: ${esc(l.part)}"></td></tr>`).join('')}</tbody></table></div>
+    ${j.lines.map(l => `<tr><td style="text-align:left">${lineHtml(l, esc)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${left(j, l)}</td><td>${unit(l.price)}</td>
+      <td><input type="number" min="0" max="${l.qty}" step="1" value="${S.pfDraft.qty[l.id] || 0}" data-pq="${l.id}" style="width:90px" aria-label="Quantity on this pro forma: ${esc(lineLabel(l))}"></td></tr>`).join('')}</tbody></table></div>
     ${settings}
     <div class="actions"><button class="btn pri" type="button" data-pfcreate="${j.id}" ${S.officeSet?.payment_details ? '' : 'disabled title="Save the payment details first"'}>${icon('doc')}Make the pro forma</button></div></div>`;
 }
 function pfLinesFrom(j) {   // the draft's lines with the order's prices (the server takes its own prices when it is made)
-  return j.lines.filter(l => (S.pfDraft.qty[l.id] || 0) > 0).map(l => ({ part: l.part, qty: S.pfDraft.qty[l.id], unit_price: l.price, net: round2(S.pfDraft.qty[l.id] * l.price) }));
+  return j.lines.filter(l => (S.pfDraft.qty[l.id] || 0) > 0).map(l => ({ job_line_id: l.id, part: l.part, qty: S.pfDraft.qty[l.id], unit_price: l.price, net: round2(S.pfDraft.qty[l.id] * l.price) }));
 }
+/** A pro forma line as it reads: a saved one keeps only the description (create_proforma copies part), so its
+ *  order line's Part no. box is looked up by job_line_id (22 Oct). */
+const pfLineHtml = (j, l) => lineHtml({ partNo: j.lines.find(x => x.id === l.job_line_id)?.partNo || '', part: l.part }, esc);
 async function createProforma(jobId) {
   const j = job(jobId);
   const lines = j.lines.map(l => ({ job_line_id: l.id, qty: S.pfDraft.qty[l.id] || 0 })).filter(l => l.qty > 0);
@@ -2585,7 +2593,7 @@ function docHtml(kind, jobId, despId) {
         ${pos.length ? `<span class="k">Call-off PO</span><span><b>${esc(pos.join(', '))}</b></span>` : ''}</div></div>
       ${j.notes ? `<div class="jnote"><div class="k">Notes</div><div style="white-space:pre-line">${esc(j.notes)}</div></div>` : ''}
       ${make.length ? `<table><thead><tr><th>Part</th><th>To make</th><th>Due</th>${pos.length ? '<th>Call-off PO</th>' : ''}</tr></thead><tbody>
-      ${make.map(l => `<tr><td>${esc(l.part)}</td><td><b class="lg">${pick[l.id]}</b></td><td>${fmtLong(l.due)}</td>${pos.length ? `<td>${esc(l.po) || ''}</td>` : ''}</tr>`).join('')}</tbody></table>`
+      ${make.map(l => `<tr><td>${lineHtml(l, esc)}</td><td><b class="lg">${pick[l.id]}</b></td><td>${fmtLong(l.due)}</td>${pos.length ? `<td>${esc(l.po) || ''}</td>` : ''}</tr>`).join('')}</tbody></table>`
         : '<div class="jnote">Nothing to make on this sheet. Enter a quantity above it on screen.</div>'}
       <table class="jprocs"><thead><tr><th>Process</th><th>Done</th><th>By</th><th>Date</th></tr></thead><tbody>
       ${need.map(p => { const st = j.procs[p]; return `<tr><td><b>${esc(p)}</b></td><td><span class="jbox">${st.done ? '✓' : ''}</span></td><td>${st.done ? esc(st.by) : ''}</td><td>${st.done ? fmt(st.at.slice(0, 10)) : ''}</td></tr>`; }).join('')
@@ -2604,7 +2612,7 @@ function docHtml(kind, jobId, despId) {
         <span class="k">Our order</span><span>${esc(j.so)}</span></div></div>
       <p>Please pay this pro forma before the goods are dispatched. <b>This is not a VAT invoice</b>; the VAT invoice follows when the goods are sent.</p>
       <table><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Net</th></tr></thead><tbody>
-      ${lines.map(l => `<tr><td>${esc(l.part)}</td><td>${l.qty}</td><td>${unit(Number(l.unit_price))}</td><td>${gbp(Number(l.net), 2)}</td></tr>`).join('') || '<tr><td colspan="4">Nothing chosen yet.</td></tr>'}</tbody></table>
+      ${lines.map(l => `<tr><td>${pfLineHtml(j, l)}</td><td>${l.qty}</td><td>${unit(Number(l.unit_price))}</td><td>${gbp(Number(l.net), 2)}</td></tr>`).join('') || '<tr><td colspan="4">Nothing chosen yet.</td></tr>'}</tbody></table>
       <div class="tot"><span>Net</span><span>${gbp(net, 2)}</span><span>VAT 20%</span><span>${gbp(vat, 2)}</span><span class="g">To pay</span><span class="g">${gbp(round2(net + vat), 2)}</span></div>
       <div class="jnote"><div class="k">How to pay</div><div style="white-space:pre-line">${esc(S.officeSet?.payment_details || 'Payment details to be added.')}</div>
         <div style="margin-top:6px">Please use <b>${esc(no)}</b> as the payment reference.</div></div>
@@ -2620,7 +2628,7 @@ function docHtml(kind, jobId, despId) {
       ${j.address ? `<div><div class="k">Deliver to</div><div style="white-space:pre-line">${esc(j.address)}</div></div>` : ''}
       <p>Thank you for your order. We confirm the following.</p>
       <table><thead><tr><th>Description</th><th>Due</th><th>Qty</th><th>Unit price</th><th>Net</th></tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${esc(l.part)}${l.po && l.po !== j.po ? ` <span style="color:var(--paper-mute)">(your PO ${esc(l.po)})</span>` : ''}</td><td>${fmtLong(l.due)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
+      ${j.lines.map(l => `<tr><td>${lineHtml(l, esc)}${l.po && l.po !== j.po ? ` <span style="color:var(--paper-mute)">(your PO ${esc(l.po)})</span>` : ''}</td><td>${fmtLong(l.due)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
       <div class="tot"><span>Net</span><span>${gbp(net, 2)}</span><span>VAT 20%</span><span>${gbp(vat, 2)}</span><span class="g">Total</span><span class="g">${gbp(net + vat, 2)}</span></div>
       <div class="foot">Clarke Lane Engineering Ltd. Please quote ${esc(j.so)} on any correspondence about this order.</div>`;
   } else {
@@ -2631,7 +2639,7 @@ function docHtml(kind, jobId, despId) {
         <div class="kv"><span class="k">Date</span><span>${fmtLong(d.date)}</span><span class="k">Your order</span><span>${esc(dnPo(j, d)) || '—'}</span>
         <span class="k">Our order</span><span>${esc(j.so)}</span></div></div>
       <table><thead><tr><th>Description</th><th>Ordered</th><th>Previously sent</th><th>This delivery</th><th>Outstanding</th></tr></thead><tbody>
-      ${j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => `<tr><td>${esc(l.part)}${deliveryDates(j).length > 1 ? ` <span style="color:var(--paper-mute)">(due ${fmt(l.due)})</span>` : ''}</td><td>${l.qty}</td><td>${before(l)}</td><td><b>${d.lines[l.id]}</b></td><td>${l.qty - before(l) - d.lines[l.id]}</td></tr>`).join('')}</tbody></table>
+      ${j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => `<tr><td>${lineHtml(l, esc)}${deliveryDates(j).length > 1 ? ` <span style="color:var(--paper-mute)">(due ${fmt(l.due)})</span>` : ''}</td><td>${l.qty}</td><td>${before(l)}</td><td><b>${d.lines[l.id]}</b></td><td>${l.qty - before(l) - d.lines[l.id]}</td></tr>`).join('')}</tbody></table>
       ${stillToCome(j, di)}
       <div class="sign"><div>Received by (print)</div><div>Signature</div><div>Date</div></div>
       <div class="foot">Please check the goods on delivery and report any shortage or damage within 48 hours, quoting ${esc(d.dn)}.</div>`;
@@ -2652,8 +2660,8 @@ function sheetEditor(j) {
   return `<div class="sheetedit panel"><h3>What is this sheet for?</h3>
     <p class="note">Change <b>To make</b> for this job sheet only, for example the call-off you are making now. The order is not changed; to change the order, use Amend.</p>
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Due</th>${linePos(j).length ? '<th>Call-off PO</th>' : ''}<th>Ordered</th><th>Outstanding</th><th>To make</th></tr></thead><tbody>
-    ${j.lines.map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td style="text-align:left">${esc(l.part)}</td><td>${fmt(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${l.qty}</td><td>${left(j, l)}</td>
-      <td><input type="number" min="0" step="1" value="${S.sheet.qty[l.id] || 0}" data-sq="${l.id}" style="width:90px" aria-label="To make on this sheet: ${esc(l.part)} due ${fmt(l.due)}"></td></tr>`).join('')}</tbody></table></div>
+    ${j.lines.map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td style="text-align:left">${lineHtml(l, esc)}</td><td>${fmt(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${l.qty}</td><td>${left(j, l)}</td>
+      <td><input type="number" min="0" step="1" value="${S.sheet.qty[l.id] || 0}" data-sq="${l.id}" style="width:90px" aria-label="To make on this sheet: ${esc(lineLabel(l))} due ${fmt(l.due)}"></td></tr>`).join('')}</tbody></table></div>
     <div class="actions">${call ? '<button class="btn sm" type="button" data-sqset="next">Next delivery</button>' : ''}<button class="btn sm" type="button" data-sqset="all">Everything outstanding</button><button class="btn sm" type="button" data-sqset="none">Clear</button></div></div>`;
 }
 function setSheet(how) {
@@ -2768,10 +2776,10 @@ function stillToCome(j, di) {
   const by = new Map();
   for (const l of j.lines) {
     const out = l.qty - upto.reduce((a, x) => a + (x.lines[l.id] || 0), 0);
-    if (out > 0) { const r = by.get(l.part) || { qty: 0, next: l.due }; r.qty += out; if (l.due < r.next) r.next = l.due; by.set(l.part, r); }
+    if (out > 0) { const k = lineLabel(l), r = by.get(k) || { qty: 0, next: l.due, l }; r.qty += out; if (l.due < r.next) r.next = l.due; by.set(k, r); }
   }
   if (!by.size) return '<p>This completes the order.</p>';
-  return `<div><div class="k">Still to come on this order</div>${[...by.entries()].map(([p, r]) => `${r.qty} × ${esc(p)} (next due ${fmtLong(r.next)})`).join('<br>')}</div>`;
+  return `<div><div class="k">Still to come on this order</div>${[...by.values()].map(r => `${r.qty} × ${lineHtml(r.l, esc)} (next due ${fmtLong(r.next)})`).join('<br>')}</div>`;
 }
 function closeDoc() { S.poForm = null; $('doc').hidden = true; document.body.classList.remove('doc-open', 'viewing'); if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; } }
 
@@ -3054,7 +3062,7 @@ function onClick(e) {
     return data.drawingBlob(f).then(b => readDrawingFile(j.id, f.name, b), e => { S.hints[j.id] = { name: f.name, err: e.message }; render(); }); }
   if ('poadd' in d) { collectPo(); S.poForm.lines.push(blankPoLine()); return showPoForm(); }
   if (d.podel) { collectPo(); S.poForm.lines.splice(+d.podel, 1); return showPoForm(); }
-  if ('pofill' in d) { collectPo(); const j = job(S.poForm.jobId); S.poForm.lines = [...S.poForm.lines.filter(l => l.description.trim()), ...j.lines.map(l => ({ description: l.part, qty: String(left(j, l) || l.qty), unit: '' }))]; return showPoForm(); }
+  if ('pofill' in d) { collectPo(); const j = job(S.poForm.jobId); S.poForm.lines = [...S.poForm.lines.filter(l => l.description.trim()), ...j.lines.map(l => ({ description: lineLabel(l), qty: String(left(j, l) || l.qty), unit: '' }))]; return showPoForm(); }
   if ('pocreate' in d) return createPo();
   if (d.rmdrawing) return removeDrawingFrom(+d.rmdrawing);
   if (d.pfnew) return openProformaDraft(+d.pfnew);
@@ -3112,9 +3120,16 @@ document.addEventListener('input', e => {
     const el = $(id); el.focus(); el.setSelectionRange(pos, pos);
   }
   const m = /^of-(qty|price)(\d+)$/.exec(e.target.id);
-  const pm = /^of-part(\d+)$/.exec(e.target.id);
+  const pm = /^of-(?:part|pno)(\d+)$/.exec(e.target.id);
   if (pm && S.form) {   // a part picked from the list brings its price, unless a price is already typed
     const all = formParts(S.form), hit = all.find(x => x.part === e.target.value);
+    // Picked from either box (22 Oct): the part number into Part no., the description into Description. Both
+    // boxes are set, so a pick with no part number clears one typed before it rather than leaving a mismatch.
+    if (hit) {
+      const no = $('of-pno' + pm[1]), desc = $('of-part' + pm[1]);
+      if (no) no.value = hit.partNo || ''; if (desc) desc.value = hit.description || hit.part;
+      collectForm();
+    }
     // The list shows only what matches the typing, so Xero's thousands of products never sit in it at once.
     const dl = $('of-parts'), want = hit ? [hit] : partMatches(all, e.target.value), key = want.map(x => x.part).join('\n');
     if (dl && dl.dataset.k !== key) { dl.innerHTML = partOptions(want); dl.dataset.k = key; }
@@ -3133,7 +3148,7 @@ document.addEventListener('input', e => {
 });
 // Clicking into a Part box: its list matches what that box already says.
 document.addEventListener('focusin', e => {
-  if (!/^of-part\d+$/.test(e.target.id) || !S.form) return;
+  if (!/^of-(part|pno)\d+$/.test(e.target.id) || !S.form) return;
   const dl = $('of-parts'), want = partMatches(formParts(S.form), e.target.value), key = want.map(x => x.part).join('\n');
   if (dl && dl.dataset.k !== key) { dl.innerHTML = partOptions(want); dl.dataset.k = key; }
 });
@@ -3178,13 +3193,15 @@ document.addEventListener('change', e => {
   if (e.target.id === 'out-proc' && S.outForm) { const f = readOutForm(), j = job(f.jobId); S.outForm = { ...f, finish: f.finish || (j ? finishFor(j, f.process) : '') }; render(); }
   if (e.target.name === 'of-p' && S.form) S.form.procsTouched = true;
   // Same part made before: tick the processes it had then, until someone ticks by hand.
-  if (/^of-part\d+$/.test(e.target.id) && S.form && !S.form.procsTouched && !S.form.spQuoteId && S.form.mode !== 'amend') {
+  if (/^of-(part|pno)\d+$/.test(e.target.id) && S.form && !S.form.procsTouched && !S.form.spQuoteId && S.form.mode !== 'amend') {
     collectForm(); const n = S.form;
-    const hits = n.lines.map(l => processesFromHistory(S.jobs, l.part)).filter(Boolean);
+    const hits = n.lines.map(l => processesFromHistory(S.jobs, lineLabel(l))).filter(Boolean);
     if (hits.length) {
       n.procs = PROCESSES.filter(p => n.procs.includes(p) || hits.some(h => h.processes.includes(p)));
       n.procNote = `Ticked as on ${[...new Set(hits.map(h => h.so))].join(', ')} (the same part made before); check them.`;
-      keepInputs = false; render();
+      // Ticked in place, not by redrawing the form: Tab from Part no. to Description (22 Oct) must keep its focus.
+      document.querySelectorAll('input[name=of-p]').forEach(i => { i.checked = n.procs.includes(i.value); });
+      if ($('of-pnote')) $('of-pnote').textContent = 'Processes this order needs. ' + n.procNote;
     }
   }
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }

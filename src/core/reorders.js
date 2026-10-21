@@ -8,6 +8,7 @@
  * Pure: no window. Tested in tests/reorders.mjs.
  */
 import { normName } from './xero.js';
+import { lineLabel } from './jobs.js';
 
 const dayNo = s => Math.round(Date.parse(String(s).slice(0, 10) + 'T12:00:00Z') / 864e5);
 const r2 = n => Math.round(n * 100) / 100;
@@ -69,7 +70,7 @@ export function reorderRound(reorders, actions, jobs, today) {
     const ask = l.find(a => a.kind === 'reorder') || null, snooze = l.find(a => a.kind === 'reorder_snooze') || null;
     const asked = ask ? String(ask.at).slice(0, 10) : null, until = snooze ? untilOf(snooze.note) : null;
     const wonOrder = asked && orders.filter(j => normName(j.customer) === r.key && j.ordered >= asked && dayNo(j.ordered) - dayNo(asked) <= WON_WITHIN
-      && (j.lines || []).some(x => lineNamesItem(x.part, r.item))).sort((a, b) => a.ordered.localeCompare(b.ordered))[0] || null;
+      && (j.lines || []).some(x => lineNamesItem(lineLabel(x), r.item))).sort((a, b) => a.ordered.localeCompare(b.ordered))[0] || null;
     // The newest of ask and snooze wins: asked again after a snooze is asked, snoozed after an ask is snoozed.
     const snoozedNow = until && until > today && (!ask || String(snooze.at) >= String(ask.at));
     const state = wonOrder ? 'won' : snoozedNow ? 'snoozed' : asked && t - dayNo(asked) <= ASKED_FOR ? 'asked' : 'due';

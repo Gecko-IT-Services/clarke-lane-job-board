@@ -3,15 +3,16 @@ const role = new URLSearchParams(location.search).get('role') || 'md';   // md =
 let jobs = [
   { id: 1, so: 'SO-9781', quote: 'Q-0301', spQuoteId: 301, customer: 'Example Customer Ltd', contactName: 'A Buyer', contactEmail: '', po: 'PO-1',
     ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO14 3TJ', status: 'open',
-    lines: [{ id: 11, lineNo: 1, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16' },
-            { id: 12, lineNo: 2, part: 'Bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23' },
+    // Lines 1–2 use the Part no. box (22 Oct); line 3 is an older line with the number in its text: both looks show.
+    lines: [{ id: 11, lineNo: 1, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16' },
+            { id: 12, lineNo: 2, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23' },
             { id: 13, lineNo: 3, part: 'Bracket BRK-1001 — 3mm S275, 304 stainless cover', qty: 10, price: 13.1, due: '2026-10-30' }],
     procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T09:00:00Z' }, 'Fold': { done: false } },
     despatches: [{ id: 1, dn: 'DN-0001', date: '2026-10-14', lines: { 11: 10 }, xero: null, deliveredOn: '2026-10-14' },
       { id: 5, dn: 'DN-0005', date: '2026-10-15', lines: { 12: 10 }, xero: null, emailedAt: '2026-10-15T09:30:00Z' }] },
   { id: 2, so: 'SO-9782', quote: '', spQuoteId: null, customer: 'Second Example Ltd', contactName: '', contactEmail: '', po: '',
     ordered: '2026-10-14', due: '2026-11-04', notes: 'Rush', address: '', status: 'open',
-    lines: [{ id: 21, lineNo: 1, part: 'Cabinet', qty: 5, price: 310, due: '2026-11-04' }, { id: 22, lineNo: 2, part: 'Carriage', qty: 1, price: 25, due: '2026-11-04' }],
+    lines: [{ id: 21, lineNo: 1, partNo: 'CAB-2040', part: 'Cabinet', qty: 5, price: 310, due: '2026-11-04' }, { id: 22, lineNo: 2, part: 'Carriage', qty: 1, price: 25, due: '2026-11-04' }],
     procs: { 'Laser': { done: false }, 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [] },
 ];
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
@@ -45,14 +46,15 @@ export const createJob = async p => {
   const id = jobs.length + 1, so = p.so_number || 'SO-97' + (82 + id);
   jobs.push({ id, so, quote: p.quote_no, spQuoteId: p.sp_quote_id, xeroQuoteId: p.xero_quote_id, customer: p.customer, contactName: p.contact_name, contactEmail: p.contact_email || '',
     po: p.customer_po, ordered: '2026-10-15', due: p.due_date, notes: p.notes, address: p.delivery_address, status: 'open',
-    lines: p.lines.map((l, i) => ({ id: nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' })),
+    lines: p.lines.map((l, i) => ({ id: nextLine++, lineNo: i + 1, partNo: (l.part_no || '').trim(), part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' })),
     procs: Object.fromEntries(p.processes.map(x => [x, { done: false }])), despatches: [] });
   return { id, so_number: so };
 };
 export const amendJob = async (id, p) => {
   const j = find(id);
   Object.assign(j, { po: p.customer_po, contactName: p.contact_name, address: p.delivery_address, notes: p.notes });
-  j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' }));
+  // As amend_job: a line sent without part_no keeps the one it had.
+  j.lines = p.lines.map((l, i) => ({ id: l.id || nextLine++, lineNo: i + 1, partNo: l.part_no != null ? String(l.part_no).trim() : (j.lines.find(x => x.id === l.id)?.partNo || ''), part: l.part, qty: l.qty, price: l.unit_price, due: l.due_date, po: l.customer_po || '' }));
 };
 export const setJobStatus = async (id, status) => { find(id).status = status; };
 let dn = 6;
@@ -144,7 +146,7 @@ export const setStationOrder = async (p, ids) => { for (const j of jobs) if (j.p
 export const setRunningOrder = async ids => { for (const j of jobs) { const n = ids.indexOf(j.id); j.priority = n < 0 ? null : n + 1; } };
 jobs.push(
   { id: 3, so: 'SO-9783', quote: '', spQuoteId: null, customer: 'Fourth Example Ltd', contactName: '', contactEmail: '', po: 'PO-77', ordered: '2026-10-15', due: '2026-11-12', notes: '', address: '', status: 'open',
-    lines: [{ id: 31, lineNo: 1, part: 'Guard plate', qty: 40, price: 8.5, due: '2026-11-12' }], procs: { 'Laser': { done: false }, 'Fold': { done: false } }, despatches: [{ id: 3, dn: 'DN-0003', date: '2026-10-15', lines: { 31: 10 }, xero: null }] },
+    lines: [{ id: 31, lineNo: 1, partNo: 'GP-4410', part: 'Guard plate', qty: 40, price: 8.5, due: '2026-11-12' }], procs: { 'Laser': { done: false }, 'Fold': { done: false } }, despatches: [{ id: 3, dn: 'DN-0003', date: '2026-10-15', lines: { 31: 10 }, xero: null }] },
   { id: 4, so: 'SO-9784', quote: '', spQuoteId: null, customer: 'Fifth Example Ltd', contactName: '', contactEmail: '', po: '', ordered: '2026-10-15', due: '2026-11-20', notes: '', address: '', status: 'open',
     lines: [{ id: 41, lineNo: 1, part: 'Frame', qty: 2, price: 140, due: '2026-10-09' }], procs: { 'Weld': { done: false }, 'P/Coat Paint': { done: false } }, despatches: [],
     cancelledDespatches: [{ id: 4, dn: 'DN-0004', date: '2026-10-13', lines: { 41: 1 }, xero: null, cancelled: { at: '2026-10-14T09:00:00Z', by: 'Levi' } }] }

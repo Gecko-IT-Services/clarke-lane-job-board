@@ -43,6 +43,12 @@ assert.deepEqual(kinds('inv-5001', {}), [], 'no invoices');
 assert.deepEqual(kinds('sample', {}), ['job']);
 assert.ok(!JSON.stringify(searchAll('9781', src, {})).includes('12.5'), 'never a price');
 
+// A line's Part no. box is searched, and the result reads number · description (22 Oct).
+{
+  const r = searchAll('brk-1001', { jobs: [{ id: 7, so: 'SO-9790', customer: 'Sample Works Ltd', lines: [{ partNo: 'BRK-1001', part: 'Mounting bracket' }], despatches: [] }] }, {});
+  assert.equal(r[0].items[0].sub, 'BRK-1001 · Mounting bracket');
+}
+
 // Best group first: an exact code beats a word inside another group.
 assert.equal(searchAll('q-0320', src, { office: true })[0].kind, 'quote');
 console.log('search: ok');

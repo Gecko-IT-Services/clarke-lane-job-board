@@ -49,3 +49,23 @@ console.log('parts: ok');
   assert.deepEqual(openOrdersNeeding([...jobs, { id: 5, customer: 'Example Racers Ltd', status: 'open', lines: [{ part: 'EX-PR-20001' }], files: [{ itemId: 'x' }] }], part, j => j.status === 'open').map(j => j.id), [1, 2]);
   console.log('parts suggested: ok');
 }
+
+// The Part no. box first (Mandy, 22 Oct): when a line has one, that is its part number; its description is not searched.
+{
+  const { lineNamesPart, lineNumbers, suggestedParts, openOrdersNeeding } = await import('../src/core/parts.js');
+  assert.ok(lineNamesPart({ partNo: 'brk 1001', part: 'Mounting bracket' }, 'BRK-1001'), 'the box, ignoring case and spacing');
+  assert.ok(!lineNamesPart({ partNo: 'BRK-1002', part: 'Bracket, replaces BRK-1001' }, 'BRK-1001'), 'the box wins over the text');
+  assert.ok(!lineNamesPart({ partNo: 'BRK-10010', part: 'Bracket' }, 'BRK-1001'), 'a longer number is a different part');
+  assert.ok(lineNamesPart({ partNo: '', part: 'Bracket BRK-1001' }, 'BRK-1001'), 'empty box: the text, as before');
+  assert.ok(lineNamesPart({ part: 'Bracket BRK-1001' }, 'BRK-1001'), 'no box at all (old lines)');
+  assert.deepEqual(lineNumbers({ partNo: 'Shim-A', part: 'Exhaust shim EX-PR-20001' }), ['Shim-A'], 'the box, even when it would not look like a part number');
+  assert.deepEqual(lineNumbers({ partNo: '', part: 'Exhaust shim EX-PR-20001' }), ['EX-PR-20001']);
+  const parts = [{ id: 1, customer: 'Example Racers Ltd', customerKey: 'exampleracers', partNo: 'BRK-1001', files: [{ id: 1, itemId: 'x', at: '2026-10-20' }] }];
+  const job = { id: 8, customer: 'Example Racers Ltd', status: 'open', lines: [{ partNo: 'BRK-1001', part: 'Mounting bracket' }], files: [] };
+  assert.deepEqual(partsOnJob(parts, job).map(p => p.id), [1], 'partsOnJob uses the box');
+  assert.deepEqual(drawingsToLink(parts, job).map(x => x.file.itemId), ['x'], 'and so does drawingsToLink');
+  assert.deepEqual(ordersForPart([job], parts[0]).map(j => j.id), [8]);
+  assert.deepEqual(openOrdersNeeding([job], parts[0], () => true).map(j => j.id), [8]);
+  const s = suggestedParts([{ id: 9, customer: 'Sample Works Ltd', status: 'open', lines: [{ partNo: 'CVR-20', part: 'Cover plate 2mm' }, { partNo: '', part: 'Guard GD-4401-02' }] }], []);
+  assert.deepEqual(s.map(x => [x.partNo, x.description]), [['CVR-20', 'Cover plate 2mm'], ['GD-4401-02', 'Guard']], 'the box with its description; the text when empty');
+}

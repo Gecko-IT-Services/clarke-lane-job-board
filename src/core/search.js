@@ -5,6 +5,7 @@
  * never searched or shown. Pure: tested in tests/search.mjs.
  */
 import { normName } from './xero.js';
+import { lineLabel } from './jobs.js';
 
 const low = s => String(s ?? '').toLowerCase();
 const flat = s => low(s).replace(/[\s\-_/.,]+/g, '');   // "so 9781", "SO-9781" and "so9781" are the same
@@ -35,9 +36,10 @@ export function searchAll(q, src, { office = false, per = 6 } = {}) {
   const add = (kind, item) => out[kind].push({ kind, ...item, r: rank(q, item.title) });
   for (const j of src.jobs || []) {
     if (j.preview) continue;
-    const line = (j.lines || []).find(l => matches(q, l.part, l.po));
-    if (matches(q, j.so, j.customer, j.po, j.quote, j.contactName, ...(j.lines || []).map(l => `${l.part} ${l.po || ''}`)))
-      add('job', { at: j.ordered || j.createdAt || '', id: j.id, title: `${j.so} · ${j.customer}`, sub: [j.po && `PO ${j.po}`, line?.part || j.lines?.[0]?.part, j.status === 'cancelled' && 'cancelled'].filter(Boolean).join(' · '), key: normName(j.customer), name: j.customer });
+    // A line's Part no. box is searched too (22 Oct), and the result reads "BRK-1001 · Bracket".
+    const line = (j.lines || []).find(l => matches(q, l.partNo, l.part, l.po));
+    if (matches(q, j.so, j.customer, j.po, j.quote, j.contactName, ...(j.lines || []).map(l => `${l.partNo || ''} ${l.part} ${l.po || ''}`)))
+      add('job', { at: j.ordered || j.createdAt || '', id: j.id, title: `${j.so} · ${j.customer}`, sub: [j.po && `PO ${j.po}`, line ? lineLabel(line) : j.lines?.[0] && lineLabel(j.lines[0]), j.status === 'cancelled' && 'cancelled'].filter(Boolean).join(' · '), key: normName(j.customer), name: j.customer });
     for (const d of j.despatches || []) if (d.dn && matches(q, d.dn)) add('dn', { at: d.date || '', id: j.id, title: `${d.dn} · ${j.customer}`, sub: `for ${j.so}${d.date ? `, ${d.date}` : ''}` });
   }
   if (office) {
