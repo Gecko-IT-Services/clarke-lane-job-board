@@ -919,11 +919,29 @@ export async function deleteJob(jobId) {
   if (!count) throw new Error('The job was not cancelled. Only Levi and Mandy can cancel jobs.');
 }
 
+/* ---------- where the van is (the driver's phone, while sharing is on) ---------- */
+export async function loadPositions() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('driver_positions').select('*');
+  if (error) fail('Could not read where the van is', error);
+  return data.map(r => ({ email: r.email, name: r.name, lat: r.lat, lng: r.lng, accuracy: r.accuracy, heading: r.heading, speed: r.speed, at: r.at }));
+}
+export async function sendPosition({ lat, lng, accuracy = null, heading = null, speed = null }) {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('set_my_position', { p_lat: lat, p_lng: lng, p_accuracy: accuracy, p_heading: heading, p_speed: speed });
+  if (error) fail('The office did not get your position', error);
+}
+export async function clearPosition() {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('clear_my_position');
+  if (error) fail('Could not stop sharing', error);
+}
+
 /** Calls back on any change to jobs, ticks or despatches by anyone. */
 export async function onChange(cb) {
   const sb = await getSupabase();
   const ch = sb.channel('board');
-  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes', 'quote_follow', 'sales_actions', 'tasks', 'enquiries', 'job_notes']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
+  for (const table of ['jobs', 'job_lines', 'job_processes', 'despatches', 'quote_dismissals', 'xero_orders', 'customer_people', 'customer_sites', 'board_settings', 'proformas', 'job_files', 'purchase_orders', 'parts', 'part_files', 'outwork', 'metal_rfqs', 'metal_quotes', 'quote_follow', 'sales_actions', 'tasks', 'enquiries', 'job_notes', 'driver_positions']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, cb);
   ch.subscribe();
 }
 

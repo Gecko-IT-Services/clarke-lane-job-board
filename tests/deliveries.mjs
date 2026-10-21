@@ -70,3 +70,26 @@ assert.match(deliveryProblem({ name: '', nobody: true, note: '  ' }), /where it 
 assert.match(deliveryProblem({ name: 'J Smith', signature: 'data:image/png;base64,' + 'A'.repeat(SIGNATURE_MAX) }), /too big/);
 
 console.log('deliveries: ok');
+
+// — Where the van is: the words on the office map, and when the phone bothers to send. —
+import { vanStatus, worthSending } from '../src/core/deliveries.js';
+{
+  const now = new Date('2026-10-21T12:00:00Z');
+  const van = at => ({ name: 'Robbie', lat: 50.9, lng: -1.4, accuracy: 12.4, heading: 90, speed: 13.4, at });
+  assert.equal(vanStatus(null, now), null);
+  let v = vanStatus(van('2026-10-21T11:59:50Z'), now);
+  assert.equal(v.ago, 'just now'); assert.equal(v.mph, 30); assert.equal(v.stale, false); assert.equal(v.accuracy, 12); assert.equal(v.heading, 90);
+  v = vanStatus(van('2026-10-21T11:40:00Z'), now);
+  assert.equal(v.ago, '20 min ago'); assert.equal(v.stale, true, 'more than 15 minutes is stale');
+  assert.equal(vanStatus(van('2026-10-21T09:00:00Z'), now).ago, '3 h ago');
+  v = vanStatus({ ...van('2026-10-21T11:59:00Z'), speed: 0, heading: 45 }, now);
+  assert.equal(v.mph, 0); assert.equal(v.heading, null, 'no heading when parked');
+  const fix = (secs, lat = 50.9, lng = -1.4) => ({ lat, lng, at: new Date(now.getTime() + secs * 1000) });
+  assert.equal(worthSending(null, fix(0)), true, 'the first fix always goes');
+  assert.equal(worthSending(fix(0), fix(5, 50.91)), false, 'never within 10 s');
+  assert.equal(worthSending(fix(0), fix(20)), false, 'not moved, under a minute: wait');
+  assert.equal(worthSending(fix(0), fix(20, 50.9005)), true, 'moved about 55 m: send');
+  assert.equal(worthSending(fix(0), fix(20, 50.9001)), false, 'moved about 11 m: wait');
+  assert.equal(worthSending(fix(0), fix(61)), true, 'a minute on, even parked: send (so the office knows the phone is alive)');
+  console.log('van: ok');
+}

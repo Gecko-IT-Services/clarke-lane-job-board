@@ -575,6 +575,12 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 .deliv .dcard:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .deliv .dcard .cu{font-size:21px;line-height:1.2}
 .deliv .dcard .addr{font-size:17px}
+/* sharing where the van is: the driver's switch */
+.deliv .dshare{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:15px;margin-bottom:4px} .deliv .dshare > div{flex:1 1 220px;display:flex;flex-direction:column;gap:2px} .deliv .dshare .note{font-size:14px}
+.deliv .dshare.on{border-color:var(--ok)} .deliv .dshare .btn{min-height:48px;font-size:16px;padding:0 18px;border-radius:12px}
+/* the van on the map */
+.mvan{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:var(--info);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.35);border:2px solid #fff} .mvan svg{width:22px;height:22px} .mvan.stale{background:var(--muted)}
+#mapvan .van{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:0 0 12px} #mapvan .van > div{flex:1 1 200px;display:flex;flex-direction:column} #mapvan .van.off{border-style:dashed}
 .deliv .meta{font-size:14px;color:var(--muted)}
 .deliv .allclear{margin:0;padding:22px;font-size:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;color:var(--ok);font-weight:600}
 .deliv .ddone h3{font-size:16px;margin-bottom:6px;color:var(--muted)}

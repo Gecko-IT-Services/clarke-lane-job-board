@@ -153,6 +153,11 @@ export const markDespatch = async (id, what, receivedBy = '', signature = '', no
     receivedBy: receivedBy.trim() || d.receivedBy || '', signature: signature || d.signature || '', deliveryNote: note.trim() || d.deliveryNote || '' }); }
   if (what === 'undelivered') Object.assign(d, { deliveredOn: null, deliveredAt: null, deliveredBy: null, receivedBy: '', signature: '', deliveryNote: '' }); } };
 export const loadSignature = async id => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) return d.signature || ''; return ''; };
+// Where the van is: the office sees a made-up van near Eastleigh; a phone's own sends replace it.
+let positions = [{ email: 'robert.clarke@clarke-lane.example', name: 'Robbie', lat: 50.9697, lng: -1.3500, accuracy: 9, heading: 230, speed: 12.1, at: new Date(Date.now() - 3 * 60000).toISOString() }];
+export const loadPositions = async () => positions.map(p => ({ ...p }));
+export const sendPosition = async p => { positions = [{ email: 'robert.clarke@clarke-lane.example', name: 'Robbie', ...p, at: new Date().toISOString() }]; };
+export const clearPosition = async () => { positions = []; };
 export const markAckEmailed = async id => { find(id).ackEmailedAt = new Date().toISOString(); };
 export let lastDraft = null;
 export const draftEmail = async m => { lastDraft = { ...m, pdfBytes: Math.round((m.pdfBase64 || "").length * 0.75) }; window.__lastDraft = lastDraft; return null; };

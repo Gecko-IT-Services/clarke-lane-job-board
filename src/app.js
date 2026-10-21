@@ -42,8 +42,8 @@ import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
 import { renderDeliveries, signaturePad } from './deliveries.js';
-import { deliveryRuns, deliveryProblem, signatureOk } from './core/deliveries.js';
-import { drawMap, focusStop, fitAll, KINDS } from './map.js';
+import { deliveryRuns, deliveryProblem, signatureOk, vanStatus, worthSending } from './core/deliveries.js';
+import { drawMap, focusStop, fitAll, showVans, focusVan, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
 import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps } from './core/jobs.js';
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
@@ -101,7 +101,7 @@ const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 
 const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'open', search: '',
   station: null, open: null, conv: null, desp: null, dispView: 'ready', dispChosen: false, dsearch: '', error: null, busy: false,
-  dpick: null, sig: '', dsign: {} };   // the driver's screen: the note tapped, its signature so far (a PNG data URL), its form
+  dpick: null, sig: '', dsign: {}, share: { on: false, last: null, err: null, sent: null, watch: null }, vans: [] };   // the driver's screen: the note tapped, its signature so far (a PNG data URL), its form
 const office = () => ['md', 'office'].includes(S.me?.role);
 /** Levi (MD): the business figures (target, order book and other totals). Mandy (office) keeps prices on orders. */
 const md = () => S.me?.role === 'md';
@@ -134,6 +134,7 @@ async function boot() {
   if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
   history.replaceState({ ...navOf(), i: 0 }, '', '#' + S.tab);   // the first step: ← Back stays hidden here
   await reload();
+  try { if (localStorage.getItem('clj.share') === '1') startSharing(); } catch { /* not kept */ }   // the van's phone carries on sharing
   if (office()) {
     loadQuotes();
     loadXeroStatus().then(() => { try { sessionStorage.removeItem('clj.preview'); } catch { /* none */ } return checkSoNumbers(); });   // the preview was retired at go-live (Philip, 19 Oct)
@@ -157,6 +158,8 @@ async function reload() {
     S.outwork = await data.loadOutwork().then(r => { S.outErr = null; return r; }).catch(e => { S.outErr = e.message; return S.outwork || []; });
     // Notes on jobs: everyone, the shop floor included.
     S.notes = await data.loadNotes().catch(() => S.notes || []);
+    // Where the van is (the driver's phone, while sharing): the office only. A missing table just means no van yet.
+    if (office()) S.vans = await data.loadPositions().catch(() => S.vans || []);
     if (md()) S.settings = await data.loadSettings().catch(() => S.settings || {});
     if (office()) [S.pfs, S.officeSet, S.pos] = await Promise.all([data.loadProformas().catch(() => S.pfs || []), data.loadOfficeSettings().catch(() => S.officeSet || {}),
       data.loadPurchaseOrders().catch(() => S.pos || [])]);
@@ -806,7 +809,7 @@ function renderMapTab() {
   const el = $('v-map');
   if (!el.dataset.ready) {
     el.innerHTML = `<p class="crumb"><a href="#dispatch" data-tab="dispatch">← Dispatch</a></p><div class="sec-h"><h2>Map</h2><span class="sub">Where the open orders are going. Pick a stop to see the jobs there and what else is nearby, so a second delivery can go on the same run.</span></div>
-      <div class="mapctl" id="mapctl"></div><div class="mapgrid"><div class="mapframe"><div id="mapbox"></div></div><aside class="stops" id="mapstops"><p class="note">Placing the postcodes…</p></aside></div><div id="mapnote"></div>`;
+      <div class="mapctl" id="mapctl"></div><div id="mapvan"></div><div class="mapgrid"><div class="mapframe"><div id="mapbox"></div></div><aside class="stops" id="mapstops"><p class="note">Placing the postcodes…</p></aside></div><div id="mapnote"></div>`;
     el.dataset.ready = '1';
   }
   if (S.xero && office() && !S.xc && !S.xcErr) loadXeroContacts();
@@ -830,7 +833,13 @@ function renderMapTab() {
   const sig = JSON.stringify([items.map(i => [i.postcode, i.kind, i.html]), S.mapMiles]);
   const note = list => `${list.length ? `<div class="panel"><h3>Not on the map <span class="note">${list.length}</span></h3><p class="note">No postcode found for these. Add a delivery address on the order (Amend) or in Customers.</p>
     <div style="display:flex;gap:6px;flex-wrap:wrap">${list.map(i => `<button class="btn sm" type="button" data-open="${i.j.id}">${esc(i.j.so)} · ${esc(i.j.customer)}</button>`).join('')}</div></div>` : ''}
-    <p class="note">Map © OpenStreetMap contributors. Postcodes are placed using postcodes.io (only the postcode is sent). Distances are straight-line. The van's live position can be added later.</p>`;
+    <p class="note">Map © OpenStreetMap contributors. Postcodes are placed using postcodes.io (only the postcode is sent). Distances are straight-line. The van shows while the driver's phone is sharing its position (the switch on the Deliveries screen); only its latest position is kept, not where it has been.</p>`;
+  // The van: a line above the map, and a marker on it once it is drawn.
+  const vans = S.vans.map(v => vanStatus(v)).filter(Boolean);
+  const vanIcon = icon('truck');
+  $('mapvan').innerHTML = vans.length ? vans.map(v => `<div class="van${v.stale ? ' stale' : ''}"><span class="mvan${v.stale ? ' stale' : ''}">${vanIcon}</span><div><b>${esc(v.name)} · ${v.stale ? 'last heard ' : ''}${esc(v.ago)}${v.mph ? ` · ${v.mph} mph` : ''}</b>${v.stale ? '<span class="note">The phone may be locked or out of signal.</span>' : ''}</div><button class="btn sm" type="button" data-mapvan="${esc(v.name)}">Show the van</button></div>`).join('')
+    : '<div class="van off"><span class="note">The van is not sharing where it is. The driver switches it on from the Deliveries screen.</span></div>';
+  const drawVans = () => showVans(vans, esc, vanIcon);
   const stopList = stops => `<div class="sh"><h3>Stops <span class="note">${stops.length}</span></h3>${stops.length > 1 ? '<button class="btn sm" type="button" data-mapfit>Show all</button>' : ''}</div>
     ${stops.length ? `<ol>${stops.map(s => {
       const custs = [...new Set(s.items.map(i => i.j.customer))];
@@ -838,11 +847,11 @@ function renderMapTab() {
         <span class="sb"><b class="mono">${esc(s.key)}</b><span class="sc">${esc(custs.join(', '))}</span>
         <span class="note">${s.items.map(i => esc(i.j.so)).join(', ')} · due ${fmt(s.items[0].due)}${s.near.length ? ` · <b class="nb">${s.near.length} nearby</b>` : ''}</span></span></button></li>`;
     }).join('')}</ol>` : '<p class="note">Nothing to show. Switch on more kinds of job above.</p>'}`;
-  if (sig === mapSig) return;
+  if (sig === mapSig) return drawVans();
   mapSig = sig;
   $('mapnote').innerHTML = note(missing);
   drawMap($('mapbox'), items, S.mapMiles, esc)
-    .then(r => { $('mapstops').innerHTML = stopList(r.stops); if (r.missing.length) $('mapnote').innerHTML = note([...missing, ...r.missing]); })
+    .then(r => { $('mapstops').innerHTML = stopList(r.stops); if (r.missing.length) $('mapnote').innerHTML = note([...missing, ...r.missing]); drawVans(); })
     .catch(e => { mapSig = ''; $('mapstops').innerHTML = ''; $('mapnote').innerHTML = `<div class="err">${esc(e.message)}</div>`; });
 }
 
@@ -1926,7 +1935,7 @@ function renderDeliveriesView() {
     if (!S.dsign?.busy && dn) toast(`${dn} has already been marked delivered.`);
     Object.assign(S, { dpick: null, sig: '', dsign: {} }); keepInputs = false;
   }
-  $('v-deliveries').innerHTML = renderDeliveries({ jobs: S.jobs, today, now: new Date(), me: S.me, pick: S.dpick, signing: S.dsign || {} },
+  $('v-deliveries').innerHTML = renderDeliveries({ jobs: S.jobs, today, now: new Date(), me: S.me, pick: S.dpick, signing: S.dsign || {}, share: S.share },
     { esc, fmt, fmtTime, lineHtml, phoneFor: deliveryPhone });
   const c = $('dl-sig');
   sigPad = c ? signaturePad(c, { value: S.sig, onStart: () => { sigDrawing = true; },
@@ -1938,6 +1947,31 @@ function deliveryPhone(j) {
   const b = bookFor(j.customer), first = s => String(s || '').split('\n')[0].trim().toLowerCase();
   const site = first(j.address) && b.sites.find(x => x.phone && first(x.address) === first(j.address));
   return (site?.phone || b.people.find(p => p.role === 'deliveries' && p.phone)?.phone || '').trim();
+}
+/* Sharing where the van is: the phone's GPS, sent while this is on and the screen is open. The driver's switch. */
+function startSharing() {
+  if (S.share.on) return;
+  if (!navigator.geolocation) { S.share.err = 'This phone cannot share its position.'; return render(); }
+  S.share = { on: true, last: null, err: null, sent: null, watch: null };
+  try { localStorage.setItem('clj.share', '1'); } catch { /* this visit only */ }
+  S.share.watch = navigator.geolocation.watchPosition(async p => {
+    const c = p.coords, fix = { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy ?? null, heading: Number.isFinite(c.heading) ? c.heading : null, speed: Number.isFinite(c.speed) ? c.speed : null, at: Date.now() };
+    if (!S.share.on || !worthSending(S.share.sent, fix)) return;
+    S.share.sent = fix;
+    try { await data.sendPosition(fix); S.share.last = new Date(); S.share.err = null; } catch (e) { S.share.err = e.message; }
+    if (S.tab === 'deliveries' && S.dpick == null) render();
+  }, e => {
+    S.share.err = e.code === 1 ? 'The phone is not allowing this app to use its location. Allow it in the phone\'s settings, then try again.' : 'The phone cannot find its position right now.';
+    if (S.tab === 'deliveries' && S.dpick == null) render();
+  }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+  render();
+}
+function stopSharing() {
+  if (S.share.watch != null) navigator.geolocation.clearWatch(S.share.watch);
+  S.share = { on: false, last: null, err: null, sent: null, watch: null };
+  try { localStorage.removeItem('clj.share'); } catch { /* fine */ }
+  data.clearPosition().catch(() => {});
+  render();
 }
 async function saveDelivery(id) {
   if (S.dsign?.busy) return;
@@ -3209,6 +3243,8 @@ function onClick(e) {
   if (d.pfset) { S.pfSettings = d.pfset === 'open'; return showDoc('pfnew', S.pfDraft.jobId); }
   if (d.sqset) return setSheet(d.sqset);
   if (d.dn) return showDoc('dn', +d.job, +d.dn);
+  if (d.share) return d.share === 'on' ? startSharing() : stopSharing();
+  if (d.mapvan) return focusVan(d.mapvan);
   if ('despclose' in d) { S.desp = null; keepInputs = false; return render(); }
   if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; render(); return showDespForm(); }
   if ('print' in d) {   // the browser's "Save as PDF" takes the page title as the file name
