@@ -10,7 +10,7 @@ import { customerQuestion } from './core/inbox.js';
 export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply', 'Job cancelled', 'Other'];
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
 
-export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false }, h) {
+export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histStale = '', histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false }, h) {
   const { esc, fmt, gbp } = h;
   if (err) return `<div class="hhead"><div><h2>CRM</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
   if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
@@ -85,7 +85,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
   const writeBtn = (c, angle = '') => `<button class="btn sm pri" type="button" data-aiopen="${esc(c.key)}" data-angle="${esc(angle)}">Write an email</button>`;
   const custBox = `<section class="panel"><h3>Customers to get back in touch with</h3>
     ${histErr ? `<div class="err">Xero's invoices could not be read: ${esc(histErr)}</div>` : !base ? '<p class="note">Reading Xero\'s invoices…</p>'
-      : `<p class="note">From Xero's sales invoices${histEarliest ? ` (back to ${esc(fmt(histEarliest))})` : ''}: regular customers who have gone quiet for well past their usual gap, and customers who have not ordered for 6 months.${histEarliest && histEarliest > new Date(Date.parse(today) - 200 * 864e5).toISOString().slice(0, 10) ? ' <b>Xero only has a few months of history</b>, so this fills in as orders build up.' : ''}</p>
+      : `${histStale ? `<p class="note">${esc(histStale)}</p>` : ''}<p class="note">From Xero's sales invoices${histEarliest ? ` (back to ${esc(fmt(histEarliest))})` : ''}: regular customers who have gone quiet for well past their usual gap, and customers who have not ordered for 6 months.${histEarliest && histEarliest > new Date(Date.parse(today) - 200 * 864e5).toISOString().slice(0, 10) ? ' <b>Xero only has a few months of history</b>, so this fills in as orders build up.' : ''}</p>
       ${quiet.length ? `<div class="tbl-wrap"><table class="lines squiet"><thead><tr><th>Customer</th><th>Usually orders</th><th>Last order</th>${md ? '<th class="num">Last 12 months</th>' : ''}<th>They buy</th><th></th></tr></thead><tbody>
         ${quiet.slice(0, 25).map(c => `<tr><td><b>${esc(c.customer)}</b>${c.lapsed ? ' <span class="chip late">Lapsed</span>' : ' <span class="chip soon">Gone quiet</span>'}</td>
           <td>${c.usual ? 'every ' + esc(days(c.usual)) : '—'}<small>${c.orders} orders</small></td><td>${esc(fmt(c.last))}<small>${esc(days(c.since))} ago</small></td>

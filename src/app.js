@@ -448,10 +448,10 @@ function openOrderForm(prefill = {}, amendId = null) {
 }
 /** Xero's Products and services, read once per visit for the Part box. Not fatal: the board's own parts still show. */
 let xitemsLoading = false;
-async function loadXeroItems() {
+async function loadXeroItems(fresh) {
   if (xitemsLoading) return; xitemsLoading = true;
   S.xitemsErr = null;
-  try { const r = await data.xero('items'); S.xitems = r.items || []; S.xitemsTotal = r.total ?? S.xitems.length; }
+  try { const r = await data.xero('items', { fresh: !!fresh }); S.xitems = r.items || []; S.xitemsTotal = r.total ?? S.xitems.length; }
   catch (e) { S.xitems = []; S.xitemsErr = e.message; }
   xitemsLoading = false;
   if (S.form) { collectForm(); keepInputs = false; render(); } else if (S.tab === 'xero') render();
@@ -878,8 +878,8 @@ async function loadMonthSales(force = false) {
     if (!force && kept && kept.from === from && Date.now() - kept.at < 15 * 60e3) { S.monthX = kept.v; S.monthXErr = null; return render(); } } catch { /* ask again */ }
   monthAsking = true;
   try {
-    const v = await data.xero('month', { from, to: today });
-    S.monthX = v.invoices || []; S.monthXErr = null;
+    const v = await data.xero('month', { from, to: today, fresh: !!force });
+    S.monthX = v.invoices || []; S.monthXErr = null; S.monthNote = staleNote(v);
     try { sessionStorage.setItem('clj.monthx', JSON.stringify({ at: Date.now(), from, v: S.monthX })); } catch { /* asked again next time */ }
   } catch (e) { S.monthXErr = e.message; }
   monthAsking = false;
@@ -893,13 +893,21 @@ async function loadDebts(force = false) {
     if (!force && kept && Date.now() - kept.at < 15 * 60e3) { S.debtInv = kept.v; S.debtErr = null; return render(); } } catch { /* ask again */ }
   debtAsking = true;
   try {
-    S.debtInv = (await data.xero('debts')).invoices || []; S.debtErr = null;
+    const v = await data.xero('debts', { fresh: !!force });
+    S.debtInv = v.invoices || []; S.debtErr = null; S.debtNote = staleNote(v);
     try { sessionStorage.setItem('clj.debts', JSON.stringify({ at: Date.now(), v: S.debtInv })); } catch { /* asked again next time */ }
   } catch (e) { S.debtErr = e.message; }
   debtAsking = false;
   render();
 }
 const debts = () => (S.debtInv ? agedDebt(S.debtInv, todayIso()) : null);
+/** A kept answer the board returned because Xero's daily limit is used up: say how old the figures are. */
+function staleNote(r) {
+  if (!r?.stale || !r.cached_at) return '';
+  const at = new Date(r.cached_at), t = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const day = iso(at) === todayIso() ? '' : ` on ${fmt(iso(at))}`;
+  return `Xero's figures from ${t}${day} (Xero's daily limit is used up for now)`;
+}
 /** The aged-debt entry for a customer as named on an order or quote: by their Xero contact, else by name. */
 function debtOf(name) {
   const list = debts(); if (!list || !name) return null;
@@ -934,7 +942,7 @@ async function chaseDebt(key) {
   } catch (e) { toast(e.message, null, true); }
   S.chasing = null; render();
 }
-const monthXero = () => (!S.xero || PREVIEW.on ? { x: null, note: '' } : S.monthX ? { x: S.monthX, note: '' } : { x: null, note: S.monthXErr || 'checking' });
+const monthXero = () => (!S.xero || PREVIEW.on ? { x: null, note: '' } : S.monthX ? { x: S.monthX, note: '', stale: S.monthNote || '' } : { x: null, note: S.monthXErr || 'checking' });
 
 /** The one-off changeover import: reads Xero's open sales orders and keeps them on the board
  *  (xero_orders), so Won quotes offers them until each becomes a sales order or is marked not a job.
@@ -945,7 +953,7 @@ async function importFromXero() {
   if (!S.xero || xeroReading) return;
   xeroReading = true; S.xeroErr = null; render();
   try {
-    S.xeroRead = await data.xero('read'); S.xeroReadAt = new Date();
+    S.xeroRead = await data.xero('read', { fresh: true }); S.xeroReadAt = new Date();
     const fresh = S.xeroRead.quotes.filter(q => openSo(q) && !onBoard(q));
     const added = await data.importXeroOrders(fresh);
     // Imports saved before item codes were read: refresh their lines so the codes (part numbers) come through.
@@ -966,8 +974,8 @@ async function checkSoNumbers() {
   try { S.xeroRead = await keptFor('clj.socheck', 15 * 60e3, async () => { const r = await data.xero('read'); return { highestSo: r.highestSo, counterNext: r.counterNext }; }); render(); }
   catch { /* numbers are checked again next time */ }
 }
-/** Xero allows the board 5,000 calls a day, and each read pages through a whole list (100 a call),
- *  so what changes slowly is kept on this computer for a while instead of read on every page load. */
+/** Xero allows the board 5,000 calls a day, and each read pages through a whole list (100 a call). The board's
+ *  Xero connection keeps Xero's answers for everyone (xero_cache); this also keeps one on this computer a while. */
 async function keptFor(key, ms, read) {
   try { const k = JSON.parse(localStorage.getItem(key)); if (k && Date.now() - k.at < ms) return k.v; } catch { /* read it */ }
   const v = await read();
@@ -1005,7 +1013,8 @@ function renderXero() {
   const head = x
     ? `<p>Connected to <b>${esc(x.tenant_name)}</b> by ${esc(x.connected_by)} on ${fmtLong(x.connected_at)}.</p>
        <div class="actions"><button class="btn" type="button" data-xero="connect" ${busy}>${icon('refresh')}Reconnect</button></div>
-       <p class="note">Xero's customer list is kept on this computer for half an hour, to stay inside Xero's daily limit. Added a customer in Xero? <button class="btn sm" type="button" data-xcreload>Read the customers again</button></p>`
+       <p class="note">To stay inside Xero's daily limit, the board remembers Xero's answers for everyone: customers for 30 minutes, products for an hour, invoices (for customer pages and Sales) for 6 hours, debts for 15 minutes. The Read again buttons fetch fresh ones. Added a customer in Xero? <button class="btn sm" type="button" data-xcreload>Read the customers again</button></p>
+       <p class="note">${data.xeroLeft.day != null ? `Xero allows the board 5,000 calls a day. Left today: <b>${Number(data.xeroLeft.day).toLocaleString('en-GB')}</b>${data.xeroLeft.at ? ` (as of ${new Date(data.xeroLeft.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })})` : ''}` : 'Calls left today: not known yet (it shows after the board\'s next read)'}</p>`
     : `<p>Not connected. Connecting lets the board create draft invoices in Xero for Keith, and bring in Xero's open sales orders once at changeover. It never approves, sends or deletes anything in Xero.</p>
        <div class="actions"><button class="btn xero" type="button" data-xero="connect" ${busy}>Connect to ${XERO}</button></div>
        <p class="note">You will be sent to Xero to sign in. Pick Clarke Lane Engineering when it asks which organisation.</p>`;
@@ -1117,7 +1126,7 @@ const ownDomain = () => domainOf(S.me?.email || '');
 function ensureHistory(fresh) {
   if (!S.xero || PREVIEW.on || S.histLoading || (S.hist && !fresh)) return;
   S.histLoading = true;
-  data.xero('history').then(r => { S.hist = r; S.histErr = null; }).catch(e => { S.histErr = e.message; S.hist = S.hist || { invoices: [] }; })
+  data.xero('history', { fresh: !!fresh }).then(r => { S.hist = r; S.histErr = null; S.histNote = staleNote(r); }).catch(e => { S.histErr = e.message; S.hist = S.hist || { invoices: [] }; })
     .then(() => { S.histLoading = false; if (['sales', 'customers', 'home'].includes(S.tab)) render(); });
 }
 /** Every quote in the quote calculator (read only), for customer pages and Sales. */
@@ -1362,7 +1371,7 @@ function customerPageHtml(key, name) {
     quotes: quotes.map(q => ({ ...q, stage: stageOf.get(q.spId) })), openQuotes: openQ, openOrders: jobs.filter(j => ['upcoming', 'current'].includes(stage(j))).length,
     insight: S.insight?.[key] || null, insightBusy: S.insightBusy === key, prompts, statusChips, jobValue: j => value(j),
     quotesState: S.salesErr ? `<div class="err">The quote calculator could not be read: ${esc(S.salesErr)}</div>` : !S.salesQ ? '<p class="note">Reading the quote calculator…</p>' : '',
-    histNote: !S.xero ? '<p class="note">Xero is not connected.</p>' : S.histErr ? `<div class="err">Xero's invoices could not be read: ${esc(S.histErr)}</div>` : !S.hist ? '<p class="note">Reading Xero…</p>' : '',
+    histNote: !S.xero ? '<p class="note">Xero is not connected.</p>' : S.histErr ? `<div class="err">Xero's invoices could not be read: ${esc(S.histErr)}</div>` : !S.hist ? '<p class="note">Reading Xero…</p>' : S.histNote ? `<p class="note">${esc(S.histNote)}</p>` : '',
     mail: m ? { ...m, messages: (m.messages || []).map(x => ({ ...x, out: domainOf(x.from) === ownDomain(), box: x.mailbox === 'me' ? 'your mailbox' : x.mailbox })) } : null }, { esc, fmt, gbp });
 }
 async function loadCustomerMail(key) {
@@ -1686,7 +1695,7 @@ function renderSalesView() {
   if (S.crmView === 'ideas') { $('v-sales').innerHTML = crmHead() + ideasHtml(); return; }
   if (!S.salesQ) { $('v-sales').innerHTML = renderSales({ loading: !S.salesErr, err: S.salesErr }, { esc, fmt, gbp }); return; }
   const m = salesModel();
-  $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai,
+  $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histStale: S.histNote || '', histEarliest: S.hist?.earliest, ai: S.ai,
     reorderBox: reordersHtml(false), more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md() }, { esc, fmt, gbp });
 }
 function crmHead() {
@@ -2030,7 +2039,7 @@ async function loadXeroContacts(fresh) {
   if (xcLoading) return;
   xcLoading = true; S.xcErr = null; if (S.form) collectForm();
   if (fresh) try { localStorage.removeItem('clj.xc2'); } catch { /* not kept */ }
-  try { [S.xc, S.xcMap] = await Promise.all([keptFor('clj.xc2', 30 * 60e3, () => data.xero('contacts')), data.loadContactMap()]); }
+  try { [S.xc, S.xcMap] = await Promise.all([keptFor('clj.xc2', 5 * 60e3, () => data.xero('contacts', { fresh: !!fresh })), data.loadContactMap()]); }
   catch (e) { S.xcErr = e.message; }
   xcLoading = false; render();
   if (S.poForm && !$('doc').hidden) { collectPo(); showPoForm(); }
@@ -2840,7 +2849,7 @@ function render() {
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
   ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
-      debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
+      debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, note: S.debtNote || '', chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: wonWaiting(),
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
@@ -3068,7 +3077,7 @@ function onClick(e) {
     const all = ids.every(x => sel.has(x)); ids.forEach(x => (all ? sel.delete(x) : sel.add(x))); return render(); }
   if ('pickclear' in d) { S.sel = new Set(); S.lastPick = null; return render(); }
   if ('addcodes' in d) return addMissingCodes();
-  if ('pcheckread' in d) { S.xitems = null; S.xitemsErr = null; render(); return loadXeroItems().then(render); }
+  if ('pcheckread' in d) { S.xitems = null; S.xitemsErr = null; render(); return loadXeroItems(true).then(render); }
   if (d.chase) return chaseDebt(d.chase);
   if (d.hintadd) return addHinted(+d.hintadd);
   if (d.keeppart) return keepForPart(+d.keeppart);

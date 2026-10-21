@@ -898,7 +898,10 @@ export async function xeroStatus() {
   return data?.[0] || null;
 }
 
-/** route: 'connect' | 'read' | 'disconnect' */
+/** Calls Xero says are left today and this minute, from the last answer (mutated, never reassigned). */
+export const xeroLeft = { day: null, minute: null, at: null };
+
+/** route: 'connect' | 'read' | 'disconnect' | ... ; body { fresh: true } reads Xero again instead of the board's kept answer. */
 export async function xero(route, body) {
   const sb = await getSupabase();
   const { data: { session } } = await sb.auth.getSession();
@@ -910,6 +913,7 @@ export async function xero(route, body) {
   } catch { throw new Error('Could not reach the Xero connection. Check the internet connection and try again.'); }
   const out = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(out.error || `The Xero connection failed (${res.status}).`);
+  if (out.xero_left) { Object.assign(xeroLeft, out.xero_left); delete out.xero_left; }
   return out;
 }
 

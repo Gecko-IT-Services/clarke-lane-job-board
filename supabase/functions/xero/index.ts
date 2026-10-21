@@ -11,6 +11,13 @@
 //   POST bills     office only → the last 12 months' supplier bills, materials lines (account 5000) only. Read only.
 //   POST history   office only → sales invoices and credit notes, last 24 months, with their lines and what is owed (customer pages, Sales). Read only.
 //   POST disconnect office only
+//   (also: invoices = status by ids, online = pay-online links, po = draft purchase order, month = Levi's month)
+//
+// Xero allows 5,000 calls a day per organisation. Read answers are kept in public.xero_cache and shared by
+// everyone on every device (22 Oct): history 6 h, bills 6 h, items 1 h, contacts 30 min, debts 15 min,
+// month 15 min (per from/to), read 15 min. A body of { fresh: true } reads Xero again. Not kept: invoices,
+// contact, online, send, po, connect, disconnect. Every answer carries xero_left: the calls Xero says are
+// left today and this minute, as of the last call this instance made.
 //
 // Secrets (Supabase › Edge Functions › Secrets): XERO_CLIENT_ID, XERO_CLIENT_SECRET.
 // Optional: XERO_SCOPES. Deployed with verify_jwt off because Xero's redirect carries no
@@ -35,6 +42,10 @@ const ORIGINS = ['https://jobs.clarke-lane.co.uk', 'https://gecko-it-services.gi
 const GO_LIVE = '2026-10-01';   // Clarke Lane's first day in Xero
 
 class HttpError extends Error { constructor(public status: number, msg: string) { super(msg); } }
+
+/** Calls Xero says are left (X-DayLimit-Remaining, X-MinLimit-Remaining), from this instance's last call. */
+let limits = { day: null as number | null, minute: null as number | null, at: '' };
+const DAY_LIMIT = "Xero's daily limit";
 
 function cors(req: Request, res: Response) {
   const o = req.headers.get('origin') || '';
@@ -117,11 +128,16 @@ async function xero(s: { access_token: string; tenant_id: string }, path: string
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(`https://api.xero.com/api.xro/2.0/${path}`, {
       headers: { Authorization: `Bearer ${s.access_token}`, 'xero-tenant-id': s.tenant_id, Accept: 'application/json' } });
+    const day = res.headers.get('X-DayLimit-Remaining'), minute = res.headers.get('X-MinLimit-Remaining');
+    if (day != null || minute != null) {
+      limits = { day: day != null && day !== '' ? Number(day) : limits.day, minute: minute != null && minute !== '' ? Number(minute) : limits.minute, at: new Date().toISOString() };
+      if (limits.day != null && limits.day < 200) console.warn(`Xero: only ${limits.day} calls left today (${path.split('?')[0]})`);
+    }
     if (res.status === 429) {
       // Xero says which limit: concurrent (5 at once), minute (60) or day (5,000 per app per organisation).
       const problem = res.headers.get('X-Rate-Limit-Problem') || '', wait = Number(res.headers.get('Retry-After')) || 2 * (attempt + 1);
       console.warn(`Xero 429 (${problem || 'unknown'}) on ${path.split('?')[0]}, retry after ${wait}s`);
-      if (problem === 'day') throw new HttpError(503, `Xero's daily limit for the board is used up. It frees up in about ${Math.ceil(wait / 3600)} hour(s).`);
+      if (problem === 'day') throw new HttpError(503, `${DAY_LIMIT} for the board is used up. It frees up in about ${Math.ceil(wait / 3600)} hour(s). Nothing is lost: dispatches waiting for Xero stay on the list; send them then.`);
       if (wait > 20) throw new HttpError(503, `Xero is busy (rate limit). Try again in ${wait} seconds.`);
       await new Promise(r => setTimeout(r, wait * 1000)); continue;
     }
@@ -131,6 +147,26 @@ async function xero(s: { access_token: string; tenant_id: string }, path: string
   }
   throw new HttpError(503, 'Xero is busy (rate limit). Try again in a minute.');
 }
+
+/** Xero's answer for `key`, kept in public.xero_cache for ttlMs and shared by everyone. `fresh` reads Xero
+ *  again. If Xero's daily limit is used up, the last kept answer is returned with stale: true. */
+async function cached<T extends Record<string, unknown>>(key: string, ttlMs: number, fresh: boolean, read: () => Promise<T>):
+    Promise<T & { cached_at?: string; stale?: boolean }> {
+  const { data: row, error } = await admin.from('xero_cache').select('body, at').eq('key', key).maybeSingle();
+  if (error) console.warn(`xero_cache read ${key}:`, error.message);
+  if (row && !fresh && Date.now() - new Date(row.at).getTime() < ttlMs) return { ...(row.body as T), cached_at: row.at };
+  let body: T;
+  try { body = await read(); }
+  catch (e) {
+    if (row && e instanceof HttpError && e.message.startsWith(DAY_LIMIT)) return { ...(row.body as T), cached_at: row.at, stale: true };
+    throw e;
+  }
+  const at = new Date().toISOString();
+  const { error: upErr } = await admin.from('xero_cache').upsert({ key, body, at });
+  if (upErr) console.warn(`xero_cache save ${key}:`, upErr.message);
+  return { ...body, cached_at: at };
+}
+const MIN = 60_000, HOUR = 60 * MIN;
 
 async function xeroPost(s: { access_token: string; tenant_id: string }, path: string, body: unknown, idempotencyKey: string) {
   const res = await fetch(`https://api.xero.com/api.xro/2.0/${path}`, { method: 'POST',
@@ -409,24 +445,27 @@ Deno.serve(async req => {
     if (route === 'callback') return await callback(url);
     const me = await office(req);
     if (!CLIENT_ID || !CLIENT_SECRET) throw new HttpError(503, 'Xero is not set up yet: XERO_CLIENT_ID and XERO_CLIENT_SECRET are missing from Supabase › Edge Functions › Secrets.');
-    if (route === 'connect') return cors(req, json({ url: await connectUrl(me.email) }));
-    if (route === 'read') return cors(req, json(await read()));
-    if (route === 'contacts') return cors(req, json(await contacts()));
-    if (route === 'contact') return cors(req, json(await contact((await req.json().catch(() => ({}))).id)));
-    if (route === 'items') return cors(req, json(await items()));
-    if (route === 'po') return cors(req, json(await purchaseOrder(await req.json().catch(() => ({})), me)));
+    const reply = (body: unknown) => cors(req, json({ ...(body as Record<string, unknown>), xero_left: limits }));
+    const b = await req.json().catch(() => ({})) as any;
+    const fresh = b?.fresh === true;
+    if (route === 'connect') return reply({ url: await connectUrl(me.email) });
+    if (route === 'read') return reply(await cached('read', 15 * MIN, fresh, read));
+    if (route === 'contacts') return reply(await cached('contacts', 30 * MIN, fresh, contacts));
+    if (route === 'contact') return reply(await contact(b?.id));
+    if (route === 'items') return reply(await cached('items', HOUR, fresh, items));
+    if (route === 'po') return reply(await purchaseOrder(b, me));
     if (route === 'month') {
       if (me.role !== 'md') throw new HttpError(403, 'Only Levi can see the month figures.');
-      const b = await req.json().catch(() => ({}));
-      return cors(req, json(await monthSales(b.from, b.to)));
+      return reply(await cached(`month:${b?.from}:${b?.to}`, 15 * MIN, fresh, () => monthSales(b?.from, b?.to)));
     }
-    if (route === 'debts') return cors(req, json(await debts()));
-    if (route === 'bills') return cors(req, json(await bills()));
-    if (route === 'history') return cors(req, json(await history()));   // per-invoice amounts, as Mandy sees on orders; totals are drawn for Levi only
-    if (route === 'online') return cors(req, json(await onlineLinks((await req.json().catch(() => ({}))).ids)));
-    if (route === 'invoices') return cors(req, json(await invoiceStatus((await req.json().catch(() => ({}))).ids)));
-    if (route === 'send') return cors(req, json(await send((await req.json().catch(() => ({}))).items)));
-    if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return cors(req, json({ ok: true })); }
+    if (route === 'debts') return reply(await cached('debts', 15 * MIN, fresh, debts));
+    if (route === 'bills') return reply(await cached('bills', 6 * HOUR, fresh, bills));
+    // per-invoice amounts, as Mandy sees on orders; totals are drawn for Levi only
+    if (route === 'history') return reply(await cached('history', 6 * HOUR, fresh, history));
+    if (route === 'online') return reply(await onlineLinks(b?.ids));
+    if (route === 'invoices') return reply(await invoiceStatus(b?.ids));
+    if (route === 'send') return reply(await send(b?.items));
+    if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return reply({ ok: true }); }
     throw new HttpError(404, 'Not found');
   } catch (e) {
     const status = e instanceof HttpError ? e.status : 500;
