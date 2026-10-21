@@ -1678,7 +1678,11 @@ function tvAwake(on) {
   if (!on && tvLock) { tvLock.release().catch(() => {}); tvLock = null; }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.tab === 'tv') tvAwake(true); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.tab === 'tv') location.hash = '#floor'; });
+function leaveTv() { if (!S.kiosk && document.fullscreenElement) document.exitFullscreen().catch(() => {}); location.hash = '#floor'; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.tab === 'tv') leaveTv(); });
+// The Leave button shows when someone moves the mouse or touches the TV, and fades again after a few seconds.
+let tvTouchT;
+['pointermove', 'pointerdown'].forEach(t => document.addEventListener(t, () => { if (S.tab !== 'tv') return; document.body.classList.add('tv-touch'); clearTimeout(tvTouchT); tvTouchT = setTimeout(() => document.body.classList.remove('tv-touch'), 4000); }, { passive: true }));
 function renderFloor() {
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
     kiosk: !!S.kiosk, canMove: office(), outwork: S.outwork || [], notes: S.notes || [], office: office(), outForm: S.outForm, canRemove: office() }, { esc, fmt, fmtTime, TICK });
@@ -2741,6 +2745,7 @@ function onClick(e) {
   if ('salesreload' in d) { S.salesQ = null; S.hist = null; S.salesErr = null; return loadSalesData(true); }
   if (d.custpage) { const n = d.custname || (S.hist?.invoices || []).find(x => normName(x.customer) === d.custpage)?.customer || S.book.people.find(p => p.key === d.custpage)?.customer || d.custpage; return openCustomer(d.custpage, n); }
   if (d.gi) return goHit(+d.gi);
+  if ('tvleave' in d) return leaveTv();
   if (d.ctab) { S.ctab = d.ctab; return render(); }
   if ('sppick' in d) { S.spView.pick = d.sppick || null; render(); if (d.sppick) $('sp-pick')?.focus(); return; }
   if (d.spsave) return linkFolder(d.spsave, false);

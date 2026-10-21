@@ -140,9 +140,9 @@ export function renderHome({ todayBox = '', jobs, me, office, md = false, editTa
   return `<div class="home">
     <div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>
     ${todayBox}
-    <div class="hcards">${cards}</div>
-    ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}
-    ${month}
+    <div class="${month ? 'hglance' : ''}"><div class="hcol"><div class="hcards">${cards}</div>
+      ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}</div>
+      ${month}</div>
     <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>
     <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;
