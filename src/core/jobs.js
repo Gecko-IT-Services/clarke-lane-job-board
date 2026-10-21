@@ -130,13 +130,17 @@ export function invoiceStatus(job) {
 
 export const lastDespatch = job => job.despatches.length ? job.despatches[job.despatches.length - 1].date : '';
 
-/** Call-off dates from the first date: every 7 or 14 days, or monthly ('m'). */
+/** Call-off dates from the first date: every 7 or 14 days, or monthly ('m'). A monthly call-off
+ *  from the 29th, 30th or 31st lands on the last day of a shorter month, not in the month after. */
 export function calloffDates(first, count, every) {
   const out = [];
   for (let i = 0; i < count; i++) {
     const d = new Date(first + 'T12:00:00Z');
-    if (every === 'm') d.setUTCMonth(d.getUTCMonth() + i);
-    else d.setUTCDate(d.getUTCDate() + i * Number(every));
+    if (every === 'm') {
+      const day = d.getUTCDate();
+      d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + i);
+      d.setUTCDate(Math.min(day, new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()));
+    } else d.setUTCDate(d.getUTCDate() + i * Number(every));
     out.push(d.toISOString().slice(0, 10));
   }
   return out;

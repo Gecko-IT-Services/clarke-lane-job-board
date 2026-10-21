@@ -291,10 +291,15 @@ async function send(items: { despatchId: number; contactId: string }[]) {
       const r = await xeroPost(s, 'Invoices', { Invoices: [inv] }, `clj-despatch-${row.id}`);
       const made = r.Invoices?.[0];
       if (!made?.InvoiceID) throw new Error('Xero did not return an invoice.');
-      const { data: marked } = await admin.rpc('xero_mark_sent', { p_despatch_id: row.id, p_invoice_id: made.InvoiceID, p_invoice_no: made.InvoiceNumber || '' });
+      // The draft exists in Xero from here on. If the board cannot write its number down (the mark
+      // fails, or the note was cancelled or un-delivered meanwhile), the office must hear about it:
+      // the note would stay in "waiting for Xero" with a draft already made.
+      const { data: marked, error: markErr } = await admin.rpc('xero_mark_sent', { p_despatch_id: row.id, p_invoice_id: made.InvoiceID, p_invoice_no: made.InvoiceNumber || '' });
+      if (markErr) console.warn('xero_mark_sent', row.id, markErr.message);
       const net = invoiceNet(inv);
       out.push({ despatchId: it.despatchId, ok: true, invoiceNo: made.InvoiceNumber, net,
-        xeroNet: made.SubTotal, mismatch: Math.abs((made.SubTotal ?? net) - net) > 0.004, recorded: !!marked });
+        xeroNet: made.SubTotal, mismatch: Math.abs((made.SubTotal ?? net) - net) > 0.004, recorded: !!marked,
+        recordError: marked ? undefined : (markErr?.message || 'the note was cancelled or set back to not delivered meanwhile') });
     } catch (e) {
       out.push({ despatchId: it.despatchId, ok: false, error: (e as Error).message });
     }
