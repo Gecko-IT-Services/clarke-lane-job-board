@@ -612,21 +612,25 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-home#v-home .hcards{gap:10px} #v-home#v-home .hcard{padding:12px 14px;gap:10px;border-radius:12px} #v-home#v-home .hcard .ic{width:34px;height:34px;border-radius:8px} #v-home#v-home .hcard svg{width:18px;height:18px}
 #v-home#v-home .hcard b{font-size:21px} #v-home#v-home .hcard div span{font-size:13px}
 #v-home#v-home .tcards{gap:8px} #v-home#v-home .tcard{padding:9px 12px;border-radius:10px} #v-home#v-home .tcard b{font-size:20px} #v-home#v-home .tcard span{font-size:12.5px}
-/* Home in Clarke Lane's blue and orange (Philip, 21 Oct: "blue and orange is so good"): white cards with an accent, not pastel boxes */
-#v-home{--cl-or:#E8641E;--cl-or-soft:rgba(232,100,30,.12);--cl-or-mid:#F29A5E;--cl-bl:#2B5BD7;--cl-bl-soft:rgba(43,91,215,.12)}
-#v-home#v-home .hcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line)}
-#v-home#v-home .hcard .ic{background:var(--field);color:var(--muted)}
-#v-home#v-home .hcard.t-bad{border-left-color:var(--cl-or)} #v-home#v-home .hcard.t-bad .ic{background:var(--cl-or);color:#fff} #v-home#v-home .hcard.t-bad b{color:var(--cl-or)}
-#v-home#v-home .hcard.t-warn{border-left-color:var(--cl-or-mid)} #v-home#v-home .hcard.t-warn .ic{background:var(--cl-or-soft);color:var(--cl-or)}
-#v-home#v-home .hcard:is(.t-info,.t-ok){border-left-color:var(--cl-bl)} #v-home#v-home .hcard:is(.t-info,.t-ok) .ic{background:var(--cl-bl-soft);color:var(--cl-bl)}
-#v-home#v-home .tcard{background:var(--surface);border-left:4px solid var(--line)}
-#v-home#v-home .tcard.t-bad{border-color:var(--line);border-left-color:var(--cl-or)} #v-home#v-home .tcard.t-bad b{color:var(--cl-or)}
-#v-home#v-home .tcard.t-warn{border-color:var(--line);border-left-color:var(--cl-or-mid)}
-#v-home#v-home .tcard.t-info{border-color:var(--line);border-left-color:var(--cl-bl)} #v-home#v-home .tcard.t-info b{color:var(--cl-bl)}
-#v-home .month .g-state{background:var(--cl-or-soft);color:var(--cl-or)} #v-home .month .g-state:is(.g-ok,.g-top){background:var(--cl-bl-soft);color:var(--cl-bl)}
-#v-home .month :is(.f-inv,.f-inv.good){border-left-color:var(--cl-or)} #v-home .month .f-wip{border-left-color:var(--cl-bl)} #v-home .month .f-gap.none{border-left-color:var(--cl-bl)}
-#v-home .vt-fill:is(.t-warn,.t-ok,.t-top){--f1:#FFC39A;--f2:#E8641E;--f3:#A8410C}
-#v-home .vt-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.2) 0 5px,rgba(255,255,255,0) 5px 10px),linear-gradient(90deg,#AFC6F5 0%,#2B5BD7 50%,#1B3C99 100%)}
+/* Home in black, silver and white (Philip, 21 Oct: "a metal fabrication company, black/silver/white"): urgency by depth, not colour */
+#v-home{--hm-ink:#141518;--hm-steel:#5B6068;--hm-silver:#B7BCC3;--hm-silver-soft:#ECEEF1}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #v-home{--hm-ink:#F4F5F7;--hm-steel:#A7ACB4;--hm-silver:#5B6068;--hm-silver-soft:#24262A}}
+:root[data-theme="dark"] #v-home{--hm-ink:#F4F5F7;--hm-steel:#A7ACB4;--hm-silver:#5B6068;--hm-silver-soft:#24262A}
+#v-home#v-home .hcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--hm-silver)}
+#v-home#v-home .hcard .ic{background:var(--hm-silver-soft);color:var(--hm-steel)}
+#v-home#v-home .hcard.t-bad{border-left-color:var(--hm-ink)} #v-home#v-home .hcard.t-bad .ic{background:var(--hm-ink);color:var(--surface)} #v-home#v-home .hcard.t-bad b{font-weight:700}
+#v-home#v-home .hcard.t-warn{border-left-color:var(--hm-steel)} #v-home#v-home .hcard.t-warn .ic{background:var(--hm-silver-soft);color:var(--hm-ink)}
+#v-home#v-home .hcard:is(.t-info,.t-ok){border-left-color:var(--hm-silver)}
+#v-home#v-home .tcard{background:var(--surface);border-color:var(--line);border-left:4px solid var(--hm-silver)}
+#v-home#v-home .tcard.t-bad{border-color:var(--line);border-left-color:var(--hm-ink)} #v-home#v-home .tcard.t-bad b{font-weight:800}
+#v-home#v-home .tcard.t-warn{border-color:var(--line);border-left-color:var(--hm-steel)}
+#v-home#v-home .tcard.t-info{border-color:var(--line);border-left-color:var(--hm-silver)}
+#v-home .month .g-state{background:var(--hm-ink);color:var(--surface)} #v-home .month .g-state:is(.g-ok,.g-top){background:var(--hm-silver-soft);color:var(--hm-ink);border:1px solid var(--hm-silver)}
+#v-home .month :is(.f-inv,.f-inv.good){border-left-color:var(--hm-ink)} #v-home .month .f-wip{border-left-color:var(--hm-steel)} #v-home .month :is(.f-gap,.f-gap.none){border-left-color:var(--hm-silver)}
+#v-home .vt-fill:is(.t-warn,.t-ok,.t-top){--f1:#7C828B;--f2:#2E3238;--f3:#0E0F11}
+#v-home .vt-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.35) 0 4px,rgba(255,255,255,0) 4px 9px),linear-gradient(90deg,#E9ECEF 0%,#A3A9B1 50%,#6C727B 100%)}
+#v-home ul.tasks li.late{border-color:var(--hm-ink);border-left-width:4px} #v-home ul.tasks .chip.late{background:var(--hm-ink);color:var(--surface)}
+#v-home .vt-marks .vt-pace{color:var(--hm-ink)} #v-home .vt-marks .vt-pace::before{border-right-color:var(--hm-ink)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
