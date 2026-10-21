@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { reorderRound, reorderTally, reorderAngle, roundNudge, itemWords, lineNamesItem, reorderNote, snoozeNote } from '../src/core/reorders.js';
+import { reorderRound, reorderTally, reorderAngle, roundNudge, nudgeWords, itemWords, lineNamesItem, reorderNote, snoozeNote } from '../src/core/reorders.js';
 
 const today = '2026-10-21';   // a Wednesday
 const ago = d => new Date(Date.parse(today + 'T12:00:00Z') - d * 864e5).toISOString().slice(0, 10);
@@ -58,6 +58,8 @@ assert.equal(reorderAngle(reorders[0]), `Their regular order of "Shelf bracket 2
 // The Monday nudge: Mondays, or when nobody has asked for a week.
 assert.equal(roundNudge(round, actions, today), 0, 'Wednesday, asked 3 days ago');
 assert.equal(roundNudge(round, actions, '2026-10-19'), 1, 'Monday');
+assert.match(nudgeWords(3, '2026-10-19'), /^Monday reorder round: 3/);
+assert.match(nudgeWords(3, '2026-10-21'), /^Nobody has asked/);
 assert.equal(roundNudge(round, actions.filter(a => a.at < at(7)), today), 1, 'nobody asked for a week');
 assert.equal(roundNudge([], [], '2026-10-19'), 0, 'nothing due');
 console.log('reorders: ok');

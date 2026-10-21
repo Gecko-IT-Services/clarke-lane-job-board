@@ -1410,7 +1410,7 @@ function todayHtml() {
   const rm = reorderModel();
   { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { quiet = quietCustomers(customerBase(S.hist.invoices, today)); reorders = rm.round.filter(r => r.state === 'due'); } }
   const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };   // the tile counts only those still to ask
-  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt }) + reordersHtml(true) + floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc });
+  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt }) + floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc });
 }
 
 /**
@@ -1428,7 +1428,7 @@ function reordersHtml(compact) {
   if (!office()) return '';
   const r = reorderModel();
   if (!r) return renderReorders({ round: [], tally: {}, compact, loading: !!S.xero && !S.histErr, err: !S.xero ? 'Xero is not connected, so the repeat parts are not known. Connect it on the Xero tab.' : S.histErr ? `Xero's invoices could not be read, so the repeat parts are not known: ${S.histErr}` : '' }, { esc, fmt, gbp });
-  return renderReorders({ ...r, md: md(), compact, nudge: compact ? r.nudge : 0 }, { esc, fmt, gbp });
+  return renderReorders({ ...r, md: md(), compact, nudge: compact ? r.nudge : 0, today: todayIso() }, { esc, fmt, gbp });
 }
 /** Asked about a repeat part (by hand after a call, or by the AI email), or not needed for 90 days. */
 async function reorderAction(key, item, kind) {
@@ -2664,7 +2664,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
