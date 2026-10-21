@@ -29,7 +29,7 @@ assert.ok(sql.includes('alter default privileges for role postgres in schema pub
 for (const m of sql.matchAll(/if not public\.(\w+)\(\)/g)) assert.ok(['is_staff', 'is_office', 'is_md'].includes(m[1]), `guard ${m[1]} is a known helper`);
 
 // — The browser writes four tables directly; it may touch only the columns the board actually sets.
-//   Everything else goes through the definer functions (see 20261021200000_delete_and_column_grants.sql). —
+//   Everything else goes through the definer functions (see 20261022180000_delete_and_column_grants.sql). —
 for (const [t, cols] of [['jobs', 'status, status_note, contact_email'], ['despatches', 'xero_invoice_no, sent_to_xero_at'],
   ['job_processes', 'done_by, done_at'], ['outwork', 'supplier, items, finish, sent_on, due_back, note, back_on, back_by']]) {
   assert.ok(sql.includes(`revoke update on public.${t} from authenticated`), `${t}: whole-row update revoked`);
