@@ -35,7 +35,7 @@ import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob,
 import { CONFIG } from './config.js';
 import { searchAll } from './core/search.js';
 import { newDispatches } from './core/mood.js';
-import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
+import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
@@ -1121,7 +1121,15 @@ async function syncEnquiries(manual) {
       const attachments = m.hasAttachments ? await data.attachmentNames(mailbox, m.graphId).catch(() => []) : [];
       const x = await data.salesAi({ from: m.fromEmail, fromName: m.fromName, subject: m.subject, text: plainText(m.text), attachments }, 'enquiry');
       const id = await data.claimEnquiry({ ...m, mailbox });
-      if (id) { await data.setEnquiry(id, { kind: x.kind, summary: x.summary || '', company: x.company || '', person: x.person || m.fromName, phone: x.phone || '', wants: x.wants || '', hasDrawings: !!x.hasDrawings || attachments.some(a => /\.(pdf|dxf|dwg|step|stp|igs)$/i.test(a)), customerKey: whoIs(customerIdx(), m.fromEmail)?.key || '' }); read++; }
+      const key = emailCustomer(customerIdx(), m.fromEmail, x.company, customerNames());   // by address or domain, else by the company named
+      const kind = sortEmail(x.kind, { known: !!key, text: `${m.subject} ${x.wants || ''} ${x.summary || ''} ${plainText(m.text, 2000)}` });
+      if (id) { await data.setEnquiry(id, { kind, summary: x.summary || '', company: x.company || '', person: x.person || m.fromName, phone: x.phone || '', wants: x.wants || '', hasDrawings: !!x.hasDrawings || attachments.some(a => /\.(pdf|dxf|dwg|step|stp|igs)$/i.test(a)), customerKey: key }); read++; }
+    }
+    // Emails filed before this sorting (21 Oct): a known customer's email about an existing order or quote moves to customer correspondence.
+    for (const e of (S.enq || []).filter(e => e.status === 'new' && e.kind === 'enquiry')) {
+      const key = e.customerKey || emailCustomer(customerIdx(), e.fromEmail, e.company, customerNames());
+      const kind = sortEmail(e.kind, { known: !!key, text: `${e.subject} ${e.wants} ${e.summary}` });
+      if (key !== e.customerKey || kind !== e.kind) { await data.setEnquiry(e.id, { kind, customerKey: key }).catch(() => {}); read++; }
     }
     S.enqState = 'ok'; S.enqCheckedAt = new Date().toISOString();
     if (read || manual) { S.enq = await data.loadEnquiries(); if (manual) toast(read ? `${read} new email${read === 1 ? '' : 's'} read.` : 'Nothing new in the mailbox.'); }

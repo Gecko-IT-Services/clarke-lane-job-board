@@ -40,6 +40,22 @@ export function customerIndex(entries) {
 }
 export const whoIs = (index, email) => { const a = String(email || '').trim().toLowerCase(); return index.byEmail.get(a) || index.byDomain.get(domainOf(a)) || null; };
 
+/**
+ * Sorting an email from info@ (Philip, 21 Oct: a known customer's "quantity change to 16, amended PO to follow" and
+ * "does the quoted price include folding" were filed as new enquiries from new customers). The AI's first sort is kept
+ * unless the sender is a known customer AND the email refers to an order or quote that already exists: then it is
+ * customer correspondence, not new work. Nothing a stranger sends is changed.
+ */
+const EXISTING = /\b(?:SO|S0|DN|PF)[-\s]?\d{3,5}\b|\bP\.?O\.?[-\s#]?[A-Z]?\d{3,}\b|\bQ[-\s]?\d{3,4}\b|\bQCLE\s?\d{3,6}\b|\b(?:amend(?:ed|ment)?|quoted price|your quote|our order|the order|order (?:no|number)|quantity change|previously|as quoted|invoice|delivery note|re-?cut|arrived)\b/i;
+export const refersToExisting = text => EXISTING.test(String(text || ''));
+/** The kind an email is filed under: the AI's, unless a known customer is writing about something that exists already. */
+export const sortEmail = (kind, { known = false, text = '' } = {}) => (kind === 'enquiry' && known && refersToExisting(text)) ? 'customer' : kind;
+/** The customer an email belongs to: by the sender's address or domain, else by the company name the AI read. names: Map key → name. */
+export function emailCustomer(index, email, company, names) {
+  const hit = whoIs(index, email); if (hit) return hit.key;
+  const k = normName(company || ''); return k && names?.has(k) ? k : '';
+}
+
 /** Email HTML as plain text, for the AI to read (no markup, no long quoted threads). */
 export function plainText(html, max = 6000) {
   const t = String(html || '').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr|li|h\d)>/gi, '\n')
