@@ -8,7 +8,7 @@ import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo } from './core/xero.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
-import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding } from './core/parts.js';
+import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partNumbersIn, partsOnJob } from './core/parts.js';
 import { OUT_PROCESSES, outNow, outBoard, itemsFor, finishFor, defaultDueBack, suppliersUsed, checkSend } from './core/outwork.js';
 import { renderHelp } from './help.js';
 import { renderHome } from './home.js';
@@ -25,6 +25,9 @@ import { renderSales } from './sales.js';
 import { renderIdeas } from './ideas.js';
 import { ideasFacts, websiteGuess, ideaBoard } from './core/ideas.js';
 import { renderToday, taskForm, renderEnquiries, renderCustomerPage } from './customer.js';
+import { renderFilesTab, foundDrawingsHtml, certsHtml, quoteHistWords } from './spfiles.js';
+import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob, certFolders } from './core/spfiles.js';
+import { CONFIG } from './config.js';
 import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
@@ -1167,8 +1170,8 @@ function customerPageHtml(key, name) {
   const tab = S.ctab || 'overview';
   if (tab === 'emails' && !S.cmail?.[key]) setTimeout(() => loadCustomerMail(key), 0);
   if (tab === 'overview' && md() && S.insight?.[key] === undefined) { S.insight = { ...(S.insight || {}), [key]: null }; data.loadInsight(key).then(x => { S.insight[key] = x; render(); }).catch(() => {}); }
-  const m = S.cmail?.[key];
-  return renderCustomerPage({ tab, c, md: md(), office: office(), today, staff: staffList(), jobs, invoices, tasks, timeline: timeline({ key, jobs, invoices, quotes, actions, tasks, enquiries: S.enq || [] }),
+  const m = S.cmail?.[key], cf = ['overview', 'files'].includes(tab) && S.sp?.ready ? custFiles(key) : (spReady(), null);
+  return renderCustomerPage({ filesHtml: tab === 'files' ? filesTabHtml(key, name) : '', quoteHist: quoteHistWords(cf?.hist), tab, c, md: md(), office: office(), today, staff: staffList(), jobs, invoices, tasks, timeline: timeline({ key, jobs, invoices, quotes, actions, tasks, enquiries: S.enq || [] }),
     quotes: quotes.map(q => ({ ...q, stage: stageOf.get(q.spId) })), openQuotes: openQ, openOrders: jobs.filter(j => ['upcoming', 'current'].includes(stage(j))).length,
     insight: S.insight?.[key] || null, insightBusy: S.insightBusy === key, prompts, statusChips, jobValue: j => value(j),
     quotesState: S.salesErr ? `<div class="err">The quote calculator could not be read: ${esc(S.salesErr)}</div>` : !S.salesQ ? '<p class="note">Reading the quote calculator…</p>' : '',
@@ -1203,6 +1206,88 @@ async function writeInsight(key, name) {
   S.insightBusy = null; render();
 }
 
+/* ---------- SharePoint files (Company Data, read only): customers' folders, drawings by part number, material certificates ---------- */
+/** The folder lists and the folders linked by hand, read once a visit (office). Resolves when ready. */
+function spReady() {
+  if (!office()) return Promise.resolve(false);
+  S.spWait ??= (async () => {
+    S.sp = { links: [], clients: [], laser: [], certs: [], misc: null, ready: false, err: null, certErr: null, files: {} };
+    try {
+      const [links, clients, laser] = await Promise.all([data.loadCustomerFolders().catch(() => []), data.companyFolders('clients'), data.companyFolders('laser')]);
+      const misc = clients.find(f => f.name.toUpperCase() === CONFIG.SP_MISC) || null;
+      Object.assign(S.sp, { links, misc, clients: clients.filter(f => f !== misc), laser, ready: true });
+    } catch (e) { S.sp.err = e.message; }   // shown on the page; a reload tries again
+    data.companyFolders('certs').then(c => { S.sp.certs = c; }).catch(e => { S.sp.certErr = `The certificate folders could not be read: ${e.message}`; }).then(() => render());
+    render(); return S.sp.ready;
+  })();
+  return S.spWait;
+}
+const spFolders = key => customerFolders(key, S.sp?.links, S.sp || {});
+/** A customer's files from their client and laser folders, read once a visit: { state, files, hist } or null until the lists are read. */
+function custFiles(key, quiet = false) {
+  if (!S.sp?.ready) { spReady(); return null; }
+  if (S.sp.files[key]) return S.sp.files[key];
+  const fs = spFolders(key), entry = S.sp.files[key] = { state: 'loading', files: [], hist: null };
+  const read = (f, label) => f ? data.filesIn(f).then(list => list.map(x => ({ ...x, path: [label, x.path].filter(Boolean).join('/') }))) : Promise.resolve([]);
+  entry.done = Promise.all([read(fs.client.folder, ''), read(fs.laser.folder, 'Laser drawings')])
+    .then(([c, l]) => { entry.files = [...c, ...l]; entry.client = c; entry.state = 'ok'; entry.hist = quoteHistory(c, { key }); })
+    .catch(e => { entry.state = 'error:' + e.message; })
+    .then(() => S.sp.misc ? data.filesIn(S.sp.misc).then(m => { entry.hist = quoteHistory(entry.client || [], { key, misc: m }); }).catch(() => {}) : null)
+    .then(() => { if (!quiet) render(); });
+  return entry;
+}
+function filesTabHtml(key, name) {
+  spReady();
+  const v = S.spView?.key === key ? S.spView : (S.spView = { key, q: '', all: {}, pick: null }); v.name = name;
+  const cf = S.sp?.ready ? custFiles(key) : null;
+  return renderFilesTab({ name, office: office(), folders: S.sp?.ready ? spFolders(key) : null, lists: { ready: !!S.sp?.ready, clients: S.sp?.clients || [], laser: S.sp?.laser || [] },
+    files: cf?.files || [], state: cf?.state, err: S.sp?.err, q: v.q, pick: v.pick, all: v.all, hist: cf?.hist }, { esc, fmt });
+}
+async function linkFolder(kind, none) {
+  const key = S.cust, name = S.spView?.name || S.custName || key, list = kind === 'client' ? S.sp.clients : S.sp.laser;
+  let folder = null;
+  if (!none) {
+    const want = ($('sp-pick')?.value || '').trim().toLowerCase();
+    folder = list.find(f => f.name.toLowerCase() === want) || null;
+    if (!folder) return toast('Pick a folder from the list as you type.', null, true);
+  }
+  try {
+    await data.setCustomerFolder(key, name, kind, folder);
+    S.sp.links = await data.loadCustomerFolders(); delete S.sp.files[key]; S.spView.pick = null;
+    toast(folder ? `${folder.name} linked to ${name}.` : `Noted: ${name} has no ${kind === 'client' ? 'client' : 'laser drawings'} folder.`);
+  } catch (e) { toast(e.message, null, true); }
+  render();
+}
+async function unlinkFolder(kind) {
+  try { await data.clearCustomerFolder(S.cust, kind); S.sp.links = await data.loadCustomerFolders(); delete S.sp.files[S.cust]; S.spView.pick = null; } catch (e) { toast(e.message, null, true); }
+  render();
+}
+/** Does an order name any part numbers (on its lines, or a Parts part of this customer)? Only then are the folders searched. */
+const namesParts = j => j.lines.some(l => partNumbersIn(l.part).length) || partsOnJob(S.parts || [], j).length > 0;
+function foundOnJob(j) {
+  if (!office() || !namesParts(j)) return '';
+  const cf = custFiles(normName(j.customer));
+  if (!cf || cf.state === 'loading') return foundDrawingsHtml({ state: S.sp?.err ? '' : 'loading' }, { esc, fmt });
+  if (cf.state !== 'ok') return '';
+  return foundDrawingsHtml({ jobId: j.id, found: foundDrawings(j, cf.files, S.parts || []) }, { esc, fmt });
+}
+async function attachSpFile(jobId, itemId) {
+  const j = job(jobId), f = S.sp?.files[normName(j?.customer)]?.files.find(x => x.itemId === itemId); if (!j || !f) return;
+  try { await data.linkSpFile(jobId, f); toast(`${f.name} attached to ${j.so}. It is the same file in SharePoint, not a copy.`); await reload(); } catch (e) { toast(e.message, null, true); }
+}
+function certsPanel(j) {
+  if (!office()) return '';
+  const grades = gradesOnJob(j); if (!grades.length) return '';
+  spReady(); if (!S.sp?.ready && !S.sp?.err) return '';
+  return certsHtml({ certs: certFolders(grades, S.sp.certs), err: S.sp.err || S.sp.certErr }, { esc });
+}
+/** Old quotes for the customers the Ideas AI is told about: read their folders (at most about 20 seconds). */
+async function quoteHistories(keys) {
+  if (!(await spReady())) return new Map();
+  const reads = keys.map(k => custFiles(k, true)?.done).filter(Boolean);
+  await Promise.race([Promise.all(reads), new Promise(r => setTimeout(r, 20000))]);
+  return new Map(keys.map(k => [k, S.sp.files[k]?.hist]).filter(([, h]) => h));
+}
 /* Tasks: one form for Home, a customer, an enquiry or an email. */
 function openTaskForm(src) {
   const today = todayIso(), f = { dueOn: plusDays(today, 1), assignedTo: S.me.email, title: '', customer: '' };
@@ -1287,9 +1372,10 @@ function ideasHtml() {
 async function thinkOfIdeas() {
   if (!S.hist) return toast('The customer history from Xero is still loading. Try again in a moment.', null, true);
   const today = todayIso(), base = customerBase(S.hist.invoices, today), m = S.salesQ && S.salesF ? salesModel() : null;
-  const facts = ideasFacts({ base, more: couldBuyMore(base, S.jobs), reorders: reordersDue(base, today), chase: m ? m.chase.length : 0, stats: m?.stats, funnel: enquiryFunnel(S.enq || [], today), research: S.research || [] });
   S.ideaBusy = { ...(S.ideaBusy || {}), ideas: true }; render();
   try {
+    const oldQuotes = await quoteHistories(base.filter(c => c.orders > 0).slice(0, 30).map(c => c.key)).catch(() => new Map());   // from their SharePoint folders
+    const facts = ideasFacts({ base, more: couldBuyMore(base, S.jobs), reorders: reordersDue(base, today), chase: m ? m.chase.length : 0, stats: m?.stats, funnel: enquiryFunnel(S.enq || [], today), research: S.research || [], oldQuotes });
     const r = await data.salesAi(facts, 'ideas');
     const keyOf = name => ideaCustomers().find(c => c.customer === name || c.key === normName(name))?.key || null;
     await data.saveIdeas((r.ideas || []).map(i => ({ ...i, key: i.customer ? keyOf(i.customer) : null })));
@@ -1746,7 +1832,7 @@ function renderDrawer() {
       ${j.lines.map(l => `<tr><td>${esc(l.part)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
-    ${drawingsPanel(j)}
+    ${drawingsPanel(j)}${certsPanel(j)}
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div>${outPanel(j)}</div>
     <div class="panel"><h3>Dispatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
       ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>
@@ -1772,7 +1858,7 @@ function drawingsPanel(j) {
       <button type="button" class="btn" data-drawing="${f.id}" data-job="${j.id}">${icon('doc')}${esc(f.name)}</button><span class="note">${kb(f.size)} · ${fmt(f.at.slice(0, 10))}${f.partFileId && office() ? ` · from Parts${partOfFile(f.partFileId) ? ` (${esc(partOfFile(f.partFileId).part.partNo)})` : ''}` : ''}</span>
       ${office() && /\.pdf$/i.test(f.name) ? `<button type="button" class="btn link sm" data-readdrawing="${f.id}" data-job="${j.id}" title="Read the drawing for the processes it suggests">Check processes</button>` : ''}
       ${office() ? `<button type="button" class="btn link sm" data-rmdrawing="${f.id}" title="Takes it off this job. The file stays in SharePoint.">Remove</button>` : ''}</li>`).join('')}</ul>`
-    : `<div class="note">${office() ? 'No drawings yet. Attach the drawing so the shop floor can see it.' : 'No drawings on this job.'}</div>`}${up}${office() ? hintBox(j) : ''}
+    : `<div class="note">${office() ? 'No drawings yet. Attach the drawing so the shop floor can see it.' : 'No drawings on this job.'}</div>`}${foundOnJob(j)}${up}${office() ? hintBox(j) : ''}
     ${office() ? `<label class="btn"${S.uploading ? ' aria-disabled="true"' : ''}>${icon('plus')}Attach drawings<input type="file" class="sr" data-attach="${j.id}" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.dxf,.dwg,.step,.stp,.doc,.docx,.xls,.xlsx"${S.uploading ? ' disabled' : ''}></label>
       <span class="note droptip">or drag PDF drawings here</span>
       <p class="note">Saved in SharePoint: Factory Jobs › Documents › Job drawings › ${esc(j.so)}.</p>` : ''}</div>`;
@@ -1832,10 +1918,12 @@ function renderParts() {
       <td>${ordersForPart(S.jobs, p).length}</td><td class="act"><button class="btn sm" type="button" data-partopen="${p.id}">${open ? 'Close' : 'Open'}</button></td></tr>${open ? detail(p) : ''}`; };
   const sugg = suggestedParts(S.jobs, S.parts).filter(s => !q || `${s.partNo} ${s.customer} ${s.description}`.toLowerCase().includes(q));
   const shown = S.suggAll ? sugg : sugg.slice(0, 25);
-  const suggRow = s => `<tr data-dropsugg="${esc(suggKey(s))}"><td><b class="mono">${esc(s.partNo)}</b>${s.description ? `<span class="ref">${esc(s.description)}</span>` : ''}</td><td>${esc(s.customer)}</td>
+  if (S.sp?.ready) for (const k of [...new Set(shown.map(s => s.customerKey))].slice(0, 15)) custFiles(k); else spReady();   // their folders, for drawings to offer
+  const suggRow = s => { const sp = suggDrawing(s); return `<tr data-dropsugg="${esc(suggKey(s))}"><td><b class="mono">${esc(s.partNo)}</b>${s.description ? `<span class="ref">${esc(s.description)}</span>` : ''}</td><td>${esc(s.customer)}</td>
     <td>${s.orders.slice(0, 4).map(j => `<button type="button" class="btn link sm" data-open="${j.id}">${esc(j.so)}</button>`).join(' ')}${s.orders.length > 4 ? ` <span class="note">+${s.orders.length - 4}</span>` : ''}</td>
     <td class="act"><label class="btn sm pri">${icon('plus')}Attach drawing<input type="file" class="sr" data-suggattach="${esc(suggKey(s))}" accept=".pdf,.png,.jpg,.jpeg,.dxf,.dwg,.step,.stp"></label>
-      <button class="btn sm" type="button" data-suggadd="${esc(suggKey(s))}" title="Add the part now, drawing later">Add</button></td></tr>`;
+      <button class="btn sm" type="button" data-suggadd="${esc(suggKey(s))}" title="Add the part now, drawing later">Add</button>
+      ${sp ? `<div class="note spsugg">In their SharePoint folder: <a href="${esc(sp.url)}" target="_blank" rel="noopener">${esc(sp.name)}</a> <button class="btn sm" type="button" data-suggsp="${esc(suggKey(s))}">Use it</button></div>` : ''}</td></tr>`; };
   const suggSec = sugg.length ? `<section class="sugg"><div class="hsec-h"><h3>Found on your orders: ${sugg.length} part number${sugg.length === 1 ? '' : 's'} not in Parts yet</h3>
       <span class="note">drag a drawing onto a row, or press Attach drawing: that adds the part and puts the drawing on its open orders too</span></div>
     <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Part</th><th>Customer</th><th>On orders</th><th class="act"><span class="sr">Action</span></th></tr></thead><tbody>${shown.map(suggRow).join('')}</tbody></table></div>
@@ -1861,13 +1949,21 @@ async function catchUpOrders(partId) {
   return n;
 }
 const suggKey = s => `${s.customerKey}|${normPartNo(s.partNo)}`;
-/** A suggested part (from the orders): add it, with a drawing if one was dropped or picked. */
-async function addSuggested(key, file) {
+/** The best drawing for a suggested part in the customer's SharePoint folders, or null. */
+const suggDrawing = s => { const cf = S.sp?.files[s.customerKey]; return cf?.state === 'ok' ? drawingsFor(s.partNo, cf.files)[0] || null : null; };
+/** A suggested part (from the orders): add it, with a drawing if one was dropped or picked, or the one found in SharePoint (fromSp). */
+async function addSuggested(key, file, fromSp = false) {
   const s = suggestedParts(S.jobs, S.parts).find(x => suggKey(x) === key); if (!s) return;
+  const sp = fromSp ? suggDrawing(s) : null; if (fromSp && !sp) return;
   try {
     const id = await data.addPart({ customer: s.customer, customerKey: s.customerKey, partNo: s.partNo, description: s.description });
     S.parts = await data.loadParts();
-    if (file) await attachPartDrawing(id, file);
+    if (sp) {
+      await data.addPartFile(id, { name: sp.name, driveId: sp.driveId, itemId: sp.itemId, url: sp.url, size: sp.size, mime: sp.mime });
+      S.parts = await data.loadParts(); const n = await catchUpOrders(id);
+      toast(`${s.partNo} added to Parts with ${sp.name} from their SharePoint folder${n ? `, and attached to ${n} open order${n === 1 ? '' : 's'} naming it` : ''}.`);
+      if (n) await reload(); render();
+    } else if (file) await attachPartDrawing(id, file);
     else { toast(`${s.partNo} added to Parts. Drop its drawing on it when you have it.`); render(); }
   } catch (e) { toast(e.message, null, true); }
 }
@@ -2557,6 +2653,13 @@ function onClick(e) {
   if ('salesreload' in d) { S.salesQ = null; S.hist = null; S.salesErr = null; return loadSalesData(true); }
   if (d.custpage) { const n = d.custname || (S.hist?.invoices || []).find(x => normName(x.customer) === d.custpage)?.customer || S.book.people.find(p => p.key === d.custpage)?.customer || d.custpage; return openCustomer(d.custpage, n); }
   if (d.ctab) { S.ctab = d.ctab; return render(); }
+  if ('sppick' in d) { S.spView.pick = d.sppick || null; render(); if (d.sppick) $('sp-pick')?.focus(); return; }
+  if (d.spsave) return linkFolder(d.spsave, false);
+  if (d.spnone) return linkFolder(d.spnone, true);
+  if (d.spunlink) return unlinkFolder(d.spunlink);
+  if (d.spall) { S.spView.all[d.spall] = true; return render(); }
+  if (d.spattach) return attachSpFile(+d.spattach, d.spitem);
+  if (d.suggsp) return addSuggested(d.suggsp, null, true);
   if ('cnote' in d) { const t = $('cn-text').value.trim(), kind = $('cn-kind').value, name = S.custName || S.cust; if (!t) return;
     data.addSalesAction({ customer: name, kind, note: t }).then(async () => { S.salesActs = await data.loadActions(); toast('Noted.'); render(); }).catch(e => toast(e.message, null, true)); return; }
   if ('cinsight' in d) return writeInsight(S.cust, S.custName || S.cust);
@@ -2716,6 +2819,7 @@ document.addEventListener('input', e => {
   }
   if (e.target.id === 'pcheck-q') { S.pcheck = { q: e.target.value }; const pos = e.target.selectionStart; render(); const el = $('pcheck-q'); el?.focus(); el?.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'msearch') { S.msearch = e.target.value; const pos = e.target.selectionStart; if (S.rfqForm) collectRfq(); renderMetalView(); const el = $('msearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
+  if (e.target.id === 'spq' && S.spView) { S.spView.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $('spq'); el?.focus(); el?.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'psearch') { S.psearch = e.target.value; const pos = e.target.selectionStart; renderParts(); const el = $('psearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'csearch') { S.csearch = e.target.value; const pos = e.target.selectionStart; renderCustomers(); const el = $('csearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (['search', 'osearch', 'dsearch'].includes(e.target.id)) {

@@ -78,7 +78,7 @@ export function renderEnquiries({ list, funnel, state, mailbox, open, busy, repl
 /** A customer's page, all but the Contacts tab (drawn by app.js from the contact book). */
 export function renderCustomerPage(p, h) {
   const { esc, fmt, gbp } = h, { tab, c, md } = p, fmtY = d => d && d.slice(0, 4) !== p.today.slice(0, 4) ? `${fmt(d)} ${d.slice(0, 4)}` : fmt(d);
-  const tabs = [['overview', 'Overview'], ['orders', 'Orders and invoices'], ['quotes', 'Quotes'], ['emails', 'Emails'], ['tasks', 'Tasks and notes'], ['contacts', 'Contacts']];
+  const tabs = [['overview', 'Overview'], ['orders', 'Orders and invoices'], ['quotes', 'Quotes'], ['emails', 'Emails'], ['tasks', 'Tasks and notes'], ['files', 'Files'], ['contacts', 'Contacts']];
   const strip = `<div class="seg ctabs" role="tablist">${tabs.map(([k, t]) => `<button type="button" data-ctab="${k}" aria-pressed="${tab === k}">${t}</button>`).join('')}</div>`;
   if (tab === 'contacts') return strip;
   const owed = p.invoices.filter(x => x.owed > 0), overdue = owed.filter(x => x.due && x.due < p.today);
@@ -96,6 +96,7 @@ export function renderCustomerPage(p, h) {
           <li>Last order <b>${esc(fmt(c.last))}</b> (${esc(days(c.since))} ago)${c.quiet ? ' <span class="chip soon">gone quiet</span>' : c.lapsed ? ' <span class="chip late">lapsed</span>' : ''}.</li>
           ${md ? `<li>Last 12 months <b>${gbp(c.yearNet)}</b>${c.prevNet ? `, the year before ${gbp(c.prevNet)}` : ''}${trendWords(c) ? ` (${esc(trendWords(c))})` : ''}.</li>` : trendWords(c) ? `<li>Orders ${esc(trendWords(c))}.</li>` : ''}
           ${c.items.length ? `<li>Buys most: ${c.items.slice(0, 3).map(i => `${esc(i.item)} (${i.times}×)`).join(', ')}.</li>` : ''}` : '<li>No invoices in Xero yet.</li>'}
+        ${p.quoteHist ? `<li>${esc(p.quoteHist)} in their SharePoint folder.</li>` : ''}
         <li>${p.openOrders} open order${p.openOrders === 1 ? '' : 's'} on the board · ${p.openQuotes.length} open quote${p.openQuotes.length === 1 ? '' : 's'}${md && p.openQuotes.length ? ` (${gbp(p.openQuotes.reduce((a, q) => a + q.value, 0))})` : ''}.</li>
         ${owed.length ? `<li>${owed.length} invoice${owed.length === 1 ? '' : 's'} unpaid${overdue.length ? `, <b class="bad">${overdue.length} overdue</b>` : ''}${md ? ` (${gbp(owed.reduce((a, x) => a + x.owed, 0))})` : ''}.</li>` : ''}
       </ul></section>
@@ -123,6 +124,8 @@ export function renderCustomerPage(p, h) {
           ${m.messages.length ? `<ul class="cmail">${m.messages.map(x => `<li><span class="chip ${x.out ? '' : 'ok'}">${x.out ? 'Sent' : 'From them'}</span> <b>${esc(x.subject)}</b> <span class="note">${esc(fmt(x.at.slice(0, 10)))} · ${esc(x.out ? 'to ' + (x.to[0] || '') : x.fromName || x.from)} · ${esc(x.box)}</span>
               <p class="note">${esc(x.preview.slice(0, 220))}</p><div class="actions">${x.webLink ? `<a class="btn sm" href="${esc(x.webLink)}" target="_blank" rel="noopener">Open in Outlook</a>` : ''}<button class="btn sm" type="button" data-taskadd="email:${esc(x.id)}">Make a task</button></div></li>`).join('')}</ul>` : '<p class="note">No emails found.</p>'}`}
       <button class="btn sm" type="button" data-cmail>${icon('refresh')}Search again</button></section>`;
+  } else if (tab === 'files') {
+    body = p.filesHtml || '';
   } else if (tab === 'tasks') {
     body = `<section class="panel"><h3>Tasks</h3>${taskList(p.tasks.filter(t => !t.doneAt), false) || '<p class="note">No open tasks.</p>'}${quickNote}
         ${p.tasks.some(t => t.doneAt) ? `<h4>Done</h4>${taskList(p.tasks.filter(t => t.doneAt), true)}` : ''}</section>

@@ -286,6 +286,75 @@ export async function removeDrawing(id) {
   if (!count) throw new Error('Not removed. Only Levi and Mandy can remove drawings.');
 }
 
+/* ---------- Company Data in SharePoint: customers' old files, laser drawings, material certificates. Read only. ---------- */
+let dataDrive;
+const spErr = e => { if (e.status === 403 || e.status === 401) { const x = new Error('Your Microsoft account cannot open the Company Data site in SharePoint. Ask for read access to it.'); x.status = e.status; throw x; } throw e; };
+async function companyDrive() {
+  dataDrive ??= (await graph(`/sites/${CONFIG.SP_DATA_SITE}:/drive?$select=id`).catch(spErr)).id;
+  return dataDrive;
+}
+const ITEM_SELECT = 'id,name,size,webUrl,createdDateTime,lastModifiedDateTime,file,folder';
+const spItem = (drive, x, path = '') => ({ id: x.id, itemId: x.id, driveId: drive, name: x.name, path, url: x.webUrl || '', size: x.size ?? null,
+  // the earlier date: files moved into SharePoint were "created" on the day they moved
+  at: [x.createdDateTime, x.lastModifiedDateTime].filter(Boolean).sort()[0] || '', mime: x.file?.mimeType || '', folder: !!x.folder });
+async function children(drive, url) {
+  const out = [];
+  for (let next = url; next;) { const r = await graph(next).catch(spErr); out.push(...(r.value || [])); next = r['@odata.nextLink']; }
+  return out;
+}
+const encPath = p => p.split('/').map(encodeURIComponent).join('/');
+/** The folders in one of Company Data's top folders (client folders, laser folders or certificate grades). */
+const folderLists = {};
+export async function companyFolders(which) {
+  const root = { clients: CONFIG.SP_CLIENTS, laser: CONFIG.SP_LASER, certs: CONFIG.SP_CERTS }[which];
+  folderLists[which] ??= (async () => { const drive = await companyDrive();
+    return (await children(drive, `/drives/${drive}/root:/${encPath(root)}:/children?$top=999&$select=${ITEM_SELECT}`)).filter(x => x.folder).map(x => spItem(drive, x, root)); })()
+    .catch(e => { delete folderLists[which]; throw e; });
+  return folderLists[which];
+}
+/** Every file in a folder and its subfolders (up to 4 deep, 4000 files), kept for the visit. path: the subfolders it is in. */
+const folderFiles = {};
+export async function filesIn(folder) {
+  const k = `${folder.driveId}|${folder.itemId}`;
+  folderFiles[k] ??= (async () => {
+    const out = [], todo = [{ id: folder.itemId, path: '', depth: 0 }];
+    while (todo.length && out.length < 4000) {
+      const f = todo.shift();
+      for (const x of await children(folder.driveId, `/drives/${folder.driveId}/items/${f.id}/children?$top=999&$select=${ITEM_SELECT}`)) {
+        if (x.folder) { if (f.depth < 4) todo.push({ id: x.id, path: f.path ? `${f.path}/${x.name}` : x.name, depth: f.depth + 1 }); }
+        else out.push(spItem(folder.driveId, x, f.path));
+      }
+    }
+    return out;
+  })().catch(e => { delete folderFiles[k]; throw e; });
+  return folderFiles[k];
+}
+/** Folders linked by hand to a customer (where the names differ): [{ key, kind: 'client' | 'laser', name, driveId, itemId, url }]. itemId null: none. */
+export async function loadCustomerFolders() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('customer_folders').select('*');
+  if (error) fail('Could not load the customer folders', error);
+  return data.map(r => ({ key: r.customer_key, kind: r.kind, customer: r.customer, name: r.name, driveId: r.drive_id, itemId: r.item_id, url: r.web_url }));
+}
+/** Links a folder to a customer, or (folder null) says the customer has none of that kind. */
+export async function setCustomerFolder(key, customer, kind, folder) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('customer_folders').upsert({ customer_key: key, customer, kind, name: folder?.name || '', drive_id: folder?.driveId || null,
+    item_id: folder?.itemId || null, web_url: folder?.url || '' }, { onConflict: 'customer_key,kind' });
+  if (error) fail('The folder was not saved', error);
+}
+export async function clearCustomerFolder(key, kind) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('customer_folders').delete().eq('customer_key', key).eq('kind', kind);
+  if (error) fail('Not saved', error);
+}
+/** Puts a Company Data file on a job: the same SharePoint file, never a copy. */
+export async function linkSpFile(jobId, f) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('job_files').insert({ job_id: jobId, name: f.name, drive_id: f.driveId, item_id: f.itemId, web_url: f.url || '', size: f.size ?? null, mime: f.mime || '' });
+  if (error) fail(`${f.name} was not attached`, error);
+}
+
 /* ---------- purchase orders (office): made in Xero by the edge function, listed here ---------- */
 export async function loadPurchaseOrders() {
   const sb = await getSupabase();
