@@ -60,3 +60,25 @@ export function deliveryProblem({ name = '', nobody = false, signature = '', not
   if (!signatureOk(signature)) return 'The signature is too big to save. Press Clear and ask them to sign again.';
   return '';
 }
+
+/** The van on the office map: how long since the phone last sent, in words, and whether that is
+ *  too long ago to trust (the phone locked, lost signal, or sharing switched off without a goodbye). */
+export function vanStatus(pos, now = new Date()) {
+  if (!pos) return null;
+  const secs = Math.max(0, Math.round((now - new Date(pos.at)) / 1000));
+  const ago = secs < 45 ? 'just now' : secs < 3600 ? `${Math.round(secs / 60)} min ago` : secs < 86400 ? `${Math.round(secs / 3600)} h ago` : `${Math.round(secs / 86400)} days ago`;
+  const mph = pos.speed > 0.5 ? Math.round(pos.speed * 2.23694) : 0;
+  return { name: pos.name, lat: pos.lat, lng: pos.lng, ago, mph, stale: secs > 15 * 60,
+    accuracy: pos.accuracy > 0 ? Math.round(pos.accuracy) : null, heading: pos.heading >= 0 && mph > 0 ? Math.round(pos.heading) : null };
+}
+
+/** Phone side: send a new fix only when it is worth sending: moved more than 40 m, or 60 s have
+ *  passed, and never more often than every 10 s. Keeps the phone's data and the table's writes small. */
+export function worthSending(last, next) {
+  if (!last) return true;
+  const dt = (next.at - last.at) / 1000;
+  if (dt < 10) return false;
+  if (dt >= 60) return true;
+  const dy = (next.lat - last.lat) * 111320, dx = (next.lng - last.lng) * 111320 * Math.cos(last.lat * Math.PI / 180);
+  return Math.hypot(dx, dy) > 40;
+}

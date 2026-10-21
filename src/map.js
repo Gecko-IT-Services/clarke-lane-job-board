@@ -2,7 +2,7 @@
  * Delivery map: Leaflet + OpenStreetMap tiles (no key), postcodes placed with postcodes.io (free UK
  * lookup, no key; only postcodes are sent, never names). One pin per postcode, coloured by the most
  * urgent job there; the popup lists the jobs and the other drops within a few miles, so Levi can see
- * when a second delivery fits the same run. The live van position is not here yet (no tracker).
+ * when a second delivery fits the same run. The van shows while the driver's phone is sharing (showVans).
  */
 import { nearbyStops } from './core/geo.js';
 
@@ -65,7 +65,8 @@ export async function drawMap(el, items, miles, esc) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
     layer = L.layerGroup().addTo(map);
     // The "nearby" ring follows whichever pin is open, and the list beside the map marks the same stop.
-    map.on('popupopen', e => { const s = e.popup._source.stop; ring = L.circle([s.lat, s.lng], { radius: s.miles * 1609.34, color: s.colour, weight: 1.5, dashArray: '5 5', fillOpacity: 0.06, interactive: false }).addTo(map); mark(s.key); });
+    map.on('popupopen', e => { const s = e.popup._source?.stop; if (!s) return;   // the van's popup has no ring
+      ring = L.circle([s.lat, s.lng], { radius: s.miles * 1609.34, color: s.colour, weight: 1.5, dashArray: '5 5', fillOpacity: 0.06, interactive: false }).addTo(map); mark(s.key); });
     map.on('popupclose', () => { ring?.remove(); ring = null; mark(''); });
   }
   layer.clearLayers(); markers = new Map();
@@ -95,7 +96,30 @@ export function focusStop(key) {
   map.setView(m.getLatLng(), Math.max(map.getZoom(), 11)); m.openPopup();
 }
 export function fitAll() {
-  if (!map || !markers.size) return;
+  const all = [...markers.values(), ...vanMarkers.values()];
+  if (!map || !all.length) return;
   map.closePopup();
-  map.fitBounds(window.L.latLngBounds([...markers.values()].map(m => m.getLatLng())).pad(0.2), { maxZoom: 12 });
+  map.fitBounds(window.L.latLngBounds(all.map(m => m.getLatLng())).pad(0.2), { maxZoom: 12 });
+}
+
+/** The van(s): vans are vanStatus() results (core/deliveries.js); iconHtml the van icon. Draws nothing until the map exists. */
+let vanLayer, vanMarkers = new Map();
+export function showVans(vans, esc, iconHtml) {
+  if (!map) return;
+  const L = window.L;
+  vanLayer ??= L.layerGroup().addTo(map);
+  vanLayer.clearLayers(); vanMarkers = new Map();
+  for (const v of vans) {
+    const m = L.marker([v.lat, v.lng], { title: v.name, zIndexOffset: 1000, icon: L.divIcon({ className: '', iconSize: [38, 38], iconAnchor: [19, 19], popupAnchor: [0, -16],
+      html: `<span class="mvan${v.stale ? ' stale' : ''}">${iconHtml}</span>` }) })
+      .bindPopup(`<div class="mpop"><div class="mh"><b>${esc(v.name)}</b><span>${v.stale ? 'last heard ' : ''}${esc(v.ago)}</span></div>
+        <div class="note">${v.mph ? `${v.mph} mph` : 'Not moving'}${v.accuracy ? ` · position good to ${v.accuracy} m` : ''}${v.stale ? ' · the phone may be locked or out of signal' : ''}</div></div>`, { maxWidth: 300 })
+      .addTo(vanLayer);
+    vanMarkers.set(v.name, m);
+  }
+}
+export function focusVan(name) {
+  const m = vanMarkers.get(name); if (!m) return;
+  map.getContainer().scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  map.setView(m.getLatLng(), Math.max(map.getZoom(), 12)); m.openPopup();
 }

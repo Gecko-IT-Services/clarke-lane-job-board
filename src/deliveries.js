@@ -10,8 +10,12 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const clock = s => { const d = new Date(s); return isNaN(d) ? '' : d.toTimeString().slice(0, 5); };
 
 /** signing: { nobody, err } for the picked note's form; the boxes themselves are kept by app.js like any form. */
-export function renderDeliveries({ jobs, today, now, me, pick, signing = {} }, h) {
-  const { esc, lineHtml } = h;
+export function renderDeliveries({ jobs, today, now, me, pick, signing = {}, share = null }, h) {
+  const { esc, lineHtml, fmtTime } = h;
+  // Sharing where the van is: the driver's own switch, in plain words. Only while this screen is open.
+  const sharing = !share ? '' : `<div class="dshare${share.on ? ' on' : ''}"><div><b>${share.on ? 'Sharing where the van is' : 'Not sharing where the van is'}</b>
+      <span class="note">${share.on ? (share.err ? esc(share.err) : share.last ? `The office last heard at ${fmtTime(share.last)}.` : 'Waiting for the phone to find itself…') : 'The office sees the van on its Dispatch map, only while this screen is open.'}</span></div>
+      <button class="btn${share.on ? '' : ' pri'}" type="button" data-share="${share.on ? 'off' : 'on'}">${share.on ? 'Stop sharing' : 'Share my location'}</button></div>`;
   const officeUser = ['md', 'office'].includes(me?.role);
   const runs = deliveryRuns(jobs, today), r = pick != null ? runs.find(x => x.d.id === pick) : null;
   const date = (now || new Date()).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -54,6 +58,7 @@ export function renderDeliveries({ jobs, today, now, me, pick, signing = {} }, h
   const doneRows = done.map(({ job: j, d }) => `<li><b>${esc(j.customer)}</b><span>${d.deliveredAt ? clock(d.deliveredAt) : ''}</span>
       <span class="sig">${d.receivedBy ? 'Signed by ' + esc(d.receivedBy) : d.deliveryNote ? 'Nobody to sign' : 'Delivered'}</span></li>`).join('');
   return `<div class="deliv">${head}
+    ${sharing}
     ${runs.length ? `<p class="note">${runs.length === 1 ? '1 delivery' : runs.length + ' deliveries'} out. Tap one when you get there.</p>` : ''}
     <div class="dlist">${cards || '<p class="allclear ok">Nothing out for delivery.</p>'}</div>
     ${doneRows ? `<section class="ddone"><h3>Delivered today</h3><ul>${doneRows}</ul></section>` : ''}</div>`;
