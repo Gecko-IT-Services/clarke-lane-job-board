@@ -28,6 +28,7 @@ import { renderToday, taskForm, renderEnquiries, renderCustomerPage } from './cu
 import { renderFilesTab, foundDrawingsHtml, certsHtml, quoteHistWords } from './spfiles.js';
 import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob, certFolders } from './core/spfiles.js';
 import { CONFIG } from './config.js';
+import { searchAll } from './core/search.js';
 import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
@@ -660,20 +661,25 @@ async function saveFormToBook() {
   } catch (e) { toast(e.message, null, true); }
 }
 
-function renderCustomers() {
-  const q = (S.csearch || '').toLowerCase();
+/** Every customer the board knows of (contact book, orders, Xero invoices, the quote calculator): key → name. */
+function customerNames() {
   const names = new Map();
   for (const x of [...S.book.people, ...S.book.sites]) if (x.customer) names.set(x.key, x.customer);
   for (const j of S.jobs) if (!j.preview && !names.has(normName(j.customer))) names.set(normName(j.customer), j.customer);
   for (const x of S.hist?.invoices || []) if (x.customer && !names.has(normName(x.customer))) names.set(normName(x.customer), x.customer);
   for (const q of S.salesQ || []) if (q.customer && !names.has(normName(q.customer))) names.set(normName(q.customer), q.customer);
+  return names;
+}
+function renderCustomers() {
+  const q = (S.csearch || '').toLowerCase();
+  const names = customerNames();
   if (S.cust && !names.has(S.cust) && S.custName) names.set(S.cust, S.custName);
   const list = [...names.entries()].filter(([, n]) => !q || n.toLowerCase().includes(q)).sort((a, b) => a[1].localeCompare(b[1]));
   const sel = S.cust && names.has(S.cust) ? S.cust : null, name = sel ? names.get(sel) : '';
   S.custShown = name;   // the name on the page: what the contact book saves with
   const items = list.map(([k, n]) => { const b = { people: S.book.people.filter(p => p.key === k).length, sites: S.book.sites.filter(x => x.key === k).length };
     return `<button type="button" class="citem ${k === sel ? 'on' : ''}" data-cust="${esc(k)}"><b>${esc(n)}</b><span>${b.people ? `${b.people} contact${b.people === 1 ? '' : 's'}` : 'no contacts yet'}${b.sites ? ` · ${b.sites} address${b.sites === 1 ? '' : 'es'}` : ''}</span></button>`; }).join('');
-  let main = '<div class="empty">Pick a customer on the left, or add one.</div>';
+  let main = customersGlance();
   if (sel) {
     const b = bookFor(name), ed = S.bookEdit, xc = contactFor(name);
     const orders = S.jobs.filter(j => !j.preview && normName(j.customer) === sel && ['upcoming', 'current'].includes(stage(j)) && j.status !== 'cancelled');
@@ -1300,6 +1306,68 @@ async function quoteHistories(keys) {
   await Promise.race([Promise.all(reads), new Promise(r => setTimeout(r, 20000))]);
   return new Map(keys.map(k => [k, S.sp.files[k]?.hist]).filter(([, h]) => h));
 }
+/** Customers with nobody picked: who is worth a call, my tasks, who was active lately, and open orders with no contact. No money. */
+function customersGlance() {
+  const today = todayIso(), base = S.hist ? customerBase(S.hist.invoices, today) : [], m = S.salesQ && S.salesF ? salesModel() : null;
+  const link = (key, name) => `<button class="btn link sm" type="button" data-custpage="${esc(key)}" data-custname="${esc(name)}"><b>${esc(name)}</b></button>`;
+  const calls = [...(m ? m.chase.slice(0, 5).map(q => `${link(normName(q.customer), q.customer)} quote ${esc(q.quoteNo)} is worth chasing`) : []),
+    ...reordersDue(base, today).slice(0, 5).map(r => `${link(r.key, r.customer)} usually orders ${esc(r.item)} every ${r.every} days; last ${esc(fmt(r.last))}`),
+    ...quietCustomers(base).slice(0, 5).map(c => `${link(c.key, c.customer)} ${c.lapsed ? 'has stopped ordering' : 'has gone quiet'}; last order ${esc(fmt(c.last))}`)];
+  const tg = taskGroups(S.tasks || [], today, S.me.email), tasks = [...tg.overdue, ...tg.today, ...tg.soon].slice(0, 8);
+  const seen = new Set(), recent = [...S.jobs.filter(j => !j.preview).map(j => ({ key: normName(j.customer), name: j.customer, at: j.createdAt || j.ordered || '', what: `order ${j.so}` })),
+    ...(S.salesQ || []).map(q => ({ key: normName(q.customer), name: q.customer, at: q.quoteDate || '', what: `quote ${q.quoteNo}` })),
+    ...(S.enq || []).filter(e => e.customerKey).map(e => ({ key: e.customerKey, name: e.company || e.fromName, at: e.receivedAt || '', what: 'email to info@' }))]
+    .filter(x => x.name && x.at).sort((a, b) => String(b.at).localeCompare(String(a.at))).filter(x => !seen.has(x.key) && seen.add(x.key)).slice(0, 8);
+  const hasPeople = new Set(S.book.people.map(p => p.key)), noOne = new Map();
+  for (const j of S.jobs) if (!j.preview && j.status !== 'cancelled' && ['upcoming', 'current'].includes(stage(j)) && !hasPeople.has(normName(j.customer))) noOne.set(normName(j.customer), j.customer);
+  const list = (items, empty) => items.length ? `<ul class="cfacts">${items.map(x => `<li>${x}</li>`).join('')}</ul>` : `<p class="note">${empty}</p>`;
+  return `<div class="cglance">
+    <section class="panel"><h3>Worth a call</h3>${list(calls, S.hist || m ? 'Nobody needs a call today.' : 'Reading Xero and the quote calculator…')}</section>
+    <section class="panel"><h3>Your tasks</h3>${list(tasks.map(t => `<b>${esc(t.title)}</b>${t.customer ? ' · ' + link(t.customerKey || normName(t.customer), t.customer) : ''} <span class="chip ${t.dueOn < today ? 'late' : t.dueOn === today ? 'soon' : ''}">${t.dueOn < today ? 'was due ' : 'due '}${t.dueOn === today ? 'today' : esc(fmt(t.dueOn))}</span>`), 'No tasks due in the next week.')}</section>
+    <section class="panel"><h3>Lately</h3>${list(recent.map(x => `${link(x.key, x.name)} <span class="note">${esc(x.what)} · ${esc(fmt(String(x.at).slice(0, 10)))}</span>`), 'Nothing yet.')}</section>
+    <section class="panel"><h3>Open orders with no contact saved</h3>${list([...noOne].slice(0, 12).map(([k, n]) => `${link(k, n)}`), 'Every customer with an open order has a contact.')}
+      ${noOne.size ? '<p class="note">Open one and add their buyer and goods-in contacts under <b>Contacts</b>, or copy them in from Xero.</p>' : ''}</section></div>`;
+}
+
+/* ---------- search everything (the top bar, every screen; press / to jump to it) ---------- */
+let gHits = [], gSel = -1;
+const searchSource = () => ({ jobs: S.jobs, customers: office() ? [...customerNames()].map(([key, name]) => ({ key, name })) : [], people: office() ? S.book.people : [],
+  quotes: office() ? S.salesQ || [] : [], invoices: office() ? S.hist?.invoices || [] : [], parts: office() ? S.parts || [] : [], enquiries: office() ? S.enq || [] : [], tasks: office() ? S.tasks || [] : [] });
+function showSearch() {
+  const q = $('gq').value, box = $('gres');
+  if (q.trim().length < 2) { box.hidden = true; gHits = []; return; }
+  const groups = searchAll(q, searchSource(), { office: office() }); let n = 0;
+  gHits = groups.flatMap(g => g.items); gSel = gHits.length ? 0 : -1;
+  box.innerHTML = groups.length ? groups.map(g => `<div class="gg"><h4>${esc(g.title)}${g.more ? ` <span>+${g.more} more: type more to narrow</span>` : ''}</h4>
+      ${g.items.map(x => `<button type="button" class="gi${n === 0 ? ' on' : ''}" data-gi="${n++}"><b>${esc(x.title)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</button>`).join('')}</div>`).join('')
+    : `<p class="gnone">Nothing found for “${esc(q.trim())}”.</p>`;
+  box.hidden = false;
+}
+function closeSearch() { $('gres').hidden = true; gSel = -1; }
+/** Opens a search result: an order, a customer's page (at the right tab), a part, an enquiry. */
+function goHit(i) {
+  const x = gHits[i]; if (!x) return;
+  $('gq').value = ''; closeSearch(); $('gq').blur();
+  if (x.kind === 'job' || x.kind === 'dn') { S.open = x.id; S.ask = null; keepInputs = false; return render(); }
+  if (x.kind === 'quote') { const j = S.jobs.find(j => j.spQuoteId === x.id); if (j) { S.open = j.id; return render(); } return openCustomer(x.key, x.name, 'quotes'); }
+  if (x.kind === 'customer') return openCustomer(x.key, x.name);
+  if (x.kind === 'person') return openCustomer(x.key, x.name, 'contacts');
+  if (x.kind === 'invoice') return openCustomer(x.key, x.name, 'orders');
+  if (x.kind === 'part') { S.tab = 'parts'; S.partOpen = x.id; S.psearch = ''; render(); return window.scrollTo(0, 0); }
+  if (x.kind === 'enquiry') { S.tab = 'customers'; S.cust = null; S.enqOpen = x.id; render(); return setTimeout(() => $('enquiries')?.scrollIntoView({ behavior: 'smooth' }), 50); }
+  if (x.kind === 'task') { if (x.key) return openCustomer(x.key, x.name, 'tasks'); S.tab = 'home'; return render(); }
+}
+document.addEventListener('keydown', e => {
+  const inBox = e.target.id === 'gq';
+  if (e.key === '/' && !inBox && !e.target.closest('input,textarea,select,[contenteditable]') && $('gq') && !$('app').hidden) { e.preventDefault(); $('gq').focus(); return; }
+  if (!inBox || $('gres').hidden) { if (inBox && e.key === 'Escape') $('gq').blur(); return; }
+  const move = d => { gSel = (gSel + d + gHits.length) % gHits.length; document.querySelectorAll('#gres .gi').forEach(b => b.classList.toggle('on', +b.dataset.gi === gSel)); document.querySelector('#gres .gi.on')?.scrollIntoView({ block: 'nearest' }); };
+  if (e.key === 'ArrowDown' && gHits.length) { e.preventDefault(); move(1); }
+  else if (e.key === 'ArrowUp' && gHits.length) { e.preventDefault(); move(-1); }
+  else if (e.key === 'Enter' && gSel >= 0) { e.preventDefault(); e.stopPropagation(); const before = navOf(); goHit(gSel); if (!sameNav(before, navOf())) navPush(); }
+  else if (e.key === 'Escape') { e.stopPropagation(); closeSearch(); }
+}, true);
+document.addEventListener('pointerdown', e => { if ($('gres') && !$('gres').hidden && !e.target.closest('#gsearch')) closeSearch(); });
 /* Tasks: one form for Home, a customer, an enquiry or an email. */
 function openTaskForm(src) {
   const today = todayIso(), f = { dueOn: plusDays(today, 1), assignedTo: S.me.email, title: '', customer: '' };
@@ -2667,6 +2735,7 @@ function onClick(e) {
   if (d.notedel) return removeNote(+d.notedel);
   if ('salesreload' in d) { S.salesQ = null; S.hist = null; S.salesErr = null; return loadSalesData(true); }
   if (d.custpage) { const n = d.custname || (S.hist?.invoices || []).find(x => normName(x.customer) === d.custpage)?.customer || S.book.people.find(p => p.key === d.custpage)?.customer || d.custpage; return openCustomer(d.custpage, n); }
+  if (d.gi) return goHit(+d.gi);
   if (d.ctab) { S.ctab = d.ctab; return render(); }
   if ('sppick' in d) { S.spView.pick = d.sppick || null; render(); if (d.sppick) $('sp-pick')?.focus(); return; }
   if (d.spsave) return linkFolder(d.spsave, false);
@@ -2821,6 +2890,7 @@ $('scrim').addEventListener('click', () => closeOpen());
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) closeOpen(); } });
 document.addEventListener('input', e => {
+  if (e.target.id === 'gq') return showSearch();
   if (e.target.dataset.pq && S.pfDraft) {   // pro forma quantities: redraw the preview, keep the box being typed in
     const j = job(S.pfDraft.jobId), l = j?.lines.find(x => x.id === +e.target.dataset.pq);
     S.pfDraft.qty[+e.target.dataset.pq] = Math.max(0, Math.min(l?.qty ?? 0, Math.floor(Number(e.target.value) || 0)));
