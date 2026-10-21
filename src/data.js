@@ -515,7 +515,8 @@ export async function deleteTask(id) {
 }
 const enqRow = e => ({ id: e.id, messageId: e.message_id, graphId: e.graph_id, mailbox: e.mailbox, receivedAt: e.received_at, fromName: e.from_name, fromEmail: e.from_email, subject: e.subject,
   webLink: e.web_link, kind: e.kind, summary: e.summary, company: e.company, person: e.person, phone: e.phone, wants: e.wants, hasDrawings: e.has_drawings, customerKey: e.customer_key,
-  status: e.status, handledBy: e.handled_by, handledAt: e.handled_at, error: e.error, quotePack: e.quote_pack || null, quotePackAt: e.quote_pack_at || null });
+  status: e.status, handledBy: e.handled_by, handledAt: e.handled_at, error: e.error, quotePack: e.quote_pack || null, quotePackAt: e.quote_pack_at || null,
+  topic: e.topic || '', refs: e.refs || {}, quoteSpId: e.quote_sp_id ?? null, jobId: e.job_id ?? null });   // what a customer's email is about, and the quote or order it names (21 Oct)
 export async function loadEnquiries() {
   const sb = await getSupabase();
   const since = new Date(Date.now() - 180 * 864e5).toISOString();
@@ -535,7 +536,7 @@ export async function setEnquiry(id, p) {
   const sb = await getSupabase();
   const row = {};
   for (const [k, c] of [['kind', 'kind'], ['summary', 'summary'], ['company', 'company'], ['person', 'person'], ['phone', 'phone'], ['wants', 'wants'], ['hasDrawings', 'has_drawings'],
-    ['customerKey', 'customer_key'], ['status', 'status'], ['error', 'error']]) if (k in p) row[c] = p[k];
+    ['customerKey', 'customer_key'], ['status', 'status'], ['error', 'error'], ['topic', 'topic'], ['refs', 'refs'], ['quoteSpId', 'quote_sp_id'], ['jobId', 'job_id']]) if (k in p) row[c] = p[k];
   if ('status' in p) { row.handled_by = p.by || null; row.handled_at = p.status === 'new' ? null : new Date().toISOString(); }
   if ('quotePack' in p) { row.quote_pack = p.quotePack || null; row.quote_pack_at = p.quotePack ? new Date().toISOString() : null; }   // the quote pack (21 Oct)
   const { error } = await sb.from('enquiries').update(row).eq('id', id);

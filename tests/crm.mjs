@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, domainOf, morning } from '../src/core/crm.js';
+import { mailTerms, customerIndex, whoIs, refersToExisting, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, domainOf, morning } from '../src/core/crm.js';
 import { customerBase } from '../src/core/sales.js';
 
 const today = '2026-10-21';
@@ -62,3 +62,19 @@ assert.deepEqual(morning({ enquiries: [{ kind: 'enquiry', status: 'new' }, { kin
   { enquiries: 1, overdueTasks: 1, todayTasks: 2, chase: 2, reorders: 0, quiet: 0, won: 3, noDrawing: 1, noContact: 2 });
 assert.equal(morning({ tasks: tg }).won, null, 'won quotes not read yet');
 console.log('crm: ok');
+
+// Sorting: a known customer writing about something that exists already is not a new enquiry.
+assert.ok(refersToExisting('Quantity change to 16 washers (previously 8), amended PO to follow'));
+assert.ok(refersToExisting('Does the quoted price for the profile parts (SO2778) include folding?'));
+assert.ok(refersToExisting('Our PO-P31734 is attached'));
+assert.ok(!refersToExisting('Could you quote for 50 brackets, 3mm mild steel, drawing attached?'));
+assert.equal(sortEmail('enquiry', { known: true, text: 'amended PO to follow' }), 'customer');
+assert.equal(sortEmail('enquiry', { known: false, text: 'amended PO to follow' }), 'enquiry', 'a stranger is never re-sorted');
+assert.equal(sortEmail('enquiry', { known: true, text: 'quote for 50 brackets please' }), 'enquiry', 'a known customer asking for new work');
+assert.equal(sortEmail('other', { known: true, text: 'SO-1234' }), 'other');
+const idx2 = customerIndex([{ key: 'sampleworks', customer: 'Sample Works Ltd', email: 'buyer@sampleworks.example' }]);
+const names = new Map([['sampleworks', 'Sample Works Ltd'], ['exampleracers', 'Example Racers Ltd']]);
+assert.equal(emailCustomer(idx2, 'jo@sampleworks.example', '', names), 'sampleworks', 'by domain');
+assert.equal(emailCustomer(idx2, 'kim@gmail.com', 'Example Racers Limited', names), 'exampleracers', 'by the company name the AI read');
+assert.equal(emailCustomer(idx2, 'kim@gmail.com', 'Nobody Ltd', names), '');
+console.log('crm sorting: ok');

@@ -35,7 +35,8 @@ import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob,
 import { CONFIG } from './config.js';
 import { searchAll } from './core/search.js';
 import { newDispatches } from './core/mood.js';
-import { mailTerms, customerIndex, whoIs, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
+import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
+import { linkEmail, emailActions, sortEmails, emailTaskTitle, needTopic, cleanTopic, ASKED } from './core/inbox.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
@@ -1121,7 +1122,30 @@ async function syncEnquiries(manual) {
       const attachments = m.hasAttachments ? await data.attachmentNames(mailbox, m.graphId).catch(() => []) : [];
       const x = await data.salesAi({ from: m.fromEmail, fromName: m.fromName, subject: m.subject, text: plainText(m.text), attachments }, 'enquiry');
       const id = await data.claimEnquiry({ ...m, mailbox });
-      if (id) { await data.setEnquiry(id, { kind: x.kind, summary: x.summary || '', company: x.company || '', person: x.person || m.fromName, phone: x.phone || '', wants: x.wants || '', hasDrawings: !!x.hasDrawings || attachments.some(a => /\.(pdf|dxf|dwg|step|stp|igs)$/i.test(a)), customerKey: whoIs(customerIdx(), m.fromEmail)?.key || '' }); read++; }
+      const key = emailCustomer(customerIdx(), m.fromEmail, x.company, customerNames());   // by address or domain, else by the company named
+      const kind = sortEmail(x.kind, { known: !!key, text: `${m.subject} ${x.wants || ''} ${x.summary || ''} ${plainText(m.text, 2000)}` });
+      const t = cleanTopic(x);   // what it is about, and the order or quote it names (21 Oct)
+      if (id) { await data.setEnquiry(id, { kind, summary: x.summary || '', company: x.company || '', person: x.person || m.fromName, phone: x.phone || '', wants: x.wants || '', hasDrawings: !!x.hasDrawings || attachments.some(a => /\.(pdf|dxf|dwg|step|stp|igs)$/i.test(a)), customerKey: key,
+        ...t, ...linkEmail(t, { jobs: S.jobs, quotes: S.salesQ || [] }) }); read++; }
+    }
+    // Emails filed before this sorting (21 Oct): a known customer's email about an existing order or quote moves to customer correspondence.
+    for (const e of (S.enq || []).filter(e => e.status === 'new' && e.kind === 'enquiry')) {
+      const key = e.customerKey || emailCustomer(customerIdx(), e.fromEmail, e.company, customerNames());
+      const kind = sortEmail(e.kind, { known: !!key, text: `${e.subject} ${e.wants} ${e.summary}` });
+      if (key !== e.customerKey || kind !== e.kind) { await data.setEnquiry(e.id, { kind, customerKey: key }).catch(() => {}); read++; }
+    }
+    // Emails read before topics (21 Oct): up to 10 a check get their topic and numbers from what was kept (the subject,
+    // what they want and the summary: the body is not stored). Low effort, about a penny each. Not on the practice page.
+    if (!data.practice) for (const e of needTopic(S.enq)) {
+      const x = await data.salesAi({ from: e.fromEmail, fromName: e.fromName, subject: e.subject, text: [e.wants, e.summary].filter(Boolean).join('\n'), attachments: [] }, 'enquiry').catch(() => null);
+      if (!x) break;   // no AI today (no key, over the limit, offline): try again next check
+      const t = cleanTopic(x);
+      await data.setEnquiry(e.id, { ...t, ...linkEmail(t, { jobs: S.jobs, quotes: S.salesQ || [] }) }).catch(() => {}); read++;
+    }
+    // An email read before the quote calculator was: link it to its quote or order now that they are known.
+    if (S.salesQ) for (const e of (S.enq || []).filter(e => e.status === 'new' && e.kind === 'customer' && e.topic && e.jobId == null && e.quoteSpId == null && Object.values(e.refs || {}).some(Boolean)).slice(0, 20)) {
+      const l = linkEmail(e, { jobs: S.jobs, quotes: S.salesQ });
+      if (l.jobId != null || l.quoteSpId != null) { await data.setEnquiry(e.id, l).catch(() => {}); read++; }
     }
     S.enqState = 'ok'; S.enqCheckedAt = new Date().toISOString();
     if (read || manual) { S.enq = await data.loadEnquiries(); if (manual) toast(read ? `${read} new email${read === 1 ? '' : 's'} read.` : 'Nothing new in the mailbox.'); }
@@ -1134,7 +1158,14 @@ async function syncEnquiries(manual) {
 setInterval(() => { if (!document.hidden && S.me && office()) syncEnquiries(); }, 15 * 60e3);
 function enquiriesHtml() {
   if (!office()) return '';
-  return renderEnquiries({ list: enquiryList(S.enq || [], new Date().toISOString()), funnel: enquiryFunnel(S.enq || [], todayIso()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
+  // Customers' emails: the linked order's SO and quote's number for the row, and the buttons for its topic (core/inbox.js).
+  const list = enquiryList(S.enq || [], new Date().toISOString()).map(e => {
+    if (e.kind !== 'customer') return e;
+    if (e.jobId == null && e.quoteSpId == null && e.topic) e = { ...e, ...linkEmail(e, { jobs: S.jobs, quotes: S.salesQ || [] }) };   // read before the quotes were: shown linked now, saved on the next check
+    const x = { ...e, jobSo: e.jobId != null ? S.jobs.find(j => j.id === e.jobId)?.so || '' : '', quoteNo: e.quoteSpId != null ? (S.salesQ || []).find(q => q.spId === e.quoteSpId)?.quoteNo || '' : '' };
+    return { ...x, actions: emailActions(x, { md: md() }) };
+  });
+  return renderEnquiries({ list: [...list.filter(e => e.kind !== 'customer'), ...sortEmails(list.filter(e => e.kind === 'customer'))], funnel: enquiryFunnel(S.enq || [], todayIso()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
     open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply, checkedAt: S.enqCheckedAt, settings: S.enqSettings, packBusy: S.packBusy }, { esc, fmt, fmtTime });
 }
 /** The AI reply to an enquiry; questions (from the quote pack's Ask these questions) are what the reply must ask. */
@@ -1142,8 +1173,10 @@ async function replyEnquiry(id, questions = []) {
   const e = (S.enq || []).find(x => x.id === id); if (!e) return;
   S.enqBusy = id; render();
   try {
+    // A customer writing about an order or quote (21 Oct): the topic and their numbers, so the reply answers that, not a new enquiry.
+    const about = e.kind === 'customer' || (e.topic && e.topic !== 'other') ? { topic: e.topic || 'other', refs: e.refs || {} } : {};
     const d = await data.salesAi({ from: e.fromEmail, fromName: e.person || e.fromName, subject: e.subject, company: e.company, wants: e.wants, summary: e.summary, hasDrawings: e.hasDrawings,
-      questions: (questions || []).slice(0, 12) }, 'reply');
+      questions: (questions || []).slice(0, 12), ...about }, 'reply');
     S.enqReply = { id, draft: { subject: d.subject, greeting: d.greeting, paragraphs: d.paragraphs || [] } };
   } catch (x) { toast(x.message, null, true); }
   S.enqBusy = null; render();
@@ -1188,7 +1221,7 @@ let digestWait = null;
 const digestHidden = day => { if (S.digestHidden === day) return true; try { return localStorage.getItem('clj.digest.' + day) === 'hidden'; } catch { return false; } };
 function digestPicksNow() {
   const today = todayIso(), m = S.salesQ && S.salesF ? salesModel() : null, rm = reorderModel();
-  return digestPicks({ role: md() ? 'md' : 'office', enquiries: S.enq || [], chase: m ? m.chase : [], reorders: rm ? rm.round.filter(r => r.state === 'due') : [],
+  return digestPicks({ role: md() ? 'md' : 'office', enquiries: S.enq || [], soOf: id => S.jobs.find(j => j.id === id)?.so || '', chase: m ? m.chase : [], reorders: rm ? rm.round.filter(r => r.state === 'due') : [],
     late: dashboard(S.jobs.filter(j => !j.preview), today).late, tasks: (S.tasks || []).filter(t => t.assignedTo === S.me.email), today, now: new Date().toISOString(),
     jobValue: md() ? j => value(j, { remaining: true }) : null });   // money for Levi only
 }
@@ -1237,12 +1270,30 @@ async function sendEnquiryReply(id) {
   try {
     const link = await data.draftEmail({ to: e.fromEmail, subject, html: aiEmailHtml({ greeting: parts[0], paragraphs: parts.slice(1) }, S.me.name) });
     await data.setEnquiry(id, { status: 'replied', by: S.me.email });
-    if (e.customerKey) data.addSalesAction({ customer: e.company || e.fromName, kind: 'email', note: `Reply to enquiry: ${e.wants || e.subject}` }).catch(() => {});
+    if (e.customerKey) data.addSalesAction({ customer: e.company || e.fromName, kind: 'email', note: e.kind === 'customer' ? `Reply to their email: ${e.summary || e.subject}` : `Reply to enquiry: ${e.wants || e.subject}` }).catch(() => {});
     S.enqReply = null; S.enq = await data.loadEnquiries();
     toast(`The reply to ${e.fromName || e.fromEmail} is in your Outlook Drafts. Check it and press Send.`);
     if (link) window.open(link, '_blank', 'noopener');
   } catch (x) { toast(mailErr(x), null, true); }
   render();
+}
+/**
+ * A customer's question on a quote, onto the chase list (Philip, 21 Oct: "can you break down the price increase", "does
+ * the quoted price include folding"): noted on the quote as "Customer asked: …" so Levi sees it on the card, its
+ * follow-up set to today so it is in Chase these today, and the email marked done.
+ */
+async function emailToChase(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e) return;
+  const q = e.quoteSpId != null ? salesQuote(e.quoteSpId) : null;
+  if (!q) return toast('The quote this email is about is not in the quote calculator yet (or is still loading). Add a task instead.', null, true);
+  try {
+    await data.addSalesAction({ spId: q.spId, customer: q.customer, kind: 'note', note: `${ASKED} ${e.summary || e.wants || e.subject}`.slice(0, 500) });
+    await data.setFollow(q, { nextOn: todayIso() });
+    await data.setEnquiry(id, { status: 'ignored', by: S.me.email });
+    S.enq = await data.loadEnquiries(); S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
+    toast(`${q.quoteNo} is on today's chase list, with the customer's question on its card.`);
+  } catch (x) { toast(x.message, null, true); }
+  loadSalesData(); render();
 }
 async function enquiryToCustomer(id) {
   const e = (S.enq || []).find(x => x.id === id); if (!e) return;
@@ -1462,7 +1513,8 @@ document.addEventListener('pointerdown', e => { if ($('gres') && !$('gres').hidd
 function openTaskForm(src) {
   const today = todayIso(), f = { dueOn: plusDays(today, 1), assignedTo: S.me.email, title: '', customer: '' };
   if (src === 'cust' && S.cust) Object.assign(f, { customer: S.custName || [...S.book.people].find(p => p.key === S.cust)?.customer || (S.hist?.invoices || []).find(x => normName(x.customer) === S.cust)?.customer || S.cust });
-  if (src?.startsWith('enquiry:')) { const e = (S.enq || []).find(x => x.id === +src.slice(8)); if (e) Object.assign(f, { title: `Quote for ${e.company || e.fromName}: ${e.wants || e.subject}`.slice(0, 200), customer: e.company || '', source: 'enquiry', sourceRef: e.id, dueOn: today }); }
+  if (src?.startsWith('enquiry:')) { const e = (S.enq || []).find(x => x.id === +src.slice(8)); if (e) Object.assign(f, { title: e.kind === 'customer' ? emailTaskTitle(e, S.jobs.find(j => j.id === e.jobId)?.so || e.refs?.so || '')
+    : `Quote for ${e.company || e.fromName}: ${e.wants || e.subject}`.slice(0, 200), customer: e.company || (e.customerKey && S.book.people.find(p => p.key === e.customerKey)?.customer) || '', source: 'enquiry', sourceRef: e.id, dueOn: today }); }   // a customer's email: "Sort out SO-…: …" for a complaint
   if (src?.startsWith('idea:')) { const i = (S.ideas || []).find(x => x.id === +src.slice(5)); if (i) Object.assign(f, { title: i.title.slice(0, 200), customer: i.customer || '', note: i.angle || '' }); }
   if (src?.startsWith('rs:')) { const [, key, n] = src.split(':'), r = (S.research || []).find(x => x.key === key), o = r?.openings[+n]; if (o) Object.assign(f, { title: o.idea.slice(0, 200), customer: r.customer, note: o.angle || '' }); }
   if (src?.startsWith('email:')) { const m = Object.values(S.cmail || {}).flatMap(x => x.messages || []).find(x => x.id === src.slice(6)); if (m) Object.assign(f, { title: `Reply to: ${m.subject}`.slice(0, 200), customer: S.custName || '', source: 'email', sourceRef: m.internetMessageId }); }
@@ -2859,7 +2911,7 @@ function onClick(e) {
   if (d.wondrill) return wonDrill(d.wondrill, d.key);
   if (d.wonlines) { S.wonOpen = S.wonOpen === d.wonlines ? null : d.wonlines; return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
-  if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; if ('gosmart' in d) S.crmView = 'main'; if (d.goenqid) { S.cust = null; S.enqOpen = +d.goenqid; } render(); setTimeout(() => $('goenq' in d ? 'enquiries' : 'smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
+  if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; if ('gosmart' in d) S.crmView = 'main'; if (d.goenqid) { S.cust = null; S.enqOpen = +d.goenqid; } render(); setTimeout(() => ((d.goenqid && $('em-' + d.goenqid)) || $('goenq' in d ? 'enquiries' : 'smart'))?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); return; }   // a customer's email: its own row
   if (d.tab) { e.preventDefault(); S.tab = d.tab; render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if (d.sendout) { e.stopPropagation(); return sendOutForm(+d.job, d.sendout); }
@@ -2869,7 +2921,7 @@ function onClick(e) {
   if (d.noteseen) { e.stopPropagation(); return seenNote(+d.noteseen); }
   if (d.notedel) return removeNote(+d.notedel);
   if ('salesreload' in d) { S.salesQ = null; S.hist = null; S.salesErr = null; return loadSalesData(true); }
-  if (d.custpage) { const n = d.custname || (S.hist?.invoices || []).find(x => normName(x.customer) === d.custpage)?.customer || S.book.people.find(p => p.key === d.custpage)?.customer || d.custpage; return openCustomer(d.custpage, n); }
+  if (d.custpage) { const n = d.custname || (S.hist?.invoices || []).find(x => normName(x.customer) === d.custpage)?.customer || S.book.people.find(p => p.key === d.custpage)?.customer || d.custpage; return openCustomer(d.custpage, n, d.custtab || 'overview'); }
   if (d.gi) return goHit(+d.gi);
   if ('tvleave' in d) return leaveTv();
   if (d.ctab) { S.ctab = d.ctab; return render(); }
@@ -2901,6 +2953,9 @@ function onClick(e) {
     data.saveOfficeSetting('enquiry_mailbox', v).then(async () => { S.officeSet = await data.loadOfficeSettings(); S.enqState = 'reading'; S.enqSettings = false; toast(`Enquiries will be read from ${v}.`); syncEnquiries(true); }).catch(e => toast(e.message, null, true)); return; }
   if ('enqdoneall' in d) { const xs = (S.enq || []).filter(e => e.kind === 'customer' && e.status === 'new');
     Promise.all(xs.map(e => data.setEnquiry(e.id, { status: 'ignored', by: S.me.email }))).then(async () => { S.enq = await data.loadEnquiries(); render(); }).catch(e => toast(e.message, null, true)); return; }
+  if (d.enqchase) return emailToChase(+d.enqchase);
+  if (d.enqdone) { const id = +d.enqdone; data.setEnquiry(id, { status: 'ignored', by: S.me.email }).then(async () => { S.enq = await data.loadEnquiries(); S.enqReply = S.enqReply?.id === id ? null : S.enqReply; render();
+    toast('Done.', async () => { await data.setEnquiry(id, { status: 'new' }); S.enq = await data.loadEnquiries(); render(); }); }).catch(e => toast(e.message, null, true)); return; }
   if ('goenq' in d) { S.tab = 'customers'; render(); setTimeout(() => $('enquiries')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
   if ('gotasks' in d) { $('today')?.scrollIntoView({ behavior: 'smooth' }); return; }
   if ('gosmart' in d) { S.tab = 'sales'; render(); setTimeout(() => $('smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }

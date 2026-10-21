@@ -249,11 +249,19 @@ export const salesAiCheckin = async facts => ({ subject: `Next batch of ${facts.
   paragraphs: ['Made-up AI text for the practice page: it has been a little while since your last order, so I thought I would check in.', 'If you have drawings for the next batch, send them over and we will get a price back to you quickly.'], model: 'practice', costUsd: 0 });
 
 // Customers, enquiries and tasks: made-up people and emails only.
+export const practice = true;   // the board skips what would cost real AI calls here (the topic backfill, 21 Oct)
+const noRefs = { so: '', po: '', quote: '' };
 export const salesAi = async (facts, kind = 'checkin') => {
+  // Customers' emails (21 Oct): a complaint, a PO against a quote and a delivery question, with their topic and numbers.
+  if (kind === 'enquiry' && /arrived bent/i.test(facts.text)) return { kind: 'customer', summary: 'The brackets on SO-9782 arrived bent; they need 10 re-made urgently.', company: 'Second Example Ltd', person: facts.fromName, phone: '', wants: '10 brackets re-made', hasDrawings: false, topic: 'complaint', refs: { ...noRefs, so: 'SO-9782' } };
+  if (kind === 'enquiry' && /PO-4471/.test(facts.text)) return { kind: 'customer', summary: 'Sends their PO-4471 for quote Q-0320.', company: 'Example Customer Ltd', person: facts.fromName, phone: '', wants: '', hasDrawings: true, topic: 'po', refs: { so: '', po: 'PO-4471', quote: 'Q-0320' } };
   if (kind === 'enquiry') return /laser|quote|price/i.test(facts.subject + facts.text)
-    ? { kind: 'enquiry', summary: 'Asks for a price on laser cut and folded brackets.', company: 'Newco Fabrications Ltd', person: facts.fromName, phone: '01234 567890', wants: '50 brackets, 3mm mild steel, laser cut and folded, powder coated black', hasDrawings: true }
-    : /delivery|order/i.test(facts.subject) ? { kind: 'customer', summary: 'Asks when their order will be delivered.', company: 'Example Customer Ltd', person: facts.fromName, phone: '', wants: '', hasDrawings: false }
-    : { kind: 'other', summary: 'A sales pitch.', company: '', person: facts.fromName, phone: '', wants: '', hasDrawings: false };
+    ? { kind: 'enquiry', summary: 'Asks for a price on laser cut and folded brackets.', company: 'Newco Fabrications Ltd', person: facts.fromName, phone: '01234 567890', wants: '50 brackets, 3mm mild steel, laser cut and folded, powder coated black', hasDrawings: true, topic: 'other', refs: noRefs }
+    : /delivery|order/i.test(facts.subject) ? { kind: 'customer', summary: 'Asks when SO-9781 will be delivered.', company: 'Example Customer Ltd', person: facts.fromName, phone: '', wants: '', hasDrawings: false, topic: 'delivery', refs: { ...noRefs, so: 'SO-9781' } }
+    : { kind: 'other', summary: 'A sales pitch.', company: '', person: facts.fromName, phone: '', wants: '', hasDrawings: false, topic: 'other', refs: noRefs };
+  if (kind === 'reply' && facts.topic) return { subject: 'Re: ' + facts.subject, greeting: 'Hi ' + String(facts.fromName || '').split(' ')[0] + ',', model: 'practice',
+    paragraphs: [facts.topic === 'complaint' ? 'Made-up AI reply for the practice page: I am sorry the parts were not right. We will look at it today.' : 'Made-up AI reply for the practice page: thank you for your email.',
+      facts.topic === 'complaint' ? 'Could you send a couple of photos and the delivery note number, so we can put it right quickly?' : 'We will check it and come back to you with any effect on the price or the date.'] };
   if (kind === 'reply') return { subject: 'Re: ' + facts.subject, greeting: 'Hi ' + String(facts.fromName || '').split(' ')[0] + ',', paragraphs: ['Made-up AI reply for the practice page: thank you for your enquiry about ' + facts.wants + '.', facts.questions?.length ? 'We will price this and come back to you. To quote it properly, could you tell us:\n' + facts.questions.map((q, i) => `${i + 1}. ${q}`).join('\n') : 'We will price this and come back to you. Could you confirm when you need them and the delivery address?'], model: 'practice' };
   if (kind === 'summary') return { summary: 'Made-up AI summary: a regular customer for brackets, ordering about every two weeks and steady on last year.', nextStep: 'Ask whether they would like their brackets powder coated by us next time.', model: 'practice' };
   if (kind === 'research') return { found: true, about: `Made-up research for the practice page: ${facts.customer} designs and builds equipment from a works in the south of England.`,
@@ -272,7 +280,7 @@ export const salesAi = async (facts, kind = 'checkin') => {
   if (kind === 'digest') return { greeting: `Morning ${facts.name || 'there'}, three things worth doing first.`,
     lines: (facts.picks || []).map(p => ({ enquiry: 'Made-up: a new customer has waited over a day, and a quick reply wins most first orders.', task: 'Made-up: it is overdue and the customer is expecting to hear back.',
       quote: 'Made-up: the follow-up is due, and a call this morning is the best chance to win it.', late: 'Made-up: ring the customer before they ring you, with a new date.',
-      reorder: 'Made-up: their usual gap has passed, so they are probably about to order again.' })[p.kind] || ''), model: 'practice', costUsd: 0.004 };
+      reorder: 'Made-up: their usual gap has passed, so they are probably about to order again.', email: 'Made-up: a customer has written about an order, and an answer today keeps them.' })[p.kind] || ''), model: 'practice', costUsd: 0.004 };
   return salesAiCheckin(facts);
 };
 export const enquiryAttachments = async () => [];
@@ -291,7 +299,7 @@ export const setTask = async (id, p, by) => { const t = tasks.find(x => x.id ===
 export const deleteTask = async id => { tasks.splice(tasks.findIndex(x => x.id === id), 1); };
 const enqs = []; let enqNo = 1;
 export const loadEnquiries = async () => structuredClone(enqs).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-export const claimEnquiry = async m => { if (enqs.some(e => e.messageId === m.messageId)) return null; const id = enqNo++; enqs.push({ id, ...m, kind: null, summary: '', company: '', person: '', phone: '', wants: '', hasDrawings: false, customerKey: '', status: 'new', handledBy: null, handledAt: null, error: null }); return id; };
+export const claimEnquiry = async m => { if (enqs.some(e => e.messageId === m.messageId)) return null; const id = enqNo++; enqs.push({ id, ...m, kind: null, summary: '', company: '', person: '', phone: '', wants: '', hasDrawings: false, customerKey: '', status: 'new', handledBy: null, handledAt: null, error: null, topic: '', refs: {}, quoteSpId: null, jobId: null }); return id; };
 export const setEnquiry = async (id, p) => { const e = enqs.find(x => x.id === id); Object.assign(e, p); if ('quotePack' in p) e.quotePackAt = p.quotePack ? new Date().toISOString() : null; if ('status' in p) { e.handledBy = p.by || null; e.handledAt = p.status === 'new' ? null : new Date().toISOString(); } };
 const insights = {};
 export const loadInsight = async k => insights[k] || null;
@@ -299,6 +307,8 @@ export const saveInsight = async (k, c, x) => { insights[k] = { ...x }; };
 export const inboxMessages = async () => [
   { graphId: 'g1', messageId: '<m1@example.net>', subject: 'Quote for laser cut brackets', fromEmail: 'jo@newco.example', fromName: 'Jo Bloggs', receivedAt: new Date(Date.now() - 26 * 36e5).toISOString(), text: 'Hello, could you quote for 50 brackets, 3mm mild steel, laser cut and folded, powder coated black? Drawing attached. Thanks, Jo', webLink: '', hasAttachments: true },
   { graphId: 'g2', messageId: '<m2@example.net>', subject: 'Delivery of our order', fromEmail: 'buyer@example.com', fromName: 'Sam Buyer', receivedAt: new Date(Date.now() - 5 * 36e5).toISOString(), text: 'When will SO-9781 be delivered?', webLink: '', hasAttachments: false },
+  { graphId: 'g4', messageId: '<m4@example.net>', subject: 'Bent brackets', fromEmail: 'buyer@second.example', fromName: 'Alex Example', receivedAt: new Date(Date.now() - 2 * 36e5).toISOString(), text: 'Hello, the brackets on SO-9782 arrived bent, need 10 re-made urgently. Alex', webLink: '', hasAttachments: false },
+  { graphId: 'g5', messageId: '<m5@example.net>', subject: 'Our purchase order', fromEmail: 'buyer@example.com', fromName: 'Sam Buyer', receivedAt: new Date(Date.now() - 4 * 36e5).toISOString(), text: 'Hi, please find our PO-4471 for Q-0320. Thanks, Sam', webLink: '', hasAttachments: true },
   { graphId: 'g3', messageId: '<m3@example.net>', subject: 'Boost your SEO today', fromEmail: 'sales@spammy.example', fromName: 'Spammy', receivedAt: new Date(Date.now() - 3 * 36e5).toISOString(), text: 'We can get you to page one.', webLink: '', hasAttachments: false }];
 export const attachmentNames = async () => ['bracket-rev-B.pdf'];
 export const searchMail = async (boxes, terms) => ({ consent: false, noAccess: [], errors: [], messages: [
