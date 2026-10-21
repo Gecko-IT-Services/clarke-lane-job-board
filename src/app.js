@@ -47,7 +47,7 @@ import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, line
 import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
-  byRunningOrder, partsLeft, moveInOrder, nextStep, floorQueue, moveInStation } from './core/jobs.js';
+  byRunningOrder, partsLeft, moveInOrder, nextStep, floorQueue, moveInStation, lineProcs } from './core/jobs.js';
 
 const $ = id => document.getElementById(id);
 
@@ -325,7 +325,8 @@ async function startConvert(spId) {
     openOrderForm({ from: `quote ${q.quoteNo}`, spQuoteId: q.spId, quoteNo: q.quoteNo, customer: q.customer,
       contact: q.contactName, contactEmail: q.contactEmail, due, procs: suggestProcesses(lines),
       // QuoteLines has no part number column: Part no. stays empty for Mandy to fill rather than guessed.
-      lines: lines.map(l => ({ partNo: '', part: describeLine(l), qty: String(l.qty), price: String(unitPrice(l.sellTotal, l.qty)), due }))
+      // One form line per quote line, so each is ticked from its own quote line (22 Oct); carriage gets the lot.
+      lines: lines.map(l => ({ partNo: '', part: describeLine(l), qty: String(l.qty), price: String(unitPrice(l.sellTotal, l.qty)), due, procs: suggestProcesses([l]) }))
         .concat(q.carriage > 0 ? [{ partNo: '', part: 'Carriage', qty: '1', price: String(q.carriage), due }] : []) });
   } catch (e) { S.conv = null; toast(e.message, null, true); render(); }
 }
@@ -431,11 +432,16 @@ function renderOrders() {
     { esc, fmt, gbp, dueChip, match: orderMatch });
 }
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
-const blankLine = due => ({ partNo: '', part: '', qty: '', price: '', due: due || '' });
+const blankLine = (due, procs = []) => ({ partNo: '', part: '', qty: '', price: '', due: due || '', procs: [...procs] });
+/** The order's processes: every process any of its lines needs, in Levi's order. */
+const unionProcs = lines => PROCESSES.filter(p => lines.some(l => (l.procs || []).includes(p)));
 function openOrderForm(prefill = {}, amendId = null) {
   const due = prefill.due || addWorkingDays(todayIso(), 10);
   S.form = { mode: amendId ? 'amend' : 'new', jobId: amendId, so: '', customer: '', po: '', contact: '', contactEmail: '',
     address: '', notes: '', due, lines: [blankLine(due)], procs: [], xeroQuoteId: null, spQuoteId: null, quoteNo: '', from: '', ...prefill };
+  // Processes are ticked per line (Levi, 22 Oct); a prefill's order-wide procs go on every line without their own.
+  S.form.lines = S.form.lines.map(l => ({ ...l, procs: [...(l.procs ?? S.form.procs ?? [])] }));
+  S.form.procs = unionProcs(S.form.lines);
   S.open = null; S.tab = 'orders'; keepInputs = false; render(); window.scrollTo(0, 0);
   if (S.xero && !S.xc && !S.xcErr) loadXeroContacts();
   if (S.xero && !S.xitems && !S.xitemsErr) loadXeroItems();
@@ -468,22 +474,24 @@ function openRepeat(id) {
   const j = job(id);
   const due = addWorkingDays(todayIso(), 10);
   openOrderForm({ from: `repeat of ${j.so}`, repeatOf: j.so, customer: j.customer, contact: j.contactName, contactEmail: j.contactEmail || '',
-    address: j.address, notes: j.notes, due, procs: needed(j), lines: repeatLines(j.lines, due) });
+    address: j.address, notes: j.notes, due, procs: needed(j), lines: repeatLines(j.lines.map(l => ({ ...l, procs: lineProcs(j, l) })), due) });
   toast(`Copied from ${j.so}. Enter the new customer order no., and check the prices and dates are still right.`);
 }
 function openAmend(id) {
   const j = job(id);
   openOrderForm({ so: j.so, customer: j.customer, po: j.po, contact: j.contactName, contactEmail: j.contactEmail || '', address: j.address, notes: j.notes,
     due: nextDue(j), procs: needed(j),
-    lines: j.lines.map(l => ({ id: l.id, partNo: l.partNo || '', part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, po: l.po || '', sent: sent(j, l) })) }, id);
+    lines: j.lines.map(l => ({ id: l.id, partNo: l.partNo || '', part: l.part, qty: String(l.qty), price: String(l.price), due: l.due, po: l.po || '', sent: sent(j, l), procs: lineProcs(j, l) })) }, id);
 }
 /** Copy what is typed into S.form, so adding, removing or splitting lines keeps everything else. */
 function collectForm() {
   const n = S.form, v = id => $(id)?.value ?? '';
   Object.assign(n, { so: v('of-so'), customer: v('of-cust') || n.customer, po: v('of-po'), contact: v('of-contact'), contactEmail: v('of-email'), address: v('of-addr'),
     due: v('of-due') || n.due, notes: v('of-notes') });
-  n.lines = n.lines.map((l, i) => ({ ...l, partNo: v('of-pno' + i), part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i), po: v('of-lpo' + i) }));
-  n.procs = [...document.querySelectorAll('input[name=of-p]:checked')].map(i => i.value);
+  const ticked = $('of-ptable') ? [...document.querySelectorAll('input[name=of-lp]:checked')] : null;
+  n.lines = n.lines.map((l, i) => ({ ...l, partNo: v('of-pno' + i), part: v('of-part' + i), qty: v('of-qty' + i), price: v('of-price' + i), due: v('of-ldue' + i), po: v('of-lpo' + i),
+    procs: ticked ? PROCESSES.filter(p => ticked.some(x => x.dataset.line === String(i) && x.value === p)) : [...(l.procs || [])] }));
+  n.procs = unionProcs(n.lines);
   n.splitN = v('of-sn'); n.splitEvery = v('of-se'); n.splitFrom = v('of-sf');
   if ($('of-b2b')) n.b2b = $('of-b2b').checked;
 }
@@ -532,13 +540,26 @@ function orderForm() {
     ${(() => { const ps = formParts(n), c = k => ps.filter(x => x.from === k).length;
       return `<datalist id="of-parts">${partOptions(partMatches(ps, ''))}</datalist>
       <p class="note">Parts list: ${c('customer')} for this customer, ${c('board')} from other orders${c('parts') ? `, ${c('parts')} in Parts` : ''}${S.xero ? `, ${S.xitems ? c('xero') + ' from Xero\'s Products and services' : 'reading Xero\'s Products and services…'}` : ''}. Type the part number or a word from the description in either box; picking one fills in the part number, the description and its price.${S.xitemsErr ? ` <span class="bad">Xero's list could not be read (${esc(S.xitemsErr)}).</span>` : ''}</p>`; })()}
-    <div class="fl" id="of-pnote">Processes this order needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : n.procNote ? '. ' + esc(n.procNote) : ''}</div>
-    <div class="pchecks">${PROCESSES.map(p => `<label><input type="checkbox" name="of-p" value="${esc(p)}" ${n.procs.includes(p) ? 'checked' : ''}>${esc(p)}</label>`).join('')}</div>
+    ${procTable(n)}
     <label class="fl">Notes (optional)<input type="text" id="of-notes" value="${esc(n.notes)}"></label>
     ${amend ? '' : `<label class="b2b"><input type="checkbox" id="of-b2b" ${n.b2b ? 'checked' : ''}> <span><b>Back-to-back:</b> buy these parts in for this order. Once it is saved, the purchase order opens ready, with the same parts (no processes needed if nothing is made here).</span></label>`}
     <div class="actions"><button class="btn pri" type="submit" ${S.busy ? 'disabled' : ''}>${amend ? 'Save the changes' : 'Create order'}</button><button class="btn" type="button" data-olcancel>Cancel</button>
       <button class="btn link sm" type="button" data-booksave title="Save the contact, email and delivery address above to this customer's contact book (Sales orders › Customers)">Save contact and address to the contact book</button></div>
     <p class="note" id="of-msg"></p></form>`;
+}
+/** How a form line reads in the Processes table: as it will on the board, or "Line n" until something is typed. */
+const formLineName = (l, i) => (l.part || '').trim() || (l.partNo || '').trim() ? lineHtml({ partNo: (l.partNo || '').trim(), part: (l.part || '').trim() }, esc) : `Line ${i + 1}`;
+/** Processes per part line (Levi, 22 Oct: "each part may need a different process"): a row per line, a column per
+ *  process, and with more than one line an All lines row that ticks or unticks a column on every line. */
+function procTable(n) {
+  const many = n.lines.length > 1;
+  const box = (p, on, attrs, label) => `<td><input type="checkbox" ${attrs} value="${esc(p)}" ${on ? 'checked' : ''} aria-label="${esc(label)}"></td>`;
+  return `<div class="fl" id="of-pnote">Processes each part needs${n.spQuoteId ? '. Ticked from the quote lines; check them and add Tap & C/Sink if needed.' : n.procNote ? '. ' + esc(n.procNote) : ''}</div>
+    <div style="overflow-x:auto"><table class="lines lprocs" id="of-ptable"><thead><tr><th>Part</th>${PROCESSES.map(p => `<th title="${esc(p)}">${esc(SHORT[p])}</th>`).join('')}</tr></thead><tbody>
+    ${many ? `<tr class="allrow"><td><b>All lines</b></td>${PROCESSES.map(p => box(p, n.lines.every(l => l.procs.includes(p)), `data-allp="${esc(p)}"`, `${p} on every line`)).join('')}</tr>` : ''}
+    ${n.lines.map((l, i) => `<tr><td id="of-plbl${i}">${formLineName(l, i)}</td>${PROCESSES.map(p => box(p, l.procs.includes(p), `name="of-lp" data-line="${i}"`, `${p}, line ${i + 1}`)).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    ${many ? '<p class="note">A line with nothing ticked goes through every process on the order.</p>' : ''}`;
 }
 /** Under the customer box: whether the order is on a Xero contact, as Sage insists on an account. */
 function customerNote(n) {
@@ -602,9 +623,11 @@ async function submitOrder() {
   if (bad) return msg('Every line needs a description, a whole-number quantity, a unit price (0 is allowed) and a due date. The part number is optional.');
   const under = lines.find(l => l.sent && Number(l.qty) < l.sent);
   if (under) return msg(`"${lineLabel(under)}" has ${under.sent} dispatched already, so its quantity cannot go below that.`);
+  n.procs = unionProcs(lines);   // the order's processes: every process a line being saved needs
   if (!n.procs.length && !n.b2b) return msg('Tick at least one process so the shop floor knows what the order needs (or tick Back-to-back if it is bought in and sent on).');
   if (n.mode === 'new' && n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
-  const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part_no: (l.partNo || '').trim(), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due, customer_po: (l.po || '').trim() }));
+  const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part_no: (l.partNo || '').trim(), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due, customer_po: (l.po || '').trim(),
+    processes: PROCESSES.filter(p => (l.procs || []).includes(p)) }));
   S.busy = true; render();
   try {
     if (n.mode === 'amend') {
@@ -626,7 +649,7 @@ async function submitOrder() {
       const partsNote = fromParts.length ? ` Drawing${fromParts.length === 1 ? '' : 's'} from Parts attached: ${fromParts.join(', ')}.` : '';
       if (n.b2b && S.xero) { S.busy = false; render(); backToBackPo(j.id); return toast(`${j.so_number} created for ${who}.${partsNote} Here is its back-to-back purchase order: check the supplier and costs, then send it to Xero.`); }
       showDoc('soa', j.id);
-      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Not started.${partsNote} Press Job sheet to print one for the folder.`);
+      toast(`${j.so_number} created for ${who}. It's on Sales orders, and on Jobs under Not started.${partsNote} Press Front sheet to print one for the folder.`);
     }
   } catch (e) { toast(e.message, null, true); }
   S.busy = false; render();
@@ -2116,7 +2139,7 @@ function renderDrawer() {
       ${(j.cancelledDespatches || []).length ? `<p class="note">Cancelled dispatch notes: ${j.cancelledDespatches.map(d => esc(d.dn)).join(', ')}.</p>` : ''}</div>
     ${money ? purchasePanel(j) + proformaPanel(j) : ''}
     <div class="actions">
-      <button class="btn" type="button" data-jobsheet="${j.id}">${icon('doc')}Job sheet</button>
+      <button class="btn" type="button" data-jobsheet="${j.id}">${icon('doc')}Front sheet</button>
       ${money ? `<button class="btn" type="button" data-repeat="${j.id}">${icon('repeat')}Repeat order</button>` : ''}
       ${money ? `<button class="btn" type="button" data-soa="${j.id}">${icon('orders')}Order acknowledgement${j.ackEmailedAt ? ` <span class="chip ok">emailed ${fmt(j.ackEmailedAt.slice(0, 10))}</span>` : ''}</button>` : ''}
       ${onBoardStage(j) && j.status === 'open' ? `<button class="btn pri" type="button" data-desp="${j.id}">${icon('truck')}Dispatch…</button>` : ''}
@@ -2576,30 +2599,30 @@ function docHtml(kind, jobId, despId) {
   const head = (title, no) => `<div class="ph">${logo}<div><h1>${title}</h1><div class="dno">${no}</div></div></div>`;
   let body;
   if (kind === 'job') {
-    // The factory's paper copy for the job folder (with the drawing). No prices. The board stays the live record.
-    const need = needed(j), skip = PROCESSES.filter(p => !j.procs[p]);
+    // The front sheet (Levi, 22 Oct: "set out like the Xero version, as each part may need a different process"):
+    // the factory's paper copy for the job folder, with the drawing. No prices. The board stays the live record.
+    const need = needed(j);
     // What to make on this sheet: chosen on screen before printing (S.sheet); the order is not changed.
     const pick = S.sheet?.jobId === j.id ? S.sheet.qty : Object.fromEntries(j.lines.map(l => [l.id, left(j, l)]));
     const make = j.lines.filter(l => (pick[l.id] || 0) > 0);
     const allDates = deliveryDates(j), dates = [...new Set(make.map(l => l.due))].sort();
     const which = allDates.length > 1 && dates.length ? dates.map(d => allDates.indexOf(d) + 1).filter(n => n > 0) : [];
     const pos = [...new Set(make.map(l => l.po).filter(Boolean))];
-    body = `<div class="ph">${logo}<div><h1>Job sheet</h1><div class="dno big">${esc(j.so)}</div></div></div>
-      <div class="two"><div><div class="k">Customer</div><b class="lg">${esc(j.customer)}</b>${j.contactName ? `<div>${esc(j.contactName)}</div>` : ''}</div>
-        <div class="kv"><span class="k">Customer PO</span><span>${esc(j.po) || '—'}</span><span class="k">Our quote</span><span>${esc(j.quote) || '—'}</span>
-        <span class="k">Ordered</span><span>${fmtLong(j.ordered)}</span>
-        <span class="k">Due</span><span><b>${dates.length ? (dates.length > 1 ? `${fmtLong(dates[0])} to ${fmtLong(dates[dates.length - 1])}` : fmtLong(dates[0])) : '—'}</b></span>
+    // A box where the part needs the process (ticked if the order has it done already); nothing where it does not.
+    const cell = (l, p) => `<td class="pr">${lineProcs(j, l).includes(p) ? `<span class="jbox">${j.procs[p].done ? '✓' : ''}</span>` : ''}</td>`;
+    body = `<div class="ph">${logo}<div><h1>Sales order front sheet</h1><div class="dno big">${esc(j.so)}</div></div></div>
+      <div class="two"><div><div class="k">Customer</div><b class="lg">${esc(j.customer)}</b>${j.address ? `<div style="white-space:pre-line">${esc(j.address)}</div>` : ''}${j.contactName ? `<div>${esc(j.contactName)}</div>` : ''}</div>
+        <div class="kv"><span class="k">Order no</span><span>${esc(j.so)}</span><span class="k">Order date</span><span>${fmtLong(j.ordered)}</span>
+        <span class="k">Customer PO</span><span>${esc(j.po) || '—'}</span><span class="k">Our quote</span><span>${esc(j.quote) || '—'}</span>
+        <span class="k">Required</span><span class="req"><b>${dates.length ? (dates.length > 1 ? `${fmtLong(dates[0])} to ${fmtLong(dates[dates.length - 1])}` : fmtLong(dates[0])) : '—'}</b></span>
         ${which.length ? `<span class="k">Call-off</span><span><b>${which.length > 1 ? `Deliveries ${which.join(', ')}` : `Delivery ${which[0]}`} of ${allDates.length}</b></span>` : ''}
         ${pos.length ? `<span class="k">Call-off PO</span><span><b>${esc(pos.join(', '))}</b></span>` : ''}</div></div>
-      ${j.notes ? `<div class="jnote"><div class="k">Notes</div><div style="white-space:pre-line">${esc(j.notes)}</div></div>` : ''}
-      ${make.length ? `<table><thead><tr><th>Part</th><th>To make</th><th>Due</th>${pos.length ? '<th>Call-off PO</th>' : ''}</tr></thead><tbody>
-      ${make.map(l => `<tr><td>${lineHtml(l, esc)}</td><td><b class="lg">${pick[l.id]}</b></td><td>${fmtLong(l.due)}</td>${pos.length ? `<td>${esc(l.po) || ''}</td>` : ''}</tr>`).join('')}</tbody></table>`
+      ${make.length ? `<table class="jfront"><thead><tr><th class="q">Qty</th><th class="pn">Part number</th><th>Description</th>${dates.length > 1 ? '<th class="du">Due</th>' : ''}${pos.length ? '<th class="du">Call-off PO</th>' : ''}${need.map(p => `<th class="pr">${esc(SHORT[p])}</th>`).join('')}</tr></thead><tbody>
+      ${make.map(l => `<tr><td class="q"><b class="lg">${pick[l.id]}</b></td><td class="pn mono">${esc((l.partNo || '').trim())}</td><td>${esc(l.part)}</td>${dates.length > 1 ? `<td class="du">${fmt(l.due)}</td>` : ''}${pos.length ? `<td class="du">${esc(l.po) || ''}</td>` : ''}${need.map(p => cell(l, p)).join('')}</tr>`).join('')}</tbody></table>`
         : '<div class="jnote">Nothing to make on this sheet. Enter a quantity above it on screen.</div>'}
-      <table class="jprocs"><thead><tr><th>Process</th><th>Done</th><th>By</th><th>Date</th></tr></thead><tbody>
-      ${need.map(p => { const st = j.procs[p]; return `<tr><td><b>${esc(p)}</b></td><td><span class="jbox">${st.done ? '✓' : ''}</span></td><td>${st.done ? esc(st.by) : ''}</td><td>${st.done ? fmt(st.at.slice(0, 10)) : ''}</td></tr>`; }).join('')
-        || '<tr><td colspan="4">No processes ticked on this order.</td></tr>'}</tbody></table>
-      ${skip.length ? `<div class="k" style="text-transform:none;letter-spacing:0">Not needed: ${skip.map(esc).join(', ')}</div>` : ''}
-      <div class="jlines"><div>Drawing no. / revision</div><div>Material</div><div>Notes</div></div>
+      ${!need.length ? '<div class="k" style="text-transform:none;letter-spacing:0">No processes ticked on this order.</div>' : ''}
+      ${j.notes ? `<div class="jnote"><div class="k">Notes</div><div style="white-space:pre-line">${esc(j.notes)}</div></div>` : ''}
+      <div class="jnote jcert"><div class="k">Certificate batch no.</div></div>
       <div class="foot">Printed ${fmtLong(todayIso())} from the job board. The job board is the live record: tick processes there too.</div>`;
   } else if (kind === 'pf' || kind === 'pfnew') {
     const p = kind === 'pf' ? S.pfs.find(x => x.id === despId) : null;
@@ -2646,7 +2669,7 @@ function docHtml(kind, jobId, despId) {
   }
   return body;
 }
-/** Before printing a job sheet: choose what this sheet is for (call-off customers make part of an
+/** Before printing a front sheet: choose what this sheet is for (call-off customers make part of an
  *  order at a time). Defaults to the next delivery; the order itself is never changed here. */
 function openJobSheet(id) {
   const j = job(id); if (!j) return;
@@ -2658,7 +2681,7 @@ function openJobSheet(id) {
 function sheetEditor(j) {
   const call = deliveryDates(j).length > 1;
   return `<div class="sheetedit panel"><h3>What is this sheet for?</h3>
-    <p class="note">Change <b>To make</b> for this job sheet only, for example the call-off you are making now. The order is not changed; to change the order, use Amend.</p>
+    <p class="note">Change <b>To make</b> for this front sheet only, for example the call-off you are making now. The order is not changed; to change the order, use Amend.</p>
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Due</th>${linePos(j).length ? '<th>Call-off PO</th>' : ''}<th>Ordered</th><th>Outstanding</th><th>To make</th></tr></thead><tbody>
     ${j.lines.map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td style="text-align:left">${lineHtml(l, esc)}</td><td>${fmt(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${l.qty}</td><td>${left(j, l)}</td>
       <td><input type="number" min="0" step="1" value="${S.sheet.qty[l.id] || 0}" data-sq="${l.id}" style="width:90px" aria-label="To make on this sheet: ${esc(lineLabel(l))} due ${fmt(l.due)}"></td></tr>`).join('')}</tbody></table></div>
@@ -2678,7 +2701,7 @@ function showDoc(kind, jobId, despId) {
   const pfBtns = p && !p.cancelledAt ? `${p.paidOn ? `<button class="btn" type="button" data-pfmark="unpaid" data-pf="${p.id}">Not paid after all</button>`
       : `<button class="btn" type="button" data-pfmark="paid" data-pf="${p.id}">Mark paid</button><button class="btn" type="button" data-pfmark="cancel" data-pf="${p.id}">Cancel pro forma</button>`}` : '';
   $('doc').innerHTML = `<div class="docbar"><span>${kind === 'job' ? 'Print it for the job folder.' : kind === 'pfnew' ? 'Check it, then make the pro forma.' : sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>${pfBtns}
-      ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">${icon('doc')}Job sheet</button>` : ''}
+      ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">${icon('doc')}Front sheet</button>` : ''}
       ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${icon('mail')}${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
       ${['dn', 'soa', 'pf'].includes(kind) ? `<button class="btn" type="button" data-savedoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}" title="Save it as a PDF named ${esc(docName(kind, jobId, despId))}.pdf">${icon('doc')}Save PDF</button>` : ''}
       <button class="btn" type="button" data-print data-name="${esc(docName(kind, jobId, despId))}">${icon('print')}Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
@@ -2691,7 +2714,7 @@ function showDoc(kind, jobId, despId) {
 /** The file name a document is saved under (Philip, 20 Oct: they keep despatch notes, so the customer's name is in it). */
 function docName(kind, jobId, despId) {
   const j = job(jobId); if (!j) return 'Document';
-  const no = kind === 'dn' ? j.despatches.find(x => x.id === despId)?.dn : kind === 'pf' ? (S.pfs || []).find(x => x.id === despId)?.pf : kind === 'job' ? 'Job sheet' : j.so;
+  const no = kind === 'dn' ? j.despatches.find(x => x.id === despId)?.dn : kind === 'pf' ? (S.pfs || []).find(x => x.id === despId)?.pf : kind === 'job' ? 'Front sheet' : j.so;
   const what = { dn: 'Delivery note', soa: 'Order acknowledgement', pf: 'Pro forma' }[kind];
   return [j.customer, what, no, kind === 'soa' ? '' : j.so].filter(Boolean).join(' - ').replace(/[\\/:*?"<>|#%]+/g, '-');
 }
@@ -3018,7 +3041,8 @@ function onClick(e) {
   if ('noask' in d) { S.ask = null; return render(); }
   if (d.status) return setStatus(+d.job, d.status);
   if (d.confirmdelete) return deleteOrder(+d.confirmdelete);
-  if ('oladd' in d) { collectForm(); S.form.lines.push(blankLine(S.form.due)); keepInputs = false; return render(); }
+  // A new line starts with the line above's processes: most lines on an order go the same way.
+  if ('oladd' in d) { collectForm(); S.form.lines.push(blankLine(S.form.due, S.form.lines[S.form.lines.length - 1]?.procs)); keepInputs = false; return render(); }
   if (d.oldel) { collectForm(); S.form.lines.splice(+d.oldel, 1); keepInputs = false; return render(); }
   if ('olsplit' in d) return splitLines();
   if ('olcancel' in d) { const back = S.form.jobId; S.form = null; if (back) S.open = back; return render(); }
@@ -3104,7 +3128,7 @@ document.addEventListener('input', e => {
     document.querySelector('#doc .paper').innerHTML = docHtml('pfnew', S.pfDraft.jobId);
     return;
   }
-  if (e.target.dataset.sq && S.sheet) {   // job sheet quantities: redraw the sheet, keep the box being typed in
+  if (e.target.dataset.sq && S.sheet) {   // front sheet quantities: redraw the sheet, keep the box being typed in
     S.sheet.qty[+e.target.dataset.sq] = Math.max(0, Math.floor(Number(e.target.value) || 0));
     document.querySelector('#doc .paper').innerHTML = docHtml('job', S.sheet.jobId);
     return;
@@ -3191,17 +3215,31 @@ document.addEventListener('change', e => {
   if (e.target.id === 'out-sent' && S.outForm && !$('out-due').dataset.touched && e.target.value) $('out-due').value = defaultDueBack(e.target.value);
   if (e.target.id === 'out-due') e.target.dataset.touched = '1';
   if (e.target.id === 'out-proc' && S.outForm) { const f = readOutForm(), j = job(f.jobId); S.outForm = { ...f, finish: f.finish || (j ? finishFor(j, f.process) : '') }; render(); }
-  if (e.target.name === 'of-p' && S.form) S.form.procsTouched = true;
-  // Same part made before: tick the processes it had then, until someone ticks by hand.
+  // Processes per line (22 Oct): All lines ticks or unticks that process on every line; a line's box keeps All lines in step.
+  if (S.form && (e.target.dataset.allp || e.target.name === 'of-lp')) {
+    S.form.procsTouched = true;
+    const p = e.target.value, col = [...document.querySelectorAll('input[name=of-lp]')].filter(i => i.value === p);
+    if (e.target.dataset.allp) col.forEach(i => { i.checked = e.target.checked; });
+    else { const all = [...document.querySelectorAll('input[data-allp]')].find(i => i.value === p); if (all) all.checked = col.every(i => i.checked); }
+  }
+  if (/^of-(part|pno)\d+$/.test(e.target.id) && S.form) {   // the Processes table names the line as it is typed
+    const i = +e.target.id.replace(/\D+/g, ''), cell = $('of-plbl' + i);
+    if (cell) cell.innerHTML = formLineName({ partNo: $('of-pno' + i)?.value, part: $('of-part' + i)?.value }, i);
+  }
+  // Same part made before: tick the processes that line had then, on that line only, until someone ticks by hand.
   if (/^of-(part|pno)\d+$/.test(e.target.id) && S.form && !S.form.procsTouched && !S.form.spQuoteId && S.form.mode !== 'amend') {
-    collectForm(); const n = S.form;
-    const hits = n.lines.map(l => processesFromHistory(S.jobs, lineLabel(l))).filter(Boolean);
-    if (hits.length) {
-      n.procs = PROCESSES.filter(p => n.procs.includes(p) || hits.some(h => h.processes.includes(p)));
-      n.procNote = `Ticked as on ${[...new Set(hits.map(h => h.so))].join(', ')} (the same part made before); check them.`;
+    collectForm(); const n = S.form, hits = [];
+    n.lines.forEach((l, i) => {
+      const h = processesFromHistory(S.jobs, lineLabel(l)); if (!h) return;
+      hits.push(h); l.procs = [...h.processes];   // nothing ticked by hand yet, so the earlier line's ticks replace what was copied
       // Ticked in place, not by redrawing the form: Tab from Part no. to Description (22 Oct) must keep its focus.
-      document.querySelectorAll('input[name=of-p]').forEach(i => { i.checked = n.procs.includes(i.value); });
-      if ($('of-pnote')) $('of-pnote').textContent = 'Processes this order needs. ' + n.procNote;
+      document.querySelectorAll(`input[name=of-lp][data-line="${i}"]`).forEach(x => { x.checked = l.procs.includes(x.value); });
+    });
+    if (hits.length) {
+      n.procs = unionProcs(n.lines);
+      document.querySelectorAll('input[data-allp]').forEach(x => { x.checked = n.lines.every(l => l.procs.includes(x.value)); });
+      n.procNote = `Ticked as on ${[...new Set(hits.map(h => h.so))].join(', ')} (the same part made before); check them.`;
+      if ($('of-pnote')) $('of-pnote').textContent = 'Processes each part needs. ' + n.procNote;
     }
   }
   if (e.target.id === 'of-site' && S.form) { const x = S.book.sites.find(y => y.id === +e.target.value); if (x) { collectForm(); S.form.address = x.address; keepInputs = false; render(); } }

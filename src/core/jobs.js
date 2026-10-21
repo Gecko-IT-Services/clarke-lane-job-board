@@ -5,11 +5,16 @@ import { normName } from './xero.js';
  * A job, as the app holds it:
  * { id, so, quote, spQuoteId, customer, contactName, contactEmail, po, ordered, due, notes,
  *   address, status: 'open' | 'held' | 'cancelled',
- *   lines: [{ id, lineNo, partNo, part, qty, price, due }], price is null for the floor role;
+ *   lines: [{ id, lineNo, partNo, part, qty, price, due, procs }], price is null for the floor role;
  *                                                          partNo: the Part no. box ('' when none),
  *                                                          part: the description (always there);
- *                                                          each line has its own due date (Sage)
- *   procs: { 'Laser': { done, by, at }, … },               only the processes the job needs
+ *                                                          each line has its own due date (Sage);
+ *                                                          procs: the processes this part needs (22 Oct),
+ *                                                          [] on lines from before then = every process
+ *                                                          on the order (read it with lineProcs)
+ *   procs: { 'Laser': { done, by, at }, … },               only the processes the job needs: every
+ *                                                          process any of its lines needs; ticked done
+ *                                                          once for the whole order
  *   despatches: [{ id, dn, date, by, lines: { [lineId]: qty }, xero: { no, at } | null }] }
  */
 
@@ -56,6 +61,22 @@ export const SHORT = { 'Laser': 'Laser', 'Fold': 'Fold', 'Cut & Drill': 'Cut & d
 export const sent = (job, line) => job.despatches.reduce((a, d) => a + (d.lines[line.id] || 0), 0);
 export const left = (job, line) => Math.max(0, line.qty - sent(job, line));
 export const needed = job => PROCESSES.filter(p => job.procs[p]);
+/**
+ * The processes one part line needs, in Levi's order (Levi, 22 Oct: "each part may need a different process").
+ * A line's own procs, kept to the processes on the order. A line from before then has none, so it needs every
+ * process on the order, exactly as it read before. A process on the order that no line lists (added to the
+ * order on its own, e.g. from a drawing) is needed by every line, as it was before. A line left with nothing
+ * reads as every process too: a line that needs no process at all is not something the board holds yet.
+ */
+export function lineProcs(job, line) {
+  const need = needed(job), listed = l => (l?.procs || []).filter(p => job.procs[p]);
+  if (!listed(line).length) return need;
+  const anyOld = (job.lines || []).some(l => !listed(l).length);
+  const orphan = anyOld ? [] : need.filter(p => !(job.lines || []).some(l => listed(l).includes(p)));
+  return need.filter(p => listed(line).includes(p) || orphan.includes(p));
+}
+/** The order's lines that need this process. */
+export const linesFor = (job, process) => (job.lines || []).filter(l => lineProcs(job, l).includes(process));
 export const doneCount = job => needed(job).filter(p => job.procs[p].done).length;
 export const allDone = job => needed(job).every(p => job.procs[p].done);
 
@@ -188,7 +209,8 @@ export function addWorkingDays(from, n) {
 /**
  * Lines for a repeat of an order: same parts, quantities and prices, with every due date moved
  * by the same number of days so the first lands on `firstDue` (a call-off schedule keeps its
- * spacing). Returns [{ partNo, part, qty, price, due }] with qty/price as strings for the form.
+ * spacing). Returns [{ partNo, part, qty, price, due }] with qty/price as strings for the form, plus the
+ * line's procs when it has them (pass lineProcs, so an older line copies as every process on the order).
  */
 export function repeatLines(lines, firstDue) {
   const days = s => Math.round(new Date(s + 'T12:00:00Z') / 864e5);
@@ -196,7 +218,8 @@ export function repeatLines(lines, firstDue) {
   const shift = days(firstDue) - start;
   return [...lines].sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : a.lineNo - b.lineNo)).map(l => {
     const d = new Date(l.due + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + shift);
-    return { partNo: l.partNo || '', part: l.part, qty: String(l.qty), price: l.price == null ? '' : String(l.price), due: d.toISOString().slice(0, 10) };
+    return { partNo: l.partNo || '', part: l.part, qty: String(l.qty), price: l.price == null ? '' : String(l.price), due: d.toISOString().slice(0, 10),
+      ...(l.procs ? { procs: [...l.procs] } : {}) };
   });
 }
 
@@ -314,11 +337,12 @@ export function boardLists(jobs) {
 export const nextStep = job => needed(job).find(p => !job.procs[p].done) || null;
 
 /** Quantity still to make per distinct part (first-seen order) and how much of it is due by the next delivery.
- *  [{ part: lineLabel, partNo, desc, left, next }]: partNo/desc so screens can lineHtml({ partNo, part: desc }). */
-export function partsLeft(job) {
+ *  [{ part: lineLabel, partNo, desc, left, next }]: partNo/desc so screens can lineHtml({ partNo, part: desc }).
+ *  With a process (a station's tablet, 22 Oct): only the lines that need it. */
+export function partsLeft(job, process) {
   const by = new Map(), nd = nextDue(job);
   // Grouped by how the line reads, so the same description under two part numbers stays two parts.
-  for (const l of job.lines) { const k = lineLabel(l), r = by.get(k) || { part: k, partNo: lineNo(l), desc: lineDesc(l), left: 0, next: 0 }; r.left += left(job, l); if (l.due <= nd) r.next += left(job, l); by.set(k, r); }
+  for (const l of process ? linesFor(job, process) : job.lines) { const k = lineLabel(l), r = by.get(k) || { part: k, partNo: lineNo(l), desc: lineDesc(l), left: 0, next: 0 }; r.left += left(job, l); if (l.due <= nd) r.next += left(job, l); by.set(k, r); }
   return [...by.values()].filter(r => r.left > 0);
 }
 

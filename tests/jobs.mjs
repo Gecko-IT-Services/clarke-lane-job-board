@@ -308,6 +308,41 @@ console.log('jobs: ok');
   console.log('jobs partsLeft: ok');
 }
 
+// — Processes per part line (Levi, 22 Oct): lineProcs, linesFor, partsLeft for one station. —
+{
+  const { lineProcs, linesFor } = await import('../src/core/jobs.js');
+  const procs = { Laser: { done: false }, Fold: { done: false }, Weld: { done: false }, 'P/Coat Paint': { done: false } };
+  const p = job({ procs, lines: [
+    { id: 10, lineNo: 1, part: 'Cabinet', qty: 5, price: 1, due: '2026-10-30', procs: ['Weld', 'Laser', 'P/Coat Paint', 'Fold'] },
+    { id: 11, lineNo: 2, part: 'Door', qty: 5, price: 1, due: '2026-10-30', procs: ['Laser', 'Fold', 'Rolling'] }] });
+  assert.deepEqual(lineProcs(p, p.lines[0]), ['Laser', 'Fold', 'Weld', 'P/Coat Paint'], "in Levi's order");
+  assert.deepEqual(lineProcs(p, p.lines[1]), ['Laser', 'Fold'], 'a process the order does not have is left out');
+  assert.deepEqual(linesFor(p, 'Weld').map(l => l.id), [10]);
+  assert.deepEqual(linesFor(p, 'Laser').map(l => l.id), [10, 11]);
+  assert.deepEqual(linesFor(p, 'Rolling'), [], 'not on the order: no line needs it');
+  assert.deepEqual(partsLeft(p, 'Weld').map(r => r.part), ['Cabinet'], 'a station sees only the parts that need it');
+  assert.deepEqual(partsLeft(p, 'Fold').map(r => r.part), ['Cabinet', 'Door']);
+  assert.deepEqual(partsLeft(p).map(r => r.part), ['Cabinet', 'Door'], 'no process: every part, as before');
+  // Lines from before 22 Oct have no procs: every process on the order, exactly as before.
+  const old = job({ procs });
+  assert.deepEqual(old.lines.map(l => lineProcs(old, l)), [['Laser', 'Fold', 'Weld', 'P/Coat Paint'], ['Laser', 'Fold', 'Weld', 'P/Coat Paint']]);
+  const empty = job({ procs, lines: old.lines.map(l => ({ ...l, procs: [] })) });
+  assert.deepEqual(lineProcs(empty, empty.lines[0]), ['Laser', 'Fold', 'Weld', 'P/Coat Paint'], '[] reads as every process');
+  assert.deepEqual(linesFor(empty, 'Weld').map(l => l.id), [10, 11]);
+  assert.deepEqual(partsLeft(empty, 'Weld'), partsLeft(empty));
+  // A process added to the order on its own (a drawing's hint) that no line lists: every line needs it.
+  const added = job({ procs: { ...procs, Insert: { done: false } }, lines: p.lines });
+  assert.deepEqual(lineProcs(added, added.lines[1]), ['Laser', 'Fold', 'Insert']);
+  // One old line and one new: the old line has every process, so nothing is left over for the new one.
+  const mixed = job({ procs, lines: [{ ...p.lines[1] }, { id: 12, lineNo: 3, part: 'Frame', qty: 1, price: 1, due: '2026-10-30' }] });
+  assert.deepEqual(lineProcs(mixed, mixed.lines[0]), ['Laser', 'Fold']);
+  assert.deepEqual(lineProcs(mixed, mixed.lines[1]), ['Laser', 'Fold', 'Weld', 'P/Coat Paint']);
+  // A line whose procs are all off the order reads as every process rather than none.
+  const gone = job({ procs: { Laser: { done: false } }, lines: [{ ...p.lines[0], procs: ['Weld'] }] });
+  assert.deepEqual(lineProcs(gone, gone.lines[0]), ['Laser']);
+  console.log('jobs line processes: ok');
+}
+
 // — Dispatch tab: what is ready, and where each dispatch note is. —
 {
   const L = [{ id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 13.1, due: '2026-10-30' }];

@@ -31,6 +31,14 @@ assert.equal(tvColumns(rows).length, 8);
 const p = tvPage([1, 2, 3, 4, 5], 2, 4);   // wraps: page 4 of 3 is the second page
 assert.deepEqual([p.rows, p.page, p.pages], [[3, 4], 1, 3]);
 assert.equal(tvPage([], 10, 0).pages, 1);
+// Parts with different processes (22 Oct): the TV row still shows every process on the order.
+{
+  const mixed = job(5, { Laser: { done: false }, Fold: { done: false }, Weld: { done: false } }, { lines: [
+    { id: 50, part: 'Cabinet', qty: 1, due: '2026-10-22', procs: ['Laser', 'Weld'] }, { id: 51, part: 'Door', qty: 1, due: '2026-10-22', procs: ['Laser', 'Fold'] }] });
+  const row = tvRows([mixed], [], '2026-10-20')[0];
+  assert.deepEqual(['Laser', 'Fold', 'Weld'].map(p => row.cells[p].state), ['next', 'todo', 'todo']);
+  assert.equal(row.steps, 3);
+}
 console.log('tv: ok');
 {
   const notes = [{ id: 1, jobId: 1, body: 'Boxes of 10', byName: 'Mandy', fromFloor: false, seenBy: null, at: '2026-10-21T09:00:00Z' }];
