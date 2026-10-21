@@ -45,7 +45,7 @@ non-staff session is easy to obtain as well; that reaches `create_proforma` (ret
 RLS table policies are not affected: a NULL policy result denies. Workshop users are not affected: their
 role is non-null, so the guard raises correctly.
 
-**Fixed, pending merge:** `supabase/migrations/20261021160000_anon_rpc.sql` makes `is_staff`, `is_office`
+**Fixed, pending merge:** `supabase/migrations/20261022170000_anon_rpc.sql` makes `is_staff`, `is_office`
 and `is_md` coalesce to false, revokes execute from anon on every public function, and changes the
 default privileges so new functions are not granted to anon. `tests/rpc-anon.mjs` calls every RPC against
 the live project with the publishable key and expects 42501; it fails (naming 15 open functions) until the

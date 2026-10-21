@@ -4,8 +4,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 // — Every table the migrations leave in place has RLS on and a policy. The site
 //   is public and its key is public: a table without RLS is readable by anyone. —
 const dir = new URL('../supabase/migrations/', import.meta.url);
-const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort()
-  .map(f => readFileSync(new URL(f, dir), 'utf8')).join('\n').toLowerCase();
+const files = readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
+const sql = files.map(f => readFileSync(new URL(f, dir), 'utf8')).join('\n').toLowerCase();
+
+// — One version number per migration. The version is the 14-digit prefix; Supabase records only that, so
+//   two files sharing one are one migration to it: the second never runs, and the push can fail on the
+//   first (21 Oct: 20261021160000 was both customer_folders and anon_rpc, and the anon fix did not go live). —
+const versions = files.map(f => f.slice(0, 14));
+assert.ok(versions.every(v => /^\d{14}$/.test(v)), 'every migration starts with a 14-digit version');
+assert.deepEqual(versions.filter((v, i) => versions.indexOf(v) !== i), [], 'no two migrations share a version');
 const created = [...sql.matchAll(/create table (?:if not exists )?(public\.\w+)/g)].map(m => m[1]);
 const dropped = new Set([...sql.matchAll(/drop table (public\.\w+)/g)].map(m => m[1]));
 const live = created.filter(t => !dropped.has(t));
@@ -20,7 +27,7 @@ assert.match(sql, /create policy \w+ on public\.job_line_prices\s+for select to 
 assert.ok(!/job_lines \([^;]*price/.test(sql), 'job_lines carries no price column');
 
 // — The role helpers are never NULL: "if not is_office()" must raise for a caller who is not on
-//   the staff list, and anon can execute nothing (see 20261021160000_anon_rpc.sql). —
+//   the staff list, and anon can execute nothing (see 20261022170000_anon_rpc.sql). —
 const last = (name) => [...sql.matchAll(new RegExp(`create(?: or replace)? function public\\.${name}\\(\\)[^$]*\\$\\$([^$]*)\\$\\$`, 'g'))].at(-1)[1];
 for (const h of ['is_staff', 'is_office', 'is_md']) assert.match(last(h), /coalesce\(.*, false\)/, `${h}() is never null`);
 assert.ok(sql.includes('revoke execute on all functions in schema public from anon'), 'anon can call no function');
