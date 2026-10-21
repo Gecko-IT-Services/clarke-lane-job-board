@@ -325,7 +325,8 @@ body.tv-mode{background:#fff;overflow:hidden} body.tv-mode #app{max-width:none;p
 .tvgrid{flex:1;width:100%;border-collapse:collapse;table-layout:fixed;border:.3vh solid #8E949C}
 .tvgrid th,.tvgrid td{border:1px solid var(--tv-line);padding:0 .6vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tvgrid thead th{font-size:1.5vh;font-weight:700;text-transform:uppercase;letter-spacing:0;text-overflow:clip;padding:0 .3vw;color:#3A4048;height:7vh;line-height:1.15;white-space:normal;background:#F4F5F7;border-bottom:.3vh solid #8E949C}
-.tvgrid th.cu,.tvgrid td.cu{width:18%;text-align:left} .tvgrid th.so,.tvgrid td.so{width:6.5%} .tvgrid th.due,.tvgrid td.due{width:8.5%} .tvgrid th.note,.tvgrid td.note{width:20%;text-align:left}
+.tvgrid th.cu,.tvgrid td.cu{width:25%;text-align:left} .tvgrid th.so,.tvgrid td.so{width:6.5%} .tvgrid th.due,.tvgrid td.due{width:8.5%} .tvgrid th.note,.tvgrid td.note{width:15%;text-align:left}
+.tvgrid td.cu{white-space:normal} .tvgrid td.cu .tvcu{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.08}   /* long names on two lines, not cut off (Philip, 21 Oct) */
 .tvgrid tbody tr{height:calc((100vh - 26vh) / var(--rows))}
 .tvgrid td{font-size:2.5vh;text-align:center} .tvgrid td.cu{font-weight:700;font-size:2.6vh} .tvgrid td.so{font-family:var(--mono);font-size:2.4vh;font-weight:600}
 .tvgrid td.c svg{width:3.6vh;height:3.6vh;vertical-align:middle} .tvgrid td.done{color:var(--tv-tick)} .tvgrid td.todo{color:var(--tv-star)} .tvgrid td.next{color:#fff;background:var(--tv-star)}

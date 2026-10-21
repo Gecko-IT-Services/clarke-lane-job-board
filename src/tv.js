@@ -25,7 +25,7 @@ export function renderTv({ jobs, outwork, notes = [], today, now, page }, h) {
   const note = r => r.jobNote ? `<td class="note jnote${r.jobNote.fresh ? ' new' : ''}${r.held ? ' held' : ''}"><span class="tvn">${esc(r.jobNote.body)}</span><small>${esc(r.jobNote.by)}${r.note ? ' · ' + esc(r.note) : ''}</small></td>`
     : `<td class="note${r.held ? ' held' : r.ready ? ' ready' : r.outLate ? ' late' : ''}">${esc(r.note)}${r.outBack ? `<small>back ${esc(fmt(r.outBack))}</small>` : ''}</td>`;
   const rows = p.rows.map(r => `<tr class="${r.held ? 'held' : r.ready ? 'ready' : r.late ? 'late' : ''}">
-      <td class="cu">${esc(r.customer)}</td><td class="so">${esc(r.so.replace(/^SO-/, ''))}</td>${cols.map(c => cell(r.cells[c])).join('')}${due(r)}${note(r)}</tr>`).join('');
+      <td class="cu"><span class="tvcu">${esc(r.customer)}</span></td><td class="so">${esc(r.so.replace(/^SO-/, ''))}</td>${cols.map(c => cell(r.cells[c])).join('')}${due(r)}${note(r)}</tr>`).join('');
   const blanks = Array.from({ length: Math.max(0, TV_ROWS - p.rows.length) }, () => `<tr class="blank"><td></td><td></td>${cols.map(() => '<td class="c"></td>').join('')}<td></td><td></td></tr>`).join('');
   const late = all.filter(r => r.late).length, ready = all.filter(r => r.ready).length, out = all.filter(r => r.note.startsWith('At ')).length;
   const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
