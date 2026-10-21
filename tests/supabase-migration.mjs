@@ -19,6 +19,15 @@ for (const t of live) {
 assert.match(sql, /create policy \w+ on public\.job_line_prices\s+for select to authenticated using \(public\.is_office\(\)\)/);
 assert.ok(!/job_lines \([^;]*price/.test(sql), 'job_lines carries no price column');
 
+// — The role helpers are never NULL: "if not is_office()" must raise for a caller who is not on
+//   the staff list, and anon can execute nothing (see 20261021160000_anon_rpc.sql). —
+const last = (name) => [...sql.matchAll(new RegExp(`create(?: or replace)? function public\\.${name}\\(\\)[^$]*\\$\\$([^$]*)\\$\\$`, 'g'))].at(-1)[1];
+for (const h of ['is_staff', 'is_office', 'is_md']) assert.match(last(h), /coalesce\(.*, false\)/, `${h}() is never null`);
+assert.ok(sql.includes('revoke execute on all functions in schema public from anon'), 'anon can call no function');
+assert.ok(sql.includes('alter default privileges for role postgres in schema public revoke execute on functions from anon'), 'new functions are not granted to anon');
+// Every "if not X()" guard uses a helper that is never null.
+for (const m of sql.matchAll(/if not public\.(\w+)\(\)/g)) assert.ok(['is_staff', 'is_office', 'is_md'].includes(m[1]), `guard ${m[1]} is a known helper`);
+
 // — Levi's nine processes, exactly. —
 const procs = sql.match(/process\s+text not null check \(process in \(([^)]*)\)\)/)[1]
   .split(',').map(s => s.trim().replace(/'/g, ''));
