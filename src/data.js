@@ -908,15 +908,16 @@ export async function deleteSite(id) {
   if (error) fail('Not removed', error);
 }
 
-/** Cancel a job made by mistake. Refused once anything has been despatched. */
+/** Delete a job made by mistake. Refused once it has a dispatch note, pro forma, purchase order or
+ *  send-out (the database's jobs_office_delete policy): such an order is cancelled, not deleted. */
 export async function deleteJob(jobId) {
   const sb = await getSupabase();
   const { error, count } = await sb.from('jobs').delete({ count: 'exact' }).eq('id', jobId);
   if (error) {
-    if (error.code === '23503') throw new Error('This job has dispatch notes, so it cannot be cancelled.');
-    fail('The job was not cancelled', error);
+    if (error.code === '23503') throw new Error('This job has dispatch notes, so it cannot be deleted. Cancel it instead.');
+    fail('The job was not deleted', error);
   }
-  if (!count) throw new Error('The job was not cancelled. Only Levi and Mandy can cancel jobs.');
+  if (!count) throw new Error('The job was not deleted: only Levi and Mandy can, and only before it has a dispatch note, pro forma, purchase order or send-out. Cancel it instead.');
 }
 
 /* ---------- where the van is (the driver's phone, while sharing is on) ---------- */

@@ -406,6 +406,9 @@ async function setStatus(id, status, undoing = false) {
 }
 async function deleteOrder(id) {
   const j = job(id);
+  const paperwork = j.despatches.length || j.cancelledDespatches.length ? 'a dispatch note' : (S.pfs || []).some(p => p.jobId === id) ? 'a pro forma'
+    : (S.pos || []).some(p => p.jobId === id) ? 'a purchase order' : (S.outwork || []).some(o => o.jobId === id) ? 'a send-out' : '';
+  if (paperwork) { S.ask = null; render(); return toast(`${j.so} has ${paperwork}, so it cannot be deleted. Cancel it instead: that keeps the record.`, null, true); }
   try { await data.deleteJob(id); S.open = null; S.ask = null; toast(`${j.so} deleted.`); }
   catch (e) { toast(e.message, null, true); }
   reload();
