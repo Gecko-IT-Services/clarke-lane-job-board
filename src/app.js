@@ -780,7 +780,7 @@ async function copyXeroToBook() {
   try { const d = await data.xero('contact', { id: xc.id });
     S.bookEdit = { kind: 'person', role: 'accounts', name: d.person || '', email: d.email || '', main: !bookFor(name).people.some(p => p.role === 'accounts') };
     if (d.address && !bookFor(name).sites.length) toast('Xero\'s address can be added under Delivery addresses if goods go there.');
-    render();
+    keepInputs = false; render();
   } catch (e) { toast(e.message, null, true); }
 }
 
@@ -2390,21 +2390,20 @@ document.addEventListener('drop', e => {
 window.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files') && !dropZone(e)) e.preventDefault(); });
 
 /* ---------- reading a drawing: the PDF's text, in the browser (pdf.js), into suggested processes ---------- */
+// The drawings come from customers, so the reader must never run anything in them: isEvalSupported off,
+// and a pdf.js from after CVE-2024-4367 (3.x ran JavaScript hidden in a font).
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/';
 let pdfReader = null;
 function loadPdfJs() {
-  pdfReader ??= new Promise((ok, bad) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); };
-    s.onerror = () => { pdfReader = null; bad(new Error('Could not load the PDF reader. Check the internet connection.')); };
-    document.head.appendChild(s);
-  });
+  pdfReader ??= import(PDFJS + 'pdf.min.mjs')
+    .then(lib => { lib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.mjs'; return lib; })
+    .catch(() => { pdfReader = null; throw new Error('Could not load the PDF reader. Check the internet connection.'); });
   return pdfReader;
 }
 /** The text of a PDF (a Blob, or its bytes: the quote pack's attachments come as bytes), first 6 pages. */
 async function pdfText(src) {
   const lib = await loadPdfJs();
-  const doc = await lib.getDocument({ data: src instanceof Uint8Array ? src : new Uint8Array(await src.arrayBuffer()) }).promise;
+  const doc = await lib.getDocument({ data: src instanceof Uint8Array ? src : new Uint8Array(await src.arrayBuffer()), isEvalSupported: false }).promise;
   const out = [];
   for (let i = 1; i <= Math.min(doc.numPages, 6); i++) out.push((await (await doc.getPage(i)).getTextContent()).items.map(x => x.str).join(' '));
   return out.join(' \n ');
@@ -2892,9 +2891,14 @@ function closeDoc() { S.poForm = null; $('doc').hidden = true; document.body.cla
 
 /* ---------- render + events ---------- */
 let keepInputs = true;
+const KEPT_FIELDS = '#views input, #views select, #views textarea, #drawer input, #drawer select, #drawer textarea';
+let keptFocus = null;   // the field being typed in when the screen was redrawn, and where the cursor was
 function snapshotInputs() {
   const m = new Map();
-  if (keepInputs) document.querySelectorAll('#views input, #views select, #views textarea, #drawer input').forEach(el => {
+  const a = document.activeElement;
+  keptFocus = keepInputs && a?.id && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.closest('#views, #drawer')
+    ? { id: a.id, start: a.selectionStart, end: a.selectionEnd } : null;
+  if (keepInputs) document.querySelectorAll(KEPT_FIELDS).forEach(el => {
     const k = el.id || (el.name ? el.name + '=' + el.value : '');
     if (k && el.type !== 'search') m.set(k, el.type === 'checkbox' ? el.checked : el.value);
   });
@@ -2902,11 +2906,17 @@ function snapshotInputs() {
   return m;
 }
 function restoreInputs(m) {
-  document.querySelectorAll('#views input, #views select, #views textarea, #drawer input').forEach(el => {
+  document.querySelectorAll(KEPT_FIELDS).forEach(el => {
     const k = el.id || (el.name ? el.name + '=' + el.value : '');
     if (!m.has(k)) return;
     if (el.type === 'checkbox') el.checked = m.get(k); else el.value = m.get(k);
   });
+  const kf = keptFocus; keptFocus = null;
+  const f = kf && $(kf.id);
+  if (f && document.activeElement !== f) {
+    f.focus({ preventScroll: true });
+    try { if (kf.start != null && f.selectionStart != null) f.setSelectionRange(kf.start, kf.end); } catch { /* a date or number box has no cursor */ }
+  }
 }
 function render() {
   if (!S.me) return;
@@ -3001,11 +3011,11 @@ function onClick(e) {
   if ('goback' in d) return history.back();
   if ('preview' in d) return enterPreview();
   if (d.cust) { S.cust = d.cust; S.custName = null; S.bookEdit = null; S.ctab = S.ctab || 'overview'; return render(); }
-  if ('addperson' in d) { S.bookEdit = { kind: 'person', role: 'orders', main: false }; return render(); }
-  if ('addsite' in d) { S.bookEdit = { kind: 'site', main: false }; return render(); }
-  if (d.editperson) { S.bookEdit = { kind: 'person', ...S.book.people.find(p => p.id === +d.editperson) }; return render(); }
-  if (d.editsite) { S.bookEdit = { kind: 'site', ...S.book.sites.find(x => x.id === +d.editsite) }; return render(); }
-  if ('bookcancel' in d) { S.bookEdit = null; return render(); }
+  if ('addperson' in d) { S.bookEdit = { kind: 'person', role: 'orders', main: false }; keepInputs = false; return render(); }
+  if ('addsite' in d) { S.bookEdit = { kind: 'site', main: false }; keepInputs = false; return render(); }
+  if (d.editperson) { S.bookEdit = { kind: 'person', ...S.book.people.find(p => p.id === +d.editperson) }; keepInputs = false; return render(); }
+  if (d.editsite) { S.bookEdit = { kind: 'site', ...S.book.sites.find(x => x.id === +d.editsite) }; keepInputs = false; return render(); }
+  if ('bookcancel' in d) { S.bookEdit = null; keepInputs = false; return render(); }
   if (d.delperson) return data.deletePerson(+d.delperson).then(reload).then(() => toast('Removed.')).catch(err => toast(err.message, null, true));
   if (d.delsite) return data.deleteSite(+d.delsite).then(reload).then(() => toast('Removed.')).catch(err => toast(err.message, null, true));
   if ('fromxerobook' in d) return copyXeroToBook();
