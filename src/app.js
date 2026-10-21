@@ -1118,7 +1118,7 @@ async function syncEnquiries(manual) {
       const id = await data.claimEnquiry({ ...m, mailbox });
       if (id) { await data.setEnquiry(id, { kind: x.kind, summary: x.summary || '', company: x.company || '', person: x.person || m.fromName, phone: x.phone || '', wants: x.wants || '', hasDrawings: !!x.hasDrawings || attachments.some(a => /\.(pdf|dxf|dwg|step|stp|igs)$/i.test(a)), customerKey: whoIs(customerIdx(), m.fromEmail)?.key || '' }); read++; }
     }
-    S.enqState = 'ok';
+    S.enqState = 'ok'; S.enqCheckedAt = new Date().toISOString();
     if (read || manual) { S.enq = await data.loadEnquiries(); if (manual) toast(read ? `${read} new email${read === 1 ? '' : 's'} read.` : 'Nothing new in the mailbox.'); }
   } catch (e) {
     S.enqState = e.code === 'CONSENT_REQUIRED' ? 'consent' : /403|denied|not found|404/i.test(e.message) ? 'noaccess' : 'error:' + e.message;
@@ -1130,7 +1130,7 @@ setInterval(() => { if (!document.hidden && S.me && office()) syncEnquiries(); }
 function enquiriesHtml() {
   if (!office()) return '';
   return renderEnquiries({ list: enquiryList(S.enq || [], new Date().toISOString()), funnel: enquiryFunnel(S.enq || [], todayIso()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
-    open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply }, { esc, fmt, fmtTime });
+    open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply, checkedAt: S.enqCheckedAt, settings: S.enqSettings }, { esc, fmt, fmtTime });
 }
 async function replyEnquiry(id) {
   const e = (S.enq || []).find(x => x.id === id); if (!e) return;
@@ -2765,8 +2765,9 @@ function onClick(e) {
   if (d.enqsend) return sendEnquiryReply(+d.enqsend);
   if (d.enqnewcust) return enquiryToCustomer(+d.enqnewcust);
   if ('enqsync' in d) return syncEnquiries(true);
+  if ('enqsettings' in d) { S.enqSettings = !S.enqSettings; return render(); }
   if ('enqmailbox' in d) { const v = $('enq-mailbox').value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return toast('That is not an email address.', null, true);
-    data.saveOfficeSetting('enquiry_mailbox', v).then(async () => { S.officeSet = await data.loadOfficeSettings(); S.enqState = 'reading'; toast(`Enquiries will be read from ${v}.`); syncEnquiries(true); }).catch(e => toast(e.message, null, true)); return; }
+    data.saveOfficeSetting('enquiry_mailbox', v).then(async () => { S.officeSet = await data.loadOfficeSettings(); S.enqState = 'reading'; S.enqSettings = false; toast(`Enquiries will be read from ${v}.`); syncEnquiries(true); }).catch(e => toast(e.message, null, true)); return; }
   if ('enqdoneall' in d) { const xs = (S.enq || []).filter(e => e.kind === 'customer' && e.status === 'new');
     Promise.all(xs.map(e => data.setEnquiry(e.id, { status: 'ignored', by: S.me.email }))).then(async () => { S.enq = await data.loadEnquiries(); render(); }).catch(e => toast(e.message, null, true)); return; }
   if ('goenq' in d) { S.tab = 'customers'; render(); setTimeout(() => $('enquiries')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
