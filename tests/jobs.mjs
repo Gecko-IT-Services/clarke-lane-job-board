@@ -87,6 +87,31 @@ const rep = repeatLines([{ lineNo: 2, part: 'B', qty: 60, price: 76.26, due: '20
 assert.deepEqual(rep.map(l => `${l.qty} ${l.price} ${l.due}`), ['60 76.26 2026-12-01', '60 76.26 2026-12-08']);
 assert.equal(repeatLines([{ part: 'x', qty: 1, price: null, due: '2026-10-16' }], '2026-10-20')[0].price, '', 'hidden price stays blank');
 
+// Repeat order keeps each line's Part no. box (22 Oct).
+assert.equal(repeatLines([{ partNo: 'BRK-1001', part: 'Bracket', qty: 1, price: 2, due: '2026-10-16' }], '2026-10-20')[0].partNo, 'BRK-1001');
+assert.equal(repeatLines([{ part: 'Bracket', qty: 1, price: 2, due: '2026-10-16' }], '2026-10-20')[0].partNo, '', 'an old line has none');
+
+// — How a line reads (Mandy, 22 Oct: a Part no. box and a Description box, like Xero and Sage). —
+{
+  const { lineLabel, lineHtml, xeroLineFields } = await import('../src/core/jobs.js');
+  const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  assert.equal(lineLabel({ partNo: 'BRK-1001', part: 'Mounting bracket' }), 'BRK-1001 · Mounting bracket', 'both');
+  assert.equal(lineLabel({ partNo: '', part: 'Mounting bracket 3mm S275' }), 'Mounting bracket 3mm S275', 'an old line reads as before');
+  assert.equal(lineLabel({ part: 'Cover' }), 'Cover', 'no partNo at all');
+  assert.equal(lineLabel({ part_no: 'BRK-1001', part: 'Bracket' }), 'BRK-1001 · Bracket', 'the database name works too');
+  assert.equal(lineLabel({ partNo: ' BRK-1001 ', part: '' }), 'BRK-1001', 'just the part number');
+  assert.equal(lineLabel({ partNo: 'BRK-1001', part: 'brk 1001' }), 'BRK-1001', 'not said twice');
+  assert.equal(lineLabel({}), '');
+  assert.equal(lineHtml({ partNo: 'A<1', part: 'Plate & cover' }, esc), '<span class="mono">A&lt;1</span> Plate &amp; cover', 'escaped, number in mono');
+  assert.equal(lineHtml({ partNo: '', part: 'Plate' }, esc), 'Plate');
+  assert.deepEqual(xeroLineFields({ code: 'BRK-1001', description: 'BRK-1001 Bracket, zinc' }), { partNo: 'BRK-1001', part: 'Bracket, zinc' }, 'code not repeated in the description');
+  assert.deepEqual(xeroLineFields({ code: 'BRK-1001', description: 'Bracket' }), { partNo: 'BRK-1001', part: 'Bracket' });
+  assert.deepEqual(xeroLineFields({ code: '', description: 'AB-12345 Bracket' }), { partNo: '', part: 'AB-12345 Bracket' }, 'no code: no guessing');
+  assert.deepEqual(xeroLineFields({ code: 'BRK-10', description: 'BRK-1001 Bracket' }), { partNo: 'BRK-10', part: 'BRK-1001 Bracket' }, 'only the whole code is taken off');
+  assert.deepEqual(xeroLineFields({ code: 'BRK-1001', description: '' }), { partNo: 'BRK-1001', part: 'BRK-1001' }, 'a description is required');
+  console.log('jobs lineLabel: ok');
+}
+
 console.log('jobs: ok');
 
 // — Running order: placed jobs first, the rest by due date; moving keeps the rest in date order. —
@@ -278,7 +303,7 @@ console.log('jobs: ok');
     { id: 11, lineNo: 2, part: 'Plate', qty: 5, price: 1, due: '2026-10-10' },
     { id: 12, lineNo: 3, part: 'Bracket', qty: 30, price: 1, due: '2026-10-20' }],
     despatches: [{ lines: { 11: 5, 10: 5 }, date: '2026-10-02' }] });
-  assert.deepEqual(partsLeft(p), [{ part: 'Bracket', left: 45, next: 15 }], 'Plate fully sent drops out; next = due by the next delivery');
+  assert.deepEqual(partsLeft(p), [{ part: 'Bracket', partNo: '', desc: 'Bracket', left: 45, next: 15 }], 'Plate fully sent drops out; next = due by the next delivery');
   assert.equal(dayNo('2026-10-02') - dayNo('2026-10-01'), 1);
   console.log('jobs partsLeft: ok');
 }
@@ -324,15 +349,20 @@ console.log('jobs: ok');
   ];
   const items = [{ code: 'BR3', description: 'Bracket 3mm', price: 11 }, { code: 'PL', description: 'Plate 6mm', price: 30 }];
   const s = partSuggestions(jobs, items, 'vfs ltd');
-  assert.deepEqual(s.map(x => [x.part, x.price, x.from]), [['bracket  3mm', 12.4, 'customer'], ['Cover', 5, 'customer'], ['Guard', 8, 'board'], ['PL Plate 6mm', 30, 'xero']],
+  assert.deepEqual(s.map(x => [x.part, x.price, x.from]), [['bracket  3mm', 12.4, 'customer'], ['Cover', 5, 'customer'], ['Guard', 8, 'board'], ['PL · Plate 6mm', 30, 'xero']],
     'latest price for the customer wins; a Xero item already ordered is not repeated; blank parts ignored');
   assert.deepEqual(partSuggestions([], items, 'x').map(x => x.from), ['xero', 'xero']);
   // Xero products by part number (code in front), and Parts for the customer (Mandy, 20 Oct).
   const vfs = partSuggestions([], [{ code: 'VFS01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'VFS (Southampton) Ltd');
-  assert.deepEqual(vfs.map(x => x.part), ['VFS01-11-1696 Post - Rear LH - Support'], 'typing the part number finds it');
+  assert.deepEqual(vfs.map(x => x.part), ['VFS01-11-1696 · Post - Rear LH - Support'], 'typing the part number finds it');
+  assert.deepEqual(vfs.map(x => [x.partNo, x.description]), [['VFS01-11-1696', 'Post - Rear LH - Support']], 'picking it fills both boxes (22 Oct)');
   const withParts = partSuggestions([], [{ code: 'VFS01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'VFS (Southampton) Ltd',
     [{ partNo: 'VFS01-11-1696', description: 'Post - Rear LH', customerKey: 'vfssouthampton' }, { partNo: 'EX-1', description: 'Shim', customerKey: 'other' }]);
-  assert.deepEqual(withParts.map(x => [x.part, x.from]), [['VFS01-11-1696 Post - Rear LH', 'customer'], ['EX-1 Shim', 'parts']], 'Parts first; the same number from Xero not repeated');
+  assert.deepEqual(withParts.map(x => [x.part, x.from]), [['VFS01-11-1696 · Post - Rear LH', 'customer'], ['EX-1 · Shim', 'parts']], 'Parts first; the same number from Xero not repeated');
+  assert.deepEqual(withParts.map(x => [x.partNo, x.description]), [['VFS01-11-1696', 'Post - Rear LH'], ['EX-1', 'Shim']], 'a Parts part fills Part no. and Description');
+  // An earlier order's line with a Part no. box offers both; one without offers its text with Part no. empty.
+  const own = partSuggestions([{ so: 'SO-9', customer: 'Acme Fab', ordered: '2026-10-21', lines: [{ partNo: 'BRK-1001', part: 'Mounting bracket', price: 3 }, { partNo: '', part: 'Cover plate', price: 2 }] }], [], 'Acme Fab');
+  assert.deepEqual(own.map(x => [x.part, x.partNo, x.description]), [['BRK-1001 · Mounting bracket', 'BRK-1001', 'Mounting bracket'], ['Cover plate', '', 'Cover plate']]);
   console.log('jobs part suggestions: ok');
 }
 
@@ -480,6 +510,7 @@ console.log('jobs: ok');
     { id: 2, so: 'SO-9736', status: 'open', xeroQuoteId: 'q1', lines: [{ id: 21, part: '01-11-1696 Bracket, 2mm' }] },
     { id: 3, so: 'SO-9737', status: 'cancelled', xeroQuoteId: 'q1', lines: [{ id: 31, part: 'Bracket, 2mm' }] }];
   assert.deepEqual(missingLineCodes(jobs, xo).map(f => [f.id, f.code]), [[11, '01-11-1696']], 'only lines that match and lack it; cancelled left alone');
+  assert.deepEqual(missingLineCodes([{ id: 4, so: 'SO-9738', status: 'open', xeroQuoteId: 'q1', lines: [{ id: 41, partNo: '01-11-1696', part: 'Bracket, 2mm' }] }], xo), [], 'already in its Part no. box (22 Oct)');
   console.log('xero item codes: ok');
 }
 

@@ -5,11 +5,45 @@ import { normName } from './xero.js';
  * A job, as the app holds it:
  * { id, so, quote, spQuoteId, customer, contactName, contactEmail, po, ordered, due, notes,
  *   address, status: 'open' | 'held' | 'cancelled',
- *   lines: [{ id, lineNo, part, qty, price, due }],       price is null for the floor role;
+ *   lines: [{ id, lineNo, partNo, part, qty, price, due }], price is null for the floor role;
+ *                                                          partNo: the Part no. box ('' when none),
+ *                                                          part: the description (always there);
  *                                                          each line has its own due date (Sage)
  *   procs: { 'Laser': { done, by, at }, … },               only the processes the job needs
  *   despatches: [{ id, dn, date, by, lines: { [lineId]: qty }, xero: { no, at } | null }] }
  */
+
+/**
+ * How a line reads everywhere it is shown (Mandy, 22 Oct: "a 'part number' box and a separate 'description' box,
+ * like Xero and Sage"): the part number and the description together, "BRK-1001 · Mounting bracket", or just the
+ * one that is there. Lines from before the Part no. box have their whole text in part and partNo empty, so they
+ * read exactly as they did. Takes the app's partNo or the database's part_no; a description that is only the
+ * part number again is not said twice.
+ */
+const lineNo = l => String(l?.partNo ?? l?.part_no ?? '').trim();
+const lineDesc = l => String(l?.part ?? '').trim();
+const sameText = (a, b) => a.toUpperCase().replace(/[\s_-]+/g, '') === b.toUpperCase().replace(/[\s_-]+/g, '');
+export function lineLabel(l) {
+  const no = lineNo(l), d = lineDesc(l);
+  return !no ? d : !d || sameText(no, d) ? no : `${no} · ${d}`;
+}
+/** lineLabel for screens and documents: the part number in mono (as Parts shows them), then the description. */
+export function lineHtml(l, esc) {
+  const no = lineNo(l), d = lineDesc(l);
+  return !no ? esc(d) : !d || sameText(no, d) ? `<span class="mono">${esc(no)}</span>` : `<span class="mono">${esc(no)}</span> ${esc(d)}`;
+}
+/**
+ * A Xero line (an item code and a description) as the form's two boxes (22 Oct): the code into Part no., the
+ * description into Description, without the code again at its start. No code: Part no. stays empty rather than
+ * guessing one out of the text. A code with no description gives the code as the description too (it is required).
+ */
+export function xeroLineFields(l) {
+  const code = String(l?.code || '').trim(), d = String(l?.description || '').trim();
+  if (!code) return { partNo: '', part: d };
+  const esc = code.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const rest = d.replace(new RegExp(`^${esc}(?![A-Za-z0-9])[\\s,:\\-–·]*`, 'i'), '').trim();
+  return { partNo: code, part: rest || d || code };
+}
 
 // Levi's nine, in the order of his Jobs List.
 export const PROCESSES = ['Laser', 'Fold', 'Cut & Drill', 'Tap & C/Sink', 'Insert', 'Weld',
@@ -154,7 +188,7 @@ export function addWorkingDays(from, n) {
 /**
  * Lines for a repeat of an order: same parts, quantities and prices, with every due date moved
  * by the same number of days so the first lands on `firstDue` (a call-off schedule keeps its
- * spacing). Returns [{ part, qty, price, due }] with qty/price as strings for the form.
+ * spacing). Returns [{ partNo, part, qty, price, due }] with qty/price as strings for the form.
  */
 export function repeatLines(lines, firstDue) {
   const days = s => Math.round(new Date(s + 'T12:00:00Z') / 864e5);
@@ -162,7 +196,7 @@ export function repeatLines(lines, firstDue) {
   const shift = days(firstDue) - start;
   return [...lines].sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : a.lineNo - b.lineNo)).map(l => {
     const d = new Date(l.due + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + shift);
-    return { part: l.part, qty: String(l.qty), price: l.price == null ? '' : String(l.price), due: d.toISOString().slice(0, 10) };
+    return { partNo: l.partNo || '', part: l.part, qty: String(l.qty), price: l.price == null ? '' : String(l.price), due: d.toISOString().slice(0, 10) };
   });
 }
 
@@ -279,10 +313,12 @@ export function boardLists(jobs) {
 /** The next process a job needs, in Levi's order, or null when all are done. */
 export const nextStep = job => needed(job).find(p => !job.procs[p].done) || null;
 
-/** Quantity still to make per distinct part (first-seen order) and how much of it is due by the next delivery. */
+/** Quantity still to make per distinct part (first-seen order) and how much of it is due by the next delivery.
+ *  [{ part: lineLabel, partNo, desc, left, next }]: partNo/desc so screens can lineHtml({ partNo, part: desc }). */
 export function partsLeft(job) {
   const by = new Map(), nd = nextDue(job);
-  for (const l of job.lines) { const r = by.get(l.part) || { part: l.part, left: 0, next: 0 }; r.left += left(job, l); if (l.due <= nd) r.next += left(job, l); by.set(l.part, r); }
+  // Grouped by how the line reads, so the same description under two part numbers stays two parts.
+  for (const l of job.lines) { const k = lineLabel(l), r = by.get(k) || { part: k, partNo: lineNo(l), desc: lineDesc(l), left: 0, next: 0 }; r.left += left(job, l); if (l.due <= nd) r.next += left(job, l); by.set(k, r); }
   return [...by.values()].filter(r => r.left > 0);
 }
 
@@ -465,20 +501,22 @@ export function attention(d, { office = false, wonQuotes = 0 } = {}) {
 }
 
 /**
- * What the order form's Part box offers: parts this customer has ordered on the board (latest price
- * first), then parts other customers have ordered, then Xero's Products and services not already
+ * What the order form's Part no. and Description boxes offer: parts this customer has ordered on the board (latest
+ * price first), then parts other customers have ordered, then Parts and Xero's Products and services not already
  * listed. Text matching ignores case and spacing. jobs: the app's jobs (with prices for the office);
  * items: [{ code, description, price }] from Xero (may be empty).
+ * Each entry: { part: how it reads in the list (lineLabel), partNo, description, price, from, so, date, code }.
+ * Picking one fills both boxes (22 Oct): partNo into Part no., description into Description.
  */
 export function partSuggestions(jobs, items, customer, parts = []) {
   const key = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   const cust = key(customer), seen = new Map();
-  const lines = jobs.flatMap(j => j.lines.map(l => ({ part: l.part, price: l.price, so: j.so, date: j.ordered || '', mine: key(j.customer) === cust })))
-    .filter(l => l.part && l.part.trim())
+  const lines = jobs.flatMap(j => j.lines.map(l => ({ partNo: lineNo(l), description: lineDesc(l), price: l.price, so: j.so, date: j.ordered || '', mine: key(j.customer) === cust })))
+    .filter(l => l.description || l.partNo)
     .sort((a, b) => (b.mine - a.mine) || (b.date < a.date ? -1 : b.date > a.date ? 1 : 0));
   for (const l of lines) {
-    const k = key(l.part); if (seen.has(k)) continue;
-    seen.set(k, { part: l.part.trim(), price: l.price, from: l.mine ? 'customer' : 'board', so: l.so, date: l.date });
+    const part = lineLabel({ partNo: l.partNo, part: l.description }), k = key(part); if (seen.has(k)) continue;
+    seen.set(k, { part, partNo: l.partNo, description: l.description || l.partNo, price: l.price, from: l.mine ? 'customer' : 'board', so: l.so, date: l.date });
   }
   // Every word already offered, so a part number already in the list is not offered twice. A Set, not a
   // search of the list per product: Xero can send thousands of products (20 Oct: the form froze).
@@ -489,15 +527,15 @@ export function partSuggestions(jobs, items, customer, parts = []) {
   // Parts saved in Sales orders › Parts: the customer's own (part number and description).
   const ck = customer ? normName(customer) : '';
   for (const p of parts || []) {
-    const text = xeroLinePart({ code: p.partNo, description: p.description });
-    const k = key(text); if (!k || seen.has(k) || words.has(key(p.partNo))) continue;
-    add(k, { part: text, price: null, from: ck && p.customerKey === ck ? 'customer' : 'parts', code: p.partNo });
+    const f = { partNo: String(p.partNo || '').trim(), part: String(p.description || '').trim() || String(p.partNo || '').trim() };
+    const text = lineLabel(f), k = key(text); if (!k || seen.has(k) || words.has(key(p.partNo))) continue;
+    add(k, { part: text, partNo: f.partNo, description: f.part, price: null, from: ck && p.customerKey === ck ? 'customer' : 'parts', code: p.partNo });
   }
   // Xero's Products and services: code and description together, so typing the part number finds it.
   for (const i of items || []) {
-    const text = xeroLinePart({ code: i.code, description: i.description });
+    const f = xeroLineFields(i), text = lineLabel(f);
     const k = key(text); if (!k || seen.has(k) || seen.has(key(i.description)) || (i.code && words.has(key(i.code)))) continue;
-    add(k, { part: text, price: i.price, from: 'xero', code: i.code || '' });
+    add(k, { part: text, partNo: f.partNo, description: f.part, price: i.price, from: 'xero', code: i.code || '' });
   }
   return [...seen.values()];
 }
@@ -526,13 +564,13 @@ export function partMatches(list, typed, limit = 50) {
  */
 export function poSuggestions(job, jobs, pos) {
   const norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const parts = new Set(job.lines.map(l => norm(l.part)).filter(p => p.length >= 3));
+  const parts = new Set(job.lines.map(l => norm(lineLabel(l))).filter(p => p.length >= 3));
   const byId = new Map(jobs.map(j => [j.id, j]));
   const cust = norm(job.customer);
   const out = { samePart: [], sameCustomer: [], other: [] };
   for (const p of [...pos].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : b.id - a.id))) {
     const from = byId.get(p.jobId);
-    const hit = (from && from.lines.some(l => parts.has(norm(l.part))))
+    const hit = (from && from.lines.some(l => parts.has(norm(lineLabel(l)))))
       || p.lines.some(l => { const d = norm(l.description); return [...parts].some(x => d.includes(x)); });
     (hit ? out.samePart : from && norm(from.customer) === cust ? out.sameCustomer : out.other).push({ ...p, so: from?.so || '', customer: from?.customer || '' });
   }
@@ -551,12 +589,13 @@ export function backToBackLines(job, pos) {
   const use = open.length ? open : job.lines.map(l => ({ l, left: l.qty }));
   const from = [];
   const lines = use.map(({ l, left: qty }) => {
-    const part = norm(l.part);
+    // The supplier sees the part number too (22 Oct); an earlier PO line still matches on the description alone.
+    const text = lineLabel(l), part = norm(text), desc = norm(l.part);
     for (const p of newest) {
-      const hit = part.length >= 3 && p.lines.find(x => { const d = norm(x.description); return d === part || d.includes(part); });
-      if (hit) { from.push(p); return { description: l.part, qty, unit: Number(hit.unit) }; }
+      const hit = part.length >= 3 && p.lines.find(x => { const d = norm(x.description); return d === part || d.includes(part) || (desc.length >= 3 && d === desc); });
+      if (hit) { from.push(p); return { description: text, qty, unit: Number(hit.unit) }; }
     }
-    return { description: l.part, qty, unit: null };
+    return { description: text, qty, unit: null };
   });
   const one = (k) => { const v = [...new Set(from.map(p => p[k] ?? ''))]; return from.length && v.length === 1 ? v[0] : null; };
   const dues = use.map(x => x.l.due).filter(Boolean).sort();
@@ -590,7 +629,9 @@ export function missingLineCodes(jobs, xeroOrders) {
     const q = j.xeroQuoteId && byId.get(j.xeroQuoteId); if (!q || j.status === 'cancelled') continue;
     for (const l of j.lines) {
       const x = (q.lines || []).find(y => String(y.code || '').trim().length >= 3 && norm(y.description) && norm(y.description) === norm(l.part));
-      if (x && !String(l.part).toUpperCase().includes(String(x.code).trim().toUpperCase())) out.push({ id: l.id, code: String(x.code).trim(), so: j.so, part: l.part });
+      if (!x) continue;   // a line already in its Part no. box (22 Oct) needs nothing added
+      const has = String(l.part).toUpperCase().includes(String(x.code).trim().toUpperCase()) || lineNo(l).toUpperCase() === String(x.code).trim().toUpperCase();
+      if (!has) out.push({ id: l.id, code: String(x.code).trim(), so: j.so, part: l.part });
     }
   }
   return out;

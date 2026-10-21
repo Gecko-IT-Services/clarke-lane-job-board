@@ -6,7 +6,7 @@
  */
 import { jobMood } from './core/mood.js';
 import { moodIcon } from './mood.js';
-import { floorQueue, floorStations, nextStep, partsLeft, dayNo, needed, allDone, nextDue, deliveryLabel, SHORT } from './core/jobs.js';
+import { floorQueue, floorStations, nextStep, partsLeft, lineHtml, dayNo, needed, allDone, nextDue, deliveryLabel, SHORT } from './core/jobs.js';
 import { OUT_PROCESSES, outBoard, outNow, suppliersUsed } from './core/outwork.js';
 import { noteSummary, newNotes } from './core/notes.js';
 import { floorNoteStrip } from './notes.js';
@@ -41,7 +41,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
 
   const isAll = station === 'all', list = floorQueue(jobs, station), open = isAll ? list : floorQueue(jobs, 'all');
   const parts = j => partsLeft(j).map(r =>
-    `<span><b>${r.left}</b> × ${esc(r.part)}${r.next && r.next !== r.left ? ` (${r.next} for the next delivery)` : ''}</span>`).join('');
+    `<span><b>${r.left}</b> × ${lineHtml({ partNo: r.partNo, part: r.desc }, esc)}${r.next && r.next !== r.left ? ` (${r.next} for the next delivery)` : ''}</span>`).join('');
   // Station order (Levi and Mandy only, 20 Oct): move a job up or down at this station alone.
   const moving = canMove && !isAll, placed = moving && list.some(j => j.procs[station].place != null);
   const move = (j, i) => !moving ? `<span class="pos">${i + 1}</span>`
@@ -98,7 +98,7 @@ function outView(jobs, outwork, today, bar, h) {
       <div class="side">${due(r)}<button type="button" class="btn" data-outback="${r.id}">Back in</button><button type="button" class="btn" data-outedit="${r.id}">Change</button></div></div></article>`;
   const groups = b.suppliers.map(g => `<section class="ogroup"><h3>${esc(g.supplier)} <small>${count(g.rows.length, 'job')}</small></h3><div class="fq">${g.rows.map(row).join('')}</div></section>`).join('');
   const ready = b.ready.length ? `<section class="ogroup"><h3>Ready to go out <small>${count(b.ready.length, 'job')}</small></h3><div class="fq">${b.ready.map(({ job: j, process: p }) => `<article class="fcard orow"><div class="ftop"><div>
-      <div class="cu">${esc(j.customer)}<span class="so">${esc(j.so)}</span></div><div class="parts">${partsLeft(j).map(r => `<span><b>${r.left}</b> × ${esc(r.part)}</span>`).join('')}</div>
+      <div class="cu">${esc(j.customer)}<span class="so">${esc(j.so)}</span></div><div class="parts">${partsLeft(j).map(r => `<span><b>${r.left}</b> × ${lineHtml({ partNo: r.partNo, part: r.desc }, esc)}</span>`).join('')}</div>
       <p class="fstat">Next: <b>${esc(p)}</b></p></div><div class="side"><button type="button" class="btn" data-sendout="${esc(p)}" data-job="${j.id}">Send out</button></div></div></article>`).join('')}</div></section>` : '';
   const back = b.back.length ? `<section class="ogroup"><h3>Back in the last 2 weeks</h3><table class="lines oback"><thead><tr><th>Order</th><th>Company</th><th>What</th><th>Went</th><th>Back</th></tr></thead><tbody>
       ${b.back.map(r => `<tr><td><b>${esc(r.job.so)}</b> ${esc(r.job.customer)}</td><td>${esc(r.supplier)}</td><td>${esc(SHORT[r.process])}${r.finish ? ' · ' + esc(r.finish) : ''}</td><td>${esc(fmt(r.sentOn))}</td><td>${esc(fmt(r.backOn))}${r.backBy ? ' · ' + esc(r.backBy) : ''}</td></tr>`).join('')}</tbody></table></section>` : '';

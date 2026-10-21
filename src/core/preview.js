@@ -3,7 +3,7 @@
  * with his real order book before go-live. Nothing here is saved anywhere. Pure: tested in
  * tests/preview.mjs.
  */
-import { PROCESSES } from './jobs.js';
+import { PROCESSES, xeroLineFields } from './jobs.js';
 
 /** Processes guessed from a line's description, for the preview only (real orders are ticked by Mandy). */
 const HINTS = [
@@ -42,7 +42,7 @@ export function previewJobs(quotes, onBoard, fallbackDue) {
       id: -(n + 1), preview: true, so: soNo(q.number), quote: '', spQuoteId: null, xeroQuoteId: q.id,
       customer: q.customer || '', contactName: '', contactEmail: '', po: q.reference || '',
       ordered: q.date || '', due, notes: '', address: '', status: 'open', priority: null,
-      lines: lines.map((l, i) => ({ id: -((n + 1) * 1000 + i), lineNo: i + 1, part: l.description || '(no description)',
+      lines: lines.map((l, i) => ({ id: -((n + 1) * 1000 + i), lineNo: i + 1, ...xeroLineFields(l), ...(l.description || l.code ? {} : { part: '(no description)' }),
         qty: Number(l.qty), price: Number(l.unit), due, po: '' })),
       procs: Object.fromEntries(guessProcesses(lines.map(l => l.description || '')).map(p => [p, { done: false }])),
       despatches: [], cancelledDespatches: [],

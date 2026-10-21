@@ -6,7 +6,7 @@
  * Pure: tested in tests/spfiles.mjs. file: { id, name, path, size, at, url, driveId, itemId }.
  */
 import { normName } from './xero.js';
-import { normPartNo, namesPart, partNumbersIn } from './parts.js';
+import { normPartNo, namesPart, lineNumbers, lineNamesPart } from './parts.js';
 
 /**
  * The folder for a customer: the one whose name is the customer's (normName, so Ltd and Limited are the same);
@@ -107,8 +107,9 @@ export function foundDrawings(job, files, parts = []) {
   const key = normName(job.customer), have = new Set((job.files || []).map(f => f.itemId));
   const nos = new Map();
   for (const l of job.lines || []) {
-    for (const no of partNumbersIn(l.part)) nos.set(normPartNo(no), no);
-    for (const p of parts) if (p.customerKey === key && namesPart(l.part, p.partNo)) nos.set(normPartNo(p.partNo), p.partNo);
+    // The line's Part no. box when filled (22 Oct), else the numbers in its text.
+    for (const no of lineNumbers(l)) nos.set(normPartNo(no), no);
+    for (const p of parts) if (p.customerKey === key && lineNamesPart(l, p.partNo)) nos.set(normPartNo(p.partNo), p.partNo);
   }
   const out = [];
   for (const no of nos.values()) {

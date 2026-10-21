@@ -67,6 +67,10 @@ const lib = [...files, { name: 'BRK-7.pdf', at: '2020-01-01T00:00:00Z', itemId: 
 assert.deepEqual(foundDrawings(job, lib, parts).map(x => [x.partNo, x.file.name, x.more]), [['EX-PR-20001', 'EX-PR-20001 Rev B.pdf', 2], ['BRK-7', 'BRK-7.pdf', 0]]);
 assert.deepEqual(foundDrawings({ ...job, files: [{ itemId: 'b' }] }, lib, parts).map(x => x.partNo), ['BRK-7'], 'the order already has one of them');
 
+// The Part no. box first (22 Oct): BRK-7 in the box finds its drawing; a number in that line's description is not looked for.
+assert.deepEqual(foundDrawings({ customer: 'Example Racers Ltd', lines: [{ partNo: 'BRK-7', part: 'Bracket, was EX-PR-20001' }], files: [] }, lib, []).map(x => x.partNo), ['BRK-7']);
+assert.deepEqual(foundDrawings({ customer: 'Example Racers Ltd', lines: [{ partNo: 'brk 7', part: 'Bracket' }], files: [] }, lib, parts).map(x => x.partNo), ['BRK-7'], 'once, as Parts spells it');
+
 // — Grades and their certificate folders. —
 assert.deepEqual(gradesIn('Bracket 3mm S275'), ['S275']);
 assert.deepEqual(gradesIn('Plate S355J2 and S275JR'), ['S355', 'S275']);

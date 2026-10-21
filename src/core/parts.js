@@ -19,10 +19,25 @@ export function namesPart(text, partNo) {
   return new RegExp(`(^|[^A-Z0-9])${esc}($|[^A-Z0-9])`).test(normPartNo(text));
 }
 
+/**
+ * Does an order line name this part number? Its Part no. box first (Mandy, 22 Oct: a box of its own, like Xero
+ * and Sage): when filled, that is the line's part number and nothing in the description is guessed at. Lines
+ * without one (all of them before 22 Oct) are matched by their text, as before.
+ */
+const boxNo = l => String(l?.partNo ?? l?.part_no ?? '').trim();
+export function lineNamesPart(l, partNo) {
+  const no = boxNo(l);
+  if (!no) return namesPart(l.part, partNo);
+  const want = normPartNo(partNo);
+  return want.length > 0 && normPartNo(no) === want;
+}
+/** The part numbers an order line carries: its Part no. box, else those spotted in its text (partNumbersIn). */
+export const lineNumbers = l => boxNo(l) ? [boxNo(l)] : partNumbersIn(l.part);
+
 /** The customer's library parts named on any of a job's lines. */
 export function partsOnJob(parts, job) {
   const key = normName(job.customer);
-  return (parts || []).filter(p => p.customerKey === key && job.lines.some(l => namesPart(l.part, p.partNo)));
+  return (parts || []).filter(p => p.customerKey === key && job.lines.some(l => lineNamesPart(l, p.partNo)));
 }
 
 /**
@@ -40,7 +55,7 @@ export const findPart = (parts, customer, partNo) =>
 
 /** Orders a part has been on, newest first. */
 export const ordersForPart = (jobs, part) =>
-  (jobs || []).filter(j => normName(j.customer) === part.customerKey && j.lines.some(l => namesPart(l.part, part.partNo)))
+  (jobs || []).filter(j => normName(j.customer) === part.customerKey && j.lines.some(l => lineNamesPart(l, part.partNo)))
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || b.id - a.id);
 
 /**
@@ -64,19 +79,20 @@ export function partNumbersIn(text) {
 
 /**
  * Part numbers on the board's orders that are not in Parts yet, per customer, most-ordered first:
- * [{ customer, customerKey, partNo, description, orders: [job] }]. description: the line text without the number.
+ * [{ customer, customerKey, partNo, description, orders: [job] }]. A line with its Part no. box filled gives that
+ * number and its Description box; one without gives the numbers in its text, description = the text without it.
  */
 export function suggestedParts(jobs, parts) {
   const by = new Map();
   for (const j of jobs || []) {
     if (j.status === 'cancelled' || j.preview) continue;
     const key = normName(j.customer);
-    for (const l of j.lines) for (const no of partNumbersIn(l.part)) {
+    for (const l of j.lines) for (const no of lineNumbers(l)) {
       if (findPart(parts, j.customer, no)) continue;
       const k = key + '|' + normPartNo(no);
       const s = by.get(k) || { customer: j.customer, customerKey: key, partNo: no, description: '', orders: [] };
       if (!s.orders.includes(j)) s.orders.push(j);
-      if (!s.description) s.description = l.part.replace(new RegExp(no.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'), 'i'), '').replace(/\s{2,}/g, ' ').replace(/^[\s,:\-–]+|[\s,:\-–]+$/g, '');
+      if (!s.description) s.description = boxNo(l) ? String(l.part || '').trim() : l.part.replace(new RegExp(no.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'), 'i'), '').replace(/\s{2,}/g, ' ').replace(/^[\s,:\-–]+|[\s,:\-–]+$/g, '');
       by.set(k, s);
     }
   }
@@ -86,6 +102,6 @@ export function suggestedParts(jobs, parts) {
 /** Open orders (not cancelled, something still to send) that name a part and do not have its current drawing. */
 export function openOrdersNeeding(jobs, part, isOpen) {
   const f = currentFile(part); if (!f) return [];
-  return (jobs || []).filter(j => isOpen(j) && normName(j.customer) === part.customerKey && j.lines.some(l => namesPart(l.part, part.partNo))
+  return (jobs || []).filter(j => isOpen(j) && normName(j.customer) === part.customerKey && j.lines.some(l => lineNamesPart(l, part.partNo))
     && !(j.files || []).some(x => x.itemId === f.itemId));
 }

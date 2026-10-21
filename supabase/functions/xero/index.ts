@@ -232,7 +232,7 @@ async function send(items: { despatchId: number; contactId: string }[]) {
       // Amounts come from the database, never from the browser.
       const { data: row, error } = await admin.from('despatches')
         .select('id, dn_number, despatched_on, delivered_on, cancelled_at, xero_invoice_id, xero_invoice_no, job_id, ' +
-          'jobs(so_number, customer_po), despatch_lines(qty, job_lines(part, line_no, customer_po, job_line_prices(unit_price)))')
+          'jobs(so_number, customer_po), despatch_lines(qty, job_lines(part, part_no, line_no, customer_po, job_line_prices(unit_price)))')
         .eq('id', it.despatchId).single();
       if (error || !row) throw new Error('Dispatch not found.');
       if (row.xero_invoice_id || row.xero_invoice_no) { out.push({ despatchId: it.despatchId, ok: true, invoiceNo: row.xero_invoice_no, already: true }); continue; }
@@ -242,7 +242,9 @@ async function send(items: { despatchId: number; contactId: string }[]) {
       const job: any = row.jobs;
       const lines = (row.despatch_lines as any[])
         .sort((a, b) => a.job_lines.line_no - b.job_lines.line_no)
-        .map(l => ({ part: l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
+        // A line's Part no. box (22 Oct) goes in front of its description, one space, as Xero shows code and
+        // description. No ItemCode: this path does not read Xero's items, so it cannot know the code exists there.
+        .map(l => ({ part: l.job_lines.part_no ? `${l.job_lines.part_no} ${l.job_lines.part}` : l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
       if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this dispatch has no price.');
       const { data: pfs } = await admin.from('proformas').select('pf_number')
         .eq('job_id', row.job_id).not('paid_on', 'is', null).is('cancelled_at', null).order('id');
