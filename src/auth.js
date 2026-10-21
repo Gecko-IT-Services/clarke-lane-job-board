@@ -64,7 +64,7 @@ export async function start() {
   // (Supabase may hold the address only in user_metadata, so an empty one is not a mismatch.)
   const sessionEmail = (session?.user?.email || session?.user?.user_metadata?.email || '').toLowerCase();
   if (session && sessionEmail && sessionEmail !== account.username.toLowerCase()) {
-    await client.auth.signOut(); session = null;
+    await client.auth.signOut({ scope: 'local' }); session = null;
   }
   if (!session) session = await silentSupabase(client);
   return { account, ready: !!session };
@@ -92,17 +92,28 @@ export async function signIn() {
 }
 
 export async function signOut() {
-  try { await (await getSupabase()).auth.signOut(); } catch { /* already gone */ }
+  try { await (await getSupabase()).auth.signOut({ scope: 'local' }); } catch { /* already gone */ }
   await msal.logoutRedirect({ account, postLogoutRedirectUri: redirectUri() });
 }
 
 export const currentAccount = () => account;
 
+/** A silent token failure that only a visit to Microsoft's sign-in page can put right. */
+const needsMicrosoft = e => e instanceof window.msal.InteractionRequiredAuthError
+  || /interaction_required|login_required|consent_required|invalid_grant|no_tokens_found|no_account|monitor_window_timeout|token_renewal_error/.test(e?.errorCode || '');
+const tokenProblem = e => {
+  if (/interaction_in_progress/.test(e?.errorCode || '')) return new Error('Still finishing a Microsoft sign-in. Wait a moment and try again.');
+  return new Error('Could not get a Microsoft 365 token: ' + (e?.errorMessage || e?.message || 'unknown error') + '. Check the internet connection and try again.');
+};
+
 /** Graph call returning the raw Response (file uploads and downloads). body is sent as it is. */
 export async function graphRaw(path, { method = 'GET', body, headers = {}, scopes = CONFIG.GRAPH_SCOPES } = {}) {
   let token;
   try { token = (await msal.acquireTokenSilent({ scopes, account })).accessToken; }
-  catch { await msal.acquireTokenRedirect({ scopes, account }); return new Promise(() => {}); }
+  catch (e) {
+    if (!needsMicrosoft(e)) throw tokenProblem(e);
+    await msal.acquireTokenRedirect({ scopes, account }); return new Promise(() => {});
+  }
   const res = await fetch(path.startsWith('http') ? path : CONFIG.GRAPH + path, { method, body, headers: { Authorization: `Bearer ${token}`, ...headers } });
   if (!res.ok) {
     let msg = res.statusText;
@@ -120,7 +131,8 @@ export async function graph(path, { headers = {}, method = 'GET', body, scopes =
   let token;
   try {
     token = (await msal.acquireTokenSilent({ scopes, account })).accessToken;
-  } catch {
+  } catch (err) {
+    if (!needsMicrosoft(err)) throw tokenProblem(err);
     if (quiet) { const e = new Error('This needs a one-off Microsoft 365 permission that is not approved yet.'); e.code = 'CONSENT_REQUIRED'; throw e; }
     await msal.acquireTokenRedirect({ scopes, account });
     return new Promise(() => {});

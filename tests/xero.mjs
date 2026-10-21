@@ -73,12 +73,20 @@ console.log('xero: ok');
   assert.equal(po.Status, 'DRAFT');
   assert.equal(po.Reference, 'SO-9790 for Example Ltd');
   assert.equal(po.DeliveryDate, '2026-10-24');
-  assert.deepEqual(po.LineItems, [{ Description: 'Powder coat RAL 9005, 40 brackets', Quantity: 1, UnitAmount: 120 }]);
+  assert.deepEqual(po.LineItems, [{ Description: 'Powder coat RAL 9005, 40 brackets', Quantity: 1, UnitAmount: 120.004 }], 'unit prices keep 4dp');
+  const metal = buildPurchaseOrder({ date: '2026-10-19', so: 'SO-1', lines: [{ description: 'Aluminium 3mm', qty: 800, unit: 1.2345 }, { description: 'MEPL-1600', qty: 4000, unit: 3.01044 }] }, 's1').LineItems;
+  assert.deepEqual([metal[0].Quantity, metal[0].UnitAmount], [800, 1.2345], '£987.60, not 800 × £1.23');
+  assert.deepEqual([metal[1].Quantity, metal[1].UnitAmount, metal[1].Description], [1, 12041.76, 'MEPL-1600 (4000 @ £3.01044)'], '4dp would change the total: 1 × the total');
   const coded = buildPurchaseOrder({ date: '2026-10-19', so: 'SO-9790', accountCode: '5000',
     lines: [{ description: 'Steel 3mm sheet', qty: 2, unit: 50 }, { description: 'Steel 2mm sheet', qty: 1, unit: 40 }] }, 's1');
   assert.deepEqual(coded.LineItems.map(l => l.AccountCode), ['5000', '5000'], 'one account on every line');
   assert.equal('AccountCode' in buildPurchaseOrder({ date: '2026-10-19', so: 'SO-1', accountCode: '', lines: [{ description: 'x', qty: 1, unit: 1 }] }, 's1').LineItems[0], false, 'not sure: left for Keith');
   console.log('xero purchase order: ok');
+// Half-pennies round up, as Postgres does: 7 × 0.145 (1.0149999… in floating point) is £1.02, 5 × 0.205 is £1.03.
+assert.equal(invoiceNet({ LineItems: [{ Quantity: 7, UnitAmount: 0.145 }] }), 1.02);
+assert.equal(invoiceNet({ LineItems: [{ Quantity: 5, UnitAmount: 0.205 }] }), 1.03);
+assert.equal(invoiceNet({ LineItems: [{ Quantity: 1, UnitAmount: -1.005 }] }), -1.01, 'away from zero');
+console.log('xero rounding: ok');
 }
 
 // emailList: several addresses in one box.

@@ -26,7 +26,7 @@ export function renderIdeas({ board, research, customers, busy, rs, err }, h) {
       <span class="note">${r.website ? esc(r.website) + ' · ' : ''}checked ${esc(fmt(r.at.slice(0, 10)))}</span>
       <button class="btn sm" type="button" data-research="${esc(r.key)}" data-custname="${esc(r.customer)}" data-site="${esc(r.website)}" ${busy.research ? 'disabled' : ''}>${icon('refresh')}Check again</button></div>
     <p>${esc(r.about)}</p>
-    ${r.news.length ? `<h5>What's new</h5><ul>${r.news.map(n => `<li>${esc(n.text)}${n.url ? ` <a href="${esc(n.url)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}</li>`).join('')}</ul>` : ''}
+    ${r.news.length ? `<h5>What's new</h5><ul>${r.news.map(n => `<li>${esc(n.text)}${/^https?:\/\//i.test(n.url || '') ? ` <a href="${esc(n.url)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}</li>`).join('')}</ul>` : ''}
     ${r.openings.length ? `<h5>Where we could help</h5><ul class="ideas">${r.openings.map((o, i) => `<li class="idea"><b>${esc(o.idea)}</b><p class="note">${esc(o.why)}</p>
         <div class="acts"><button class="btn sm" type="button" data-rsemail="${esc(r.key)}" data-i="${i}">${icon('mail')}Write an email</button><button class="btn sm" type="button" data-rstask="${esc(r.key)}" data-i="${i}">${icon('plus')}Make a task</button></div></li>`).join('')}</ul>` : ''}</article>`;
   const researchBox = `<section class="panel" id="rsbox"><h3>Customer research <small>their website, LinkedIn, Facebook and news</small></h3>

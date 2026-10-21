@@ -117,10 +117,19 @@ async function session() {
   const row = data?.[0];
   if (!row) throw new HttpError(409, 'Xero is not connected yet. Press Connect to Xero.');
   if (new Date(row.expires_at).getTime() - Date.now() > 60_000) return row;
+  // One refresh at a time: a Xero refresh token works once, and the board fires several routes together.
+  refreshing ??= refresh(row).finally(() => { refreshing = null; });
+  return refreshing;
+}
+let refreshing: Promise<any> | null = null;
+async function refresh(row: any) {
   const t = await tokenRequest({ grant_type: 'refresh_token', refresh_token: row.refresh_token })
-    .catch(() => { throw new HttpError(409, 'The Xero connection has lapsed (unused for 60 days, or removed in Xero). Press Connect to Xero again.'); });
+    .catch((e: Error) => { throw /invalid_grant/.test(e.message) ? new HttpError(409, 'The Xero connection has lapsed (unused for 60 days, or removed in Xero). Press Connect to Xero again.') : e; });
   const expires = new Date(Date.now() + t.expires_in * 1000).toISOString();
-  await admin.rpc('xero_update_tokens', { p_access: t.access_token, p_refresh: t.refresh_token, p_expires_at: expires });
+  const save = () => admin.rpc('xero_update_tokens', { p_access: t.access_token, p_refresh: t.refresh_token, p_expires_at: expires });
+  let { error } = await save();
+  if (error) ({ error } = await save());   // the old refresh token is spent now, so this one must be kept
+  if (error) console.error('xero_update_tokens failed; the next refresh will need Connect to Xero again:', error.message);
   return { ...row, access_token: t.access_token };
 }
 

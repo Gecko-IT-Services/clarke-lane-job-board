@@ -86,6 +86,10 @@ anyone ticks anything. Date pickers on the Jobs board are destroyed mid-pick the
 ## Medium
 
 M1, M2, M3, M7 and the pro forma half of M10 fixed in PR 99 (branch fix/review-medium).
+M4, M5, M6, the rest of M10, M11, M12, M13, M14, M17, M18, M19 and M21 fixed in PR 100 (branch fix/review-medium-2).
+Left open on purpose: M8 and M9 need a schema change (refuse deleting a job once a pro forma or PO exists; column-limited
+policies), M15 wants the amend made one RPC, M16 and M20 and M22 are product decisions (count cancelled orders' shipped goods;
+who may connect Xero and read history; whether floor ticks ask for a name).
 
 ### M1. Enquiry sync permanently skips mail when more than 8 arrive between runs (app.js:1090-1093)
 `since` is the newest stored `receivedAt` minus 1 h, and each run reads only the newest 8. Twelve emails

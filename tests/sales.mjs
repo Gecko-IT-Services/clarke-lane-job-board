@@ -68,6 +68,7 @@ assert.equal(pipeline([open[1]], {}, [{ spId: open[1].spId, kind: 'email', at: a
 // The month.
 const jobs = [{ status: 'open', ordered: '2026-10-05', v: 3000 }, { status: 'cancelled', ordered: '2026-10-06', v: 900 }, { status: 'open', ordered: '2026-09-30', v: 700 }];
 const mg = monthGap({ target: 10000, jobs, quotes: [q('A Ltd', 10, 500, 2)], open: p, stats: st, today, jobValue: j => j.v });
+assert.equal(monthGap({ target: 10000, jobs, quotes: [q('A Ltd', 10, 500, 2), q('B Ltd', 10, 700, 2, { dismissed: true })], open: p, stats: st, today, jobValue: j => j.v }).booked, mg.booked, 'a dismissed "Ordered" quote is not booked');
 assert.equal(mg.booked, 3500);
 assert.equal(mg.gap, 6500);
 assert.ok(mg.likely > 0 && mg.afterLikely === Math.round((6500 - mg.likely) * 100) / 100);
