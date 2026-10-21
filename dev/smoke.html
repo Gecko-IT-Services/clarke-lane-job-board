@@ -149,9 +149,9 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .duepick .duebtn:hover .pen{opacity:1;color:var(--ink)}
 .duepick input[type=date]{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
 .duepick + .note{display:block;font-size:12px;margin-top:2px}
-:is(#v-home,#v-jobs) .month{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px 18px;display:flex;flex-direction:column;gap:10px}
+:is(#v-home,#v-jobs) .month{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
 .month .mhead{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
-.month .mhead h3{font-size:19px} .month .mbig{font:600 24px var(--display);letter-spacing:-.02em} .month .mhead .g-state{margin-left:auto;align-self:center}
+.month .mhead h3{font-size:17px} .month .mbig{font:600 24px var(--display);letter-spacing:-.02em} .month .mhead .g-state{margin-left:auto;align-self:center}
 .month .minfo{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .month p{font-size:14.5px} .month p.note{font-size:13.5px} .month .ok{color:var(--ok)} .month p.bad{color:var(--bad);font-weight:600;font-size:14px}
 .month a{font-weight:600;color:var(--info);text-decoration:none;font-size:14px}
@@ -159,44 +159,36 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 #v-jobs .mline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;padding:10px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px} #v-jobs .mline .wip{color:var(--info)} #v-jobs .mline .gap{color:var(--warn)} #v-jobs .mline .ok{color:var(--ok)} #v-jobs .mline a{margin-left:auto;font-weight:600;color:var(--info);text-decoration:none} #v-jobs .mline .g-state{font-size:12.5px;font-weight:600;border-radius:999px;padding:2px 10px;background:var(--warn-soft);color:var(--warn)} #v-jobs .mline .g-state.g-ok,#v-jobs .mline .g-state.g-top{background:var(--ok-soft);color:var(--ok)}
 .month .g-state{font-size:13px;font-weight:600;border-radius:999px;padding:3px 12px;background:var(--warn-soft);color:var(--warn)}
 .month .g-state.g-ok,.month .g-state.g-top{background:var(--ok-soft);color:var(--ok)}
-/* The steel tube (Philip, 19 Oct): polished steel with a glass highlight, filled left to right. */
-.tube{--steel-a:#FBFBFC;--steel-b:#D5D8DC;--steel-c:#A9AEB5;--steel-d:#C9CDD2;--steel-e:#ECEEF0;--steel-edge:#8A8F96;--cap:#6E737A;
-  position:relative;padding:22px 14px 0}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tube{--steel-a:#6A6E75;--steel-b:#45484E;--steel-c:#26282C;--steel-d:#3A3D42;--steel-e:#55585E;--steel-edge:#1A1B1E;--cap:#8C9097}}
-:root[data-theme="dark"] .tube{--steel-a:#6A6E75;--steel-b:#45484E;--steel-c:#26282C;--steel-d:#3A3D42;--steel-e:#55585E;--steel-edge:#1A1B1E;--cap:#8C9097}
-.tube-body{position:relative;height:30px;border-radius:999px;overflow:hidden;border:1px solid var(--steel-edge);
-  background:linear-gradient(180deg,var(--steel-a) 0%,var(--steel-b) 28%,var(--steel-c) 55%,var(--steel-d) 78%,var(--steel-e) 100%);
-  box-shadow:inset 0 3px 6px rgba(0,0,0,.28),inset 0 -2px 3px rgba(255,255,255,.35),0 1px 0 rgba(255,255,255,.6)}
-.tube-body::after{content:"";position:absolute;left:8px;right:8px;top:3px;height:9px;border-radius:999px;pointer-events:none;
-  background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,0))}
-/* end caps: machined rings at both ends */
-.tube::before,.tube::after{content:"";position:absolute;top:18px;width:14px;height:38px;border-radius:5px;
-  background:linear-gradient(90deg,var(--cap),var(--steel-a) 45%,var(--cap));box-shadow:0 1px 2px rgba(0,0,0,.3)}
-.tube::before{left:3px} .tube::after{right:3px}
-.tube-fill,.tube-could{position:absolute;left:0;top:0;bottom:0;border-radius:999px}
-.tube-fill{background:linear-gradient(180deg,var(--f1) 0%,var(--f2) 45%,var(--f3) 100%);box-shadow:inset 0 -3px 4px rgba(0,0,0,.25),2px 0 3px rgba(0,0,0,.18)}
-.tube-fill.t-warn{--f1:#FFD9A0;--f2:#E39A2C;--f3:#A8620C}
-.tube-fill.t-ok,.tube-fill.t-top{--f1:#A6EBC2;--f2:#33A564;--f3:#1D6A40}
-.tube-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 5px,rgba(255,255,255,0) 5px 10px),linear-gradient(180deg,#B9D3F2 0%,#5C8FCF 45%,#2F5E9E 100%);box-shadow:inset 0 -3px 4px rgba(0,0,0,.22)}
-.tube-gap{position:absolute;top:0;bottom:0;right:0;z-index:2;display:flex;align-items:center;justify-content:center;pointer-events:none}
-.tube-gap span{font-size:11.5px;font-weight:700;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:1px 9px;box-shadow:0 1px 2px rgba(0,0,0,.15)}
-.month .mfigs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.month .mfig{display:flex;flex-direction:column;gap:1px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);border-left-width:4px}
-.month .mfig span{font-size:12.5px;font-weight:600;color:var(--muted)} .month .mfig b{font:600 22px var(--display);letter-spacing:-.02em} .month .mfig small{font-size:12px;color:var(--muted)}
+/* The steel tube (Philip, 19 Oct), upright since 21 Oct (Levi: "vertical, fatter and smaller"): polished steel, filled from the bottom. */
+.vtube{--steel-a:#FBFBFC;--steel-b:#D5D8DC;--steel-c:#A9AEB5;--steel-d:#C9CDD2;--steel-e:#ECEEF0;--steel-edge:#8A8F96;--cap:#6E737A;
+  position:relative;display:grid;grid-template-columns:58px 104px;gap:8px;height:210px;padding:14px 0 12px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .vtube{--steel-a:#6A6E75;--steel-b:#45484E;--steel-c:#26282C;--steel-d:#3A3D42;--steel-e:#55585E;--steel-edge:#1A1B1E;--cap:#8C9097}}
+:root[data-theme="dark"] .vtube{--steel-a:#6A6E75;--steel-b:#45484E;--steel-c:#26282C;--steel-d:#3A3D42;--steel-e:#55585E;--steel-edge:#1A1B1E;--cap:#8C9097}
+.vt-body{position:relative;border-radius:29px;overflow:hidden;border:1px solid var(--steel-edge);
+  background:linear-gradient(90deg,var(--steel-a) 0%,var(--steel-b) 28%,var(--steel-c) 55%,var(--steel-d) 78%,var(--steel-e) 100%);
+  box-shadow:inset 3px 0 6px rgba(0,0,0,.28),inset -2px 0 3px rgba(255,255,255,.35)}
+.vt-body::after{content:"";position:absolute;top:10px;bottom:10px;left:6px;width:12px;border-radius:999px;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,.75),rgba(255,255,255,0))}
+.vtube::before,.vtube::after{content:"";position:absolute;left:-6px;width:70px;height:12px;border-radius:5px;background:linear-gradient(180deg,var(--cap),var(--steel-a) 45%,var(--cap));box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.vtube::before{top:6px} .vtube::after{bottom:4px}
+.vt-fill,.vt-could{position:absolute;left:0;right:0;bottom:0;border-radius:0 0 29px 29px}
+.vt-fill{background:linear-gradient(90deg,var(--f1) 0%,var(--f2) 45%,var(--f3) 100%);box-shadow:inset -3px 0 4px rgba(0,0,0,.25),0 -2px 3px rgba(0,0,0,.18)}
+.vt-fill.t-warn{--f1:#FFD9A0;--f2:#E39A2C;--f3:#A8620C}
+.vt-fill.t-ok,.vt-fill.t-top{--f1:#A6EBC2;--f2:#33A564;--f3:#1D6A40}
+.vt-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 5px,rgba(255,255,255,0) 5px 10px),linear-gradient(90deg,#B9D3F2 0%,#5C8FCF 45%,#2F5E9E 100%);box-shadow:inset -3px 0 4px rgba(0,0,0,.22)}
+.vt-ring{position:absolute;left:-1px;right:-1px;height:4px;margin-bottom:-2px;background:linear-gradient(180deg,#3A3D42,#C9CDD2,#3A3D42);box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.vt-marks{position:relative;font-size:12px;color:var(--muted);white-space:nowrap}
+.vt-marks span{position:absolute;left:0;transform:translateY(50%);line-height:1} .vt-marks b{color:var(--ink);font-weight:600}
+.vt-marks .vt-pace{left:-8px;width:0;height:10px;padding:0;overflow:visible}
+.vt-marks .vt-pace::before{content:"";position:absolute;left:0;top:50%;margin-top:-5px;border:5px solid transparent;border-right:7px solid var(--info);border-left:0}
+.vtube.grow .vt-fill,.vtube.grow .vt-could{animation:vt-fill 1.1s cubic-bezier(.2,.7,.2,1) both}
+@keyframes vt-fill{from{height:0}}
+@media (prefers-reduced-motion: reduce){.vtube.grow .vt-fill,.vtube.grow .vt-could{animation:none}}
+.month .mbody{display:flex;gap:18px;align-items:stretch} .month .mside{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.month .mfigs{display:flex;flex-direction:column;gap:6px}
+.month .mfig{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);border-left-width:4px}
+.month .mfig span{font-size:12.5px;font-weight:600;color:var(--muted)} .month .mfig b{font:600 18px var(--display);letter-spacing:-.02em;grid-row:span 2} .month .mfig small{font-size:11.5px;color:var(--muted)}
 .month .f-inv{border-left-color:#E39A2C} .month .f-inv.good{border-left-color:#33A564} .month .f-wip{border-left-color:#5C8FCF} .month .f-gap{border-left-color:var(--muted)} .month .f-gap.none{border-left-color:var(--ok)}
-@media (max-width:640px){.month .mfigs{grid-template-columns:1fr}.month .mfig{flex-direction:row;align-items:baseline;gap:8px}.month .mfig b{font-size:18px;margin-left:auto;order:2}.month .mfig small{display:none}}
-.tube-ring{position:absolute;top:-1px;bottom:-1px;width:4px;margin-left:-2px;background:linear-gradient(90deg,#3A3D42,#C9CDD2,#3A3D42);box-shadow:0 0 0 1px rgba(0,0,0,.25)}
-.tube-tag{position:absolute;top:0;transform:translateX(-50%);font-size:11.5px;font-weight:600;white-space:nowrap;color:var(--ink)}
-.tube-pace{position:absolute;top:56px;width:0;height:0;margin-left:-6px;border:6px solid transparent;border-bottom:8px solid var(--info);border-top:0}
-.tube-scale{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:12px;padding:0 2px}
-.tube.grow .tube-fill,.tube.grow .tube-could{animation:tube-fill 1.1s cubic-bezier(.2,.7,.2,1) both}
-@keyframes tube-fill{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
-@media (prefers-reduced-motion: reduce){.tube.grow .tube-fill,.tube.grow .tube-could{animation:none}}
-.month .tkey{list-style:none;margin:2px 0 0;padding:0;display:flex;gap:4px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
-.month .tkey li{display:flex;align-items:center;gap:6px}
-.month .tkey i{display:inline-block;width:16px;height:8px;border-radius:4px}
-.month .tkey .k-done{background:linear-gradient(90deg,#E39A2C 50%,#33A564 50%)} .month .tkey .k-could{background:#5C8FCF} .month .tkey .k-gap{background:linear-gradient(180deg,#ECEEF0,#A9AEB5);outline:1px solid var(--line)}
-.month .tkey .k-pace{width:0;height:0;border:5px solid transparent;border-bottom:7px solid var(--info);border-top:0;border-radius:0}
+.month .minfo p{font-size:13px} .month .minfo p.note{font-size:12px}
 .month .tform{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .month .tform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
 .month .tform input{width:170px}
@@ -321,6 +313,8 @@ body.tv-mode{background:#fff;overflow:hidden} body.tv-mode #app{max-width:none;p
 .tvbar{display:flex;align-items:center;gap:3vw}
 .tvbrand{display:flex;flex-direction:column;line-height:1} .tvbrand b{font-size:3.4vh;letter-spacing:.02em} .tvbrand span{font-size:1.5vh;letter-spacing:.42em;color:var(--tv-mute);margin-top:.4vh}
 .tvsum{display:flex;gap:2.4vw;font-size:2.4vh;color:var(--tv-mute)} .tvsum b{color:var(--tv-ink);font-size:3.2vh;margin-right:.4vw} .tvsum .late b{color:var(--tv-red)} .tvsum .ready b{color:var(--tv-green)}
+.tvleave{position:fixed;bottom:1.2vh;right:1.6vw;z-index:55;font-size:2vh;padding:1vh 1.4vw;opacity:0;pointer-events:none;transition:opacity .3s;box-shadow:0 .6vh 2vh rgba(0,0,0,.18)}
+body.tv-touch .tvleave{opacity:1;pointer-events:auto}
 .tvclock{margin-left:auto;text-align:right;font-size:1.9vh;color:var(--tv-mute)} .tvclock b{display:block;font-size:4.2vh;color:var(--tv-ink);font-variant-numeric:tabular-nums;line-height:1.05}
 .tvgrid{flex:1;width:100%;border-collapse:collapse;table-layout:fixed;border:.3vh solid #8E949C}
 .tvgrid th,.tvgrid td{border:1px solid var(--tv-line);padding:0 .6vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -590,7 +584,9 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hbtns{margin-left:auto;display:flex;gap:8px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-#v-home .hcards.inv{margin-top:-6px}
+#v-home .hcol{display:flex;flex-direction:column;gap:10px}
+#v-home .hglance{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;align-items:start}   /* Levi: the month beside the cards, not below (21 Oct) */
+@media (max-width:1180px){#v-home .hglance{grid-template-columns:1fr}}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;transition:transform .12s ease, box-shadow .12s ease}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
@@ -612,6 +608,10 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard[class*="t-"] .ic{background:var(--surface)}
 @media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:480px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard .ic{width:36px;height:36px} }
+/* Home a size smaller (Levi, 21 Oct: "it's all a bit too big"); after the shared card rules so it wins */
+#v-home#v-home .hcards{gap:10px} #v-home#v-home .hcard{padding:12px 14px;gap:10px;border-radius:12px} #v-home#v-home .hcard .ic{width:34px;height:34px;border-radius:8px} #v-home#v-home .hcard svg{width:18px;height:18px}
+#v-home#v-home .hcard b{font-size:21px} #v-home#v-home .hcard div span{font-size:13px}
+#v-home#v-home .tcards{gap:8px} #v-home#v-home .tcard{padding:9px 12px;border-radius:10px} #v-home#v-home .tcard b{font-size:20px} #v-home#v-home .tcard span{font-size:12.5px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}

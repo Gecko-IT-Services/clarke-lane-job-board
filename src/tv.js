@@ -36,7 +36,8 @@ export function renderTv({ jobs, outwork, notes = [], today, now, page, cheer = 
     <header class="tvbar"><div class="tvbrand"><b>CLARKE LANE</b><span>ENGINEERING</span></div>
       <div class="tvmid"><div class="tvsum"><span><b>${all.length}</b> open</span>${late ? `<span class="late"><b>${late}</b> late</span>` : ''}<span class="ready"><b>${ready}</b> ready to dispatch</span>${out ? `<span><b>${out}</b> out for coating</span>` : ''}</div>
         ${moodLine(boardMood({ open: all.length, late, ready, today }), esc)}</div>
-      <div class="tvclock"><b id="tvclock">${time}</b>${esc(date)}</div></header>
+      <div class="tvclock"><b id="tvclock">${time}</b>${esc(date)}</div>
+      <button type="button" class="btn tvleave" data-tvleave title="Back to the shop floor (or press Esc)">← Leave TV board</button></header>
     <table class="tvgrid"><thead><tr><th class="cu">Customer</th><th class="so">Job no.</th>${cols.map(c => `<th class="c">${HEAD[c] || esc(SHORT[c])}</th>`).join('')}<th class="due">Due date</th><th class="note">Notes</th></tr></thead>
       <tbody>${rows}${blanks}</tbody></table>
     <footer class="tvfoot"><span class="k done">${TICK} Done</span><span class="k next">${STAR} Next step</span><span class="k todo">${STAR} Still to do</span><span class="k out"><span>OUT</span> At another company</span>
