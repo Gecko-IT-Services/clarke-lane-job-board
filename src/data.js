@@ -28,8 +28,7 @@ export async function whoAmI() {
  */
 const DESP_COLS = 'id,job_id,dn_number,despatched_on,despatched_by,xero_invoice_id,xero_invoice_no,sent_to_xero_at,emailed_at,'
   + 'delivered_on,delivered_by,received_by,cancelled_at,cancelled_by,cancelled_lines,delivered_at,delivery_note';
-const despatchRows = sb => sb.from('despatches').select(DESP_COLS).order('id')
-  .then(r => r.error ? sb.from('despatches').select('*').order('id') : r);
+const despatchRows = async sb => { const r = await allRows(sb, 'despatches', ['id'], DESP_COLS); return r.error ? allRows(sb, 'despatches', ['id']) : r; };
 /** The signature drawn on the driver's phone for one dispatch note: a PNG data URL, or '' when none. */
 export async function loadSignature(despatchId) {
   const sb = await getSupabase();
@@ -38,14 +37,28 @@ export async function loadSignature(despatchId) {
   return data?.signature || '';
 }
 
+/** Every row of a table, in `order` (a key, so pages never overlap). Supabase answers at most 1000 rows a
+ *  request; a board that read just the first 1000 would quietly lose ticks and lines on later jobs. */
+async function allRows(sb, table, order, select = '*') {
+  const PAGE = 1000, rows = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = sb.from(table).select(select).range(from, from + PAGE - 1);
+    for (const c of order) q = q.order(c);
+    const { data, error } = await q;
+    if (error) return { error };
+    rows.push(...data);
+    if (data.length < PAGE) return { data: rows };
+  }
+}
+
 /** All jobs in the app's shape (see src/core/jobs.js). */
 export async function loadJobs({ office }) {
   const sb = await getSupabase();
-  const q = t => sb.from(t).select('*');
+  const q = (t, ...order) => allRows(sb, t, order);
   const [jobs, lines, prices, procs, desps, dlines, files] = await Promise.all([
-    q('jobs').order('id'), q('job_lines').order('line_no'),
-    office ? q('job_line_prices') : Promise.resolve({ data: [] }),
-    q('job_processes'), despatchRows(sb), q('despatch_lines'), q('job_files').order('id'),
+    q('jobs', 'id'), q('job_lines', 'job_id', 'line_no'),
+    office ? q('job_line_prices', 'job_line_id') : Promise.resolve({ data: [] }),
+    q('job_processes', 'job_id', 'process'), despatchRows(sb), q('despatch_lines', 'despatch_id', 'job_line_id'), q('job_files', 'id'),
   ]);
   for (const r of [jobs, lines, prices, procs, desps, dlines]) if (r.error) fail('Could not load the jobs', r.error);
   const price = new Map(prices.data.map(p => [p.job_line_id, Number(p.unit_price)]));
