@@ -421,7 +421,7 @@ export async function deleteNote(id) {
   if (!count) throw new Error('The note was not removed. Only Levi and Mandy can remove notes.');
 }
 
-/* ---------- sales (Levi only): follow-ups on quotes and customers, and the AI email writer ---------- */
+/* ---------- CRM (Levi and Mandy): follow-ups on quotes and customers, and the AI email writer ---------- */
 export async function allQuotes() {
   const s = await spLists();
   const items = await allItems(`/sites/${s.site}/lists/${s.quotes}/items?$expand=fields&$top=500`);
@@ -537,7 +537,7 @@ export async function setEnquiry(id, p) {
   const { error } = await sb.from('enquiries').update(row).eq('id', id);
   if (error) fail('The enquiry was not updated', error);
 }
-/* ---------- ideas (Levi only): customers' websites read by AI, and ideas for winning more work ---------- */
+/* ---------- ideas (Levi and Mandy): customers' websites read by AI, and ideas for winning more work ---------- */
 const researchRow = r => ({ key: r.customer_key, customer: r.customer, website: r.website, about: r.about, news: r.news || [], openings: r.openings || [], sources: r.sources || [], at: r.created_at });
 export async function loadResearch() {
   const sb = await getSupabase();

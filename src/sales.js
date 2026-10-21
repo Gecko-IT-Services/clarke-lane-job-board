@@ -1,5 +1,5 @@
 /**
- * CRM, was Sales (Levi only; renamed 21 Oct): the month against his target, quotes to chase today, every open quote by stage, what his
+ * CRM, was Sales (renamed 21 Oct; Levi and Mandy, the month's figures and totals Levi only (md)): the month against his target, quotes to chase today, every open quote by stage, what his
  * quote history says, and customers to get back in touch with (from Xero's invoices), with emails drafted by
  * the board or written by AI from the facts. Logic in core/sales.js (tested); this file only draws.
  */
@@ -10,7 +10,7 @@ export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply',
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
 const later = x => x <= 0.01 ? 'almost none are ordered' : pc(x) + ' are ordered';
 
-export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today, reorders = [], more = [], news = null, enquiriesBox = '' }, h) {
+export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today, reorders = [], more = [], news = null, enquiriesBox = '', md = false }, h) {
   const { esc, fmt, gbp } = h;
   if (err) return `<div class="hhead"><div><h2>CRM</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
   if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
@@ -46,7 +46,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
   const live = open.filter(q => q.stage !== 'dead'), v = view || 'live';
   const shown = v === 'live' ? live : v === 'all' ? open : open.filter(q => q.stage === v);
   const hist = q => (actions || []).filter(a => a.spId === q.spId);
-  const listBox = `<section class="panel"><h3>Open quotes <small>${live.length} live · ${gbp(live.reduce((a, q) => a + q.value, 0))} quoted · ${gbp(live.reduce((a, q) => a + q.likely, 0))} likely</small></h3>
+  const listBox = `<section class="panel"><h3>Open quotes <small>${live.length} live${md ? ` · ${gbp(live.reduce((a, q) => a + q.value, 0))} quoted · ${gbp(live.reduce((a, q) => a + q.likely, 0))} likely` : ''}</small></h3>
     <div class="seg sseg"><button type="button" data-sview="live" aria-pressed="${v === 'live'}">Live <em>${live.length}</em></button>${Object.entries(STAGES).map(([k, t]) => counts[k] ? `<button type="button" data-sview="${k}" aria-pressed="${v === k}">${esc(t)} <em>${counts[k]}</em></button>` : '').join('')}</div>
     ${v === 'dead' ? `<p class="note">These are well past the point your won quotes usually come in, so they are rarely ordered now. Mark them lost with a reason to tidy up (the reasons show what to fix), or chase one if it still matters.</p>` : ''}
     ${shown.length ? `<div class="tbl-wrap"><table class="lines slist"><thead><tr><th>Quote</th><th>Customer</th><th class="num">Value</th><th class="num">Sent</th><th class="num">Chance</th><th class="num">Likely</th><th>Stage</th><th>Last</th></tr></thead><tbody>
@@ -82,10 +82,10 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
   const custBox = `<section class="panel"><h3>Customers to get back in touch with</h3>
     ${histErr ? `<div class="err">Xero's invoices could not be read: ${esc(histErr)}</div>` : !base ? '<p class="note">Reading Xero\'s invoices…</p>'
       : `<p class="note">From Xero's sales invoices${histEarliest ? ` (back to ${esc(fmt(histEarliest))})` : ''}: regular customers who have gone quiet for well past their usual gap, and customers who have not ordered for 6 months.${histEarliest && histEarliest > new Date(Date.parse(today) - 200 * 864e5).toISOString().slice(0, 10) ? ' <b>Xero only has a few months of history</b>, so this fills in as orders build up.' : ''}</p>
-      ${quiet.length ? `<div class="tbl-wrap"><table class="lines squiet"><thead><tr><th>Customer</th><th>Usually orders</th><th>Last order</th><th class="num">Last 12 months</th><th>They buy</th><th></th></tr></thead><tbody>
+      ${quiet.length ? `<div class="tbl-wrap"><table class="lines squiet"><thead><tr><th>Customer</th><th>Usually orders</th><th>Last order</th>${md ? '<th class="num">Last 12 months</th>' : ''}<th>They buy</th><th></th></tr></thead><tbody>
         ${quiet.slice(0, 25).map(c => `<tr><td><b>${esc(c.customer)}</b>${c.lapsed ? ' <span class="chip late">Lapsed</span>' : ' <span class="chip soon">Gone quiet</span>'}</td>
           <td>${c.usual ? 'every ' + esc(days(c.usual)) : '—'}<small>${c.orders} orders</small></td><td>${esc(fmt(c.last))}<small>${esc(days(c.since))} ago</small></td>
-          <td class="num">${gbp(c.yearNet)}${c.prevNet > c.yearNet ? `<small>was ${gbp(c.prevNet)}</small>` : ''}</td>
+          ${md ? `<td class="num">${gbp(c.yearNet)}${c.prevNet > c.yearNet ? `<small>was ${gbp(c.prevNet)}</small>` : ''}</td>` : ''}
           <td>${c.items.slice(0, 2).map(i => esc(i.item)).join('<br>') || '—'}</td>
           <td>${writeBtn(c)} <button class="btn sm" type="button" data-ccall="${esc(c.key)}">Log a call</button> <button class="btn sm link" type="button" data-custpage="${esc(c.key)}">Page</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="allclear ok">Nobody has gone quiet.</p>'}`}</section>`;
@@ -108,7 +108,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
     <div class="snewslist">${active.slice(0, 60).map((c, i) => `<label><input type="checkbox" data-newspick="${esc(c.key)}" ${(news?.picked ? news.picked.includes(c.key) : i < 15) ? 'checked' : ''}> ${esc(c.customer)}</label>`).join('')}</div>
     <div class="actions"><button class="btn pri" type="button" data-newsgo ${news?.busy ? 'disabled' : ''}>${news?.busy ? esc(news.busy) : `${icon('mail')}Draft the emails`}</button></div></section>`;
 
-  return `<div class="hhead"><div><h2>CRM</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with. Only you see this page.</p></div>
+  return `<div class="hhead"><div><h2>CRM</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with.${md ? ' Only you see the month\'s figures and totals.' : ''}</p></div>
       <div class="hbtns"><button class="btn" type="button" data-salesreload>${icon('refresh')}Refresh</button></div></div>
-    ${monthBox}${enquiriesBox}${aiBox}${chaseBox}${listBox}${reorderBox}${moreBox}${custBox}${newsBox}${says}`;
+    ${md ? monthBox : ''}${enquiriesBox}${aiBox}${chaseBox}${listBox}${reorderBox}${moreBox}${custBox}${newsBox}${says}`;
 }
