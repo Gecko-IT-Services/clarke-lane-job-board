@@ -607,6 +607,10 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hbtns{margin-left:auto;display:flex;gap:8px}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+#v-home .hmd{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:stretch}   /* Levi: the month beside what to chase (21 Oct) */
+@media (max-width:1000px){#v-home .hmd{grid-template-columns:1fr}}
+#v-home .hmd .month{margin:0} #v-home .sales-today{display:flex;flex-direction:column;gap:10px} #v-home .sales-today .tcards{grid-template-columns:repeat(2,minmax(0,1fr))}
+#v-home .sales-today .hsec-h{margin:0} #v-home .sales-today ul.tasks{margin-top:2px}
 #v-home .hcol{display:flex;flex-direction:column;gap:10px}
 #v-home .hglance{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;align-items:start}   /* Levi: the month beside the cards, not below (21 Oct) */
 @media (max-width:1180px){#v-home .hglance{grid-template-columns:1fr}}
