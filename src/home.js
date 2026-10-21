@@ -14,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ todayBox = '', jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
+export function renderHome({ todayBox = '', reorderBox = '', jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -143,6 +143,7 @@ export function renderHome({ todayBox = '', jobs, me, office, md = false, editTa
     <div class="${month ? 'hglance' : ''}"><div class="hcol"><div class="hcards">${cards}</div>
       ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}</div>
       ${month}</div>
+    ${reorderBox}
     <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>
     <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;

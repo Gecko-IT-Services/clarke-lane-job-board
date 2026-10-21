@@ -99,3 +99,6 @@ export function roundNudge(round, actions, today) {
   const lately = (actions || []).some(a => a.kind === 'reorder' && dayNo(today) - dayNo(a.at) < 7);
   return monday || !lately ? due : 0;
 }
+/** The prompt's words: on a Monday it is the Monday round; any other day it is because nobody has asked for a week. */
+export const nudgeWords = (n, today) => new Date(today + 'T12:00:00Z').getUTCDay() === 1
+  ? `Monday reorder round: ${n} to ask this week.` : `Nobody has asked about a repeat part for a week: ${n} waiting.`;
