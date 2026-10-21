@@ -94,3 +94,6 @@ figure the customer wrote taken out of what is sent to the AI. The shop floor ne
 ## Not verified here
 The edge function deploys on merge and cannot be run in this environment: the new schema fields and prompt text
 were checked by reading, not by a live call.
+
+## Publishing note (21 Oct)
+The site is published by GitHub Pages on every merge to `main` ("pages build and deployment" under Actions, usually about a minute). Once the `deploy` step sat in GitHub's queue for half an hour; cancelling it left the run marked as running, so it could not be re-run. Any new merge to `main` starts a fresh publish, which is the simplest fix. The Supabase migrations and the `sales-ai` function deploy separately and were not affected.
