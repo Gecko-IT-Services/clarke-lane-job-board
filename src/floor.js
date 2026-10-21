@@ -11,6 +11,7 @@ import { floorQueue, floorStations, nextStep, partsLeft, lineHtml, dayNo, needed
 import { OUT_PROCESSES, outBoard, outNow, suppliersUsed } from './core/outwork.js';
 import { noteSummary, newNotes } from './core/notes.js';
 import { floorNoteStrip } from './notes.js';
+import { deliveryRuns } from './core/deliveries.js';
 
 const count = (n, w, many = w + 's') => `${n} ${n === 1 ? w : many}`;
 export const clockHtml = now => `<b>${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</b>${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
@@ -35,6 +36,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
     return `<div class="kiosk">${bar('<div><h2>Shop floor</h2><p class="sub">Tap your station</p></div>')}${noteBar}
       <div class="tiles">${tiles}${outTile}</div>
       <div class="kfoot"><button type="button" class="btn" data-station="all">All jobs <em>${floorQueue(jobs, 'all').length}</em></button>
+        <button type="button" class="btn" data-tab="deliveries" title="The driver's screen: mark a delivery and get it signed for on the phone">Deliveries <em>${deliveryRuns(jobs, today).length}</em></button>
         <button type="button" class="btn" data-kiosk="${kiosk ? 'off' : 'on'}" aria-pressed="${!!kiosk}">${kiosk ? 'Leave kiosk mode' : 'Kiosk mode'}</button>
         <button type="button" class="btn" data-tvopen title="The whiteboard for the workshop TV: display only, updates by itself. Esc comes back here.">TV board</button>
         <span class="note">Updates by itself. Goes back to this screen after 2 minutes untouched.</span></div></div>`;

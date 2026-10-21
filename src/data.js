@@ -21,6 +21,23 @@ export async function whoAmI() {
   return { email: r.email || '', name: r.name || '', role: r.role || null };
 }
 
+/**
+ * Dispatch notes without their signatures: a signature is a picture (up to 80 KB), and every screen reloads the
+ * jobs each minute, so it is read only when a delivery note is opened (loadSignature). Before the 22 Oct migration
+ * the new columns are missing; then every column is read, as before.
+ */
+const DESP_COLS = 'id,job_id,dn_number,despatched_on,despatched_by,xero_invoice_id,xero_invoice_no,sent_to_xero_at,emailed_at,'
+  + 'delivered_on,delivered_by,received_by,cancelled_at,cancelled_by,cancelled_lines,delivered_at,delivery_note';
+const despatchRows = sb => sb.from('despatches').select(DESP_COLS).order('id')
+  .then(r => r.error ? sb.from('despatches').select('*').order('id') : r);
+/** The signature drawn on the driver's phone for one dispatch note: a PNG data URL, or '' when none. */
+export async function loadSignature(despatchId) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('despatches').select('signature').eq('id', despatchId).maybeSingle();
+  if (error) return '';   // before the migration: no signatures yet
+  return data?.signature || '';
+}
+
 /** All jobs in the app's shape (see src/core/jobs.js). */
 export async function loadJobs({ office }) {
   const sb = await getSupabase();
@@ -28,7 +45,7 @@ export async function loadJobs({ office }) {
   const [jobs, lines, prices, procs, desps, dlines, files] = await Promise.all([
     q('jobs').order('id'), q('job_lines').order('line_no'),
     office ? q('job_line_prices') : Promise.resolve({ data: [] }),
-    q('job_processes'), q('despatches').order('id'), q('despatch_lines'), q('job_files').order('id'),
+    q('job_processes'), despatchRows(sb), q('despatch_lines'), q('job_files').order('id'),
   ]);
   for (const r of [jobs, lines, prices, procs, desps, dlines]) if (r.error) fail('Could not load the jobs', r.error);
   const price = new Map(prices.data.map(p => [p.job_line_id, Number(p.unit_price)]));
@@ -47,7 +64,8 @@ export async function loadJobs({ office }) {
   for (const d of desps.data) {
     const o = { id: d.id, dn: d.dn_number, date: d.despatched_on, by: d.despatched_by, lines: {},
       xero: d.xero_invoice_no || d.xero_invoice_id ? { no: d.xero_invoice_no || '', id: d.xero_invoice_id || null, at: d.sent_to_xero_at } : null,
-      emailedAt: d.emailed_at, deliveredOn: d.delivered_on, deliveredBy: d.delivered_by, receivedBy: d.received_by };
+      emailedAt: d.emailed_at, deliveredOn: d.delivered_on, deliveredBy: d.delivered_by, receivedBy: d.received_by,
+      deliveredAt: d.delivered_at ?? null, deliveryNote: d.delivery_note || '' };   // the signature itself: loadSignature, when a note is opened
     if (d.cancelled_at) {   // kept for the record only: none of its quantities count as sent
       o.cancelled = { at: d.cancelled_at, by: d.cancelled_by };
       for (const x of d.cancelled_lines || []) o.lines[x.job_line_id] = x.qty;
@@ -135,10 +153,15 @@ export async function createDespatch(jobId, lines) {
   return data;
 }
 
-/** what: 'emailed' | 'delivered' | 'undelivered' */
-export async function markDespatch(despatchId, what, receivedBy = '') {
+/** what: 'emailed' | 'delivered' | 'undelivered'. signature: a PNG data URL from the driver's screen; note: where
+ *  it was left when nobody signed. Both are only sent when there is one, so Mark delivered on the Dispatch tab
+ *  keeps working on a database from before the 22 Oct migration. */
+export async function markDespatch(despatchId, what, receivedBy = '', signature = '', note = '') {
   const sb = await getSupabase();
-  const { error } = await sb.rpc('mark_despatch', { p_despatch_id: despatchId, p_what: what, p_received_by: receivedBy });
+  const args = { p_despatch_id: despatchId, p_what: what, p_received_by: receivedBy };
+  if (signature) args.p_signature = signature;
+  if (note) args.p_note = note;
+  const { error } = await sb.rpc('mark_despatch', args);
   if (error) fail('Not saved', error);
 }
 /** Cancel a dispatch note not yet invoiced: it stays, marked cancelled; its quantities are outstanding again. */

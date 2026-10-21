@@ -1,5 +1,7 @@
 // Smoke-test stand-in for src/data.js: made-up orders held in memory. Not real customers.
 const role = new URLSearchParams(location.search).get('role') || 'md';   // md = Levi, office = Mandy, floor = the shop floor
+// A made-up scribble standing in for a signature drawn on the driver's phone.
+const FAKE_SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAA8CAYAAADPLpCHAAACmklEQVR42u2cW07DMBBFicUGQOx/hYguoXxVqio3je153EnP+aJI1PO4nowf4eMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwJKNEEAWX98/19vPl79fEy02wgrZYu59nuUzwth7rGaieoKUfP76/rmqxv3y97tZidml5Rgxrrq4ZxIR7bPHY93DptvvVm3cvJK7Z5hikL2FkumzlVg842ZlY/Mw8pVRj45YPnJUq14veRWeKJ6tRu/zqo0tI7k94VcR9UqlzfJXJc4RY7es5KoFO8PfrIqYEecjsbOo0i0zuZX6aA9/o4WlEGdvG7bs5KouXrxty1okWox7dCL2Ju7IAnrGvqY429RaD4+JVq2fvi3eZ/4mcuJuCslVqFxZ9mRXau8tx5HtXAudtRXjztrnRYpNabHmLebVdsW0QkdXkux++h38fXXIseL/3mng0e+diUlbqSjvQJS/GTsfPRGPHpKNjDF69jATk6ZaPZQfw2ca/5nAVnJ9VKgevspeH1U4cImewCr7xFZi3vue+3H2dlBGq3SLcLKSqFX2wqP9tR535I6LZazlL/hHilph/ztqAXpfEa1EtRK/vUo8UqVLvLESucugUJ0fE9hbsFn52fN1ZhzL+K3cwCy1Y+HZDqgdu1u/AXN0y2xWmJbxe2brkTFKvlNo3Roo3iF5dl94poKNbMXNtHjW+VjJw1ZVzO90KerRrlkBeVRctQOosm99W1UF9TvYvcTNvFgQdbMuIh57Y73F+3wVFoIV46wYv5IVenUrL+NaY/U4VykG7QzBXukpEfNa66EWv9L/OWlm5a+8AKxSOJTXHadJ6iuhWlyJpEJrV+dTCfpo5UDI+YtxWo6ARQ4A0HoAAAAAAAAAAAAAAAAAAAjwD2RVpx4eWdBqAAAAAElFTkSuQmCC';
 let jobs = [
   { id: 1, so: 'SO-9781', quote: 'Q-0301', spQuoteId: 301, customer: 'Example Customer Ltd', contactName: 'A Buyer', contactEmail: '', po: 'PO-1',
     ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO14 3TJ', status: 'open',
@@ -9,7 +11,9 @@ let jobs = [
             { id: 12, lineNo: 2, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23', procs: ['Laser', 'Fold'] },
             { id: 13, lineNo: 3, part: 'Bracket BRK-1001 — 3mm S275, 304 stainless cover', qty: 10, price: 13.1, due: '2026-10-30', procs: [] }],
     procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T09:00:00Z' }, 'Fold': { done: false } },
-    despatches: [{ id: 1, dn: 'DN-0001', date: '2026-10-14', lines: { 11: 10 }, xero: null, deliveredOn: '2026-10-14' },
+    // DN-0001 was marked on the driver's screen (22 Oct): signed for on the phone, so its delivery note shows the signature.
+    despatches: [{ id: 1, dn: 'DN-0001', date: '2026-10-14', lines: { 11: 10 }, xero: null, deliveredOn: '2026-10-14', deliveredAt: '2026-10-14T14:35:00Z',
+        deliveredBy: 'levi@clarke-lane.example', receivedBy: 'A Buyer', signature: FAKE_SIGNATURE, deliveryNote: 'Signed at goods-in' },
       { id: 5, dn: 'DN-0005', date: '2026-10-15', lines: { 12: 10 }, xero: null, emailedAt: '2026-10-15T09:30:00Z' }] },
   { id: 2, so: 'SO-9782', quote: '', spQuoteId: null, customer: 'Second Example Ltd', contactName: '', contactEmail: '', po: '',
     ordered: '2026-10-14', due: '2026-11-04', notes: 'Rush', address: 'Unit 9, Sample Trading Estate\nExampletown EX1 2AB', status: 'open',
@@ -21,7 +25,8 @@ let jobs = [
 ];
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
-export const whoAmI = async () => ({ email: role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : 'workshop@clarke-lane.example', name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : 'Shop Floor', role });
+const whoEmail = () => role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : 'workshop@clarke-lane.example';
+export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : 'Shop Floor', role });
 const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
 export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
 export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
@@ -140,10 +145,14 @@ export const xero = async (route, body) => {
 let cmap = new Map();
 export const loadContactMap = async () => new Map(cmap);
 export const saveContact = async (k, c) => { cmap.set(k, c); };
-export const markDespatch = async (id, what, receivedBy) => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) {
+export const markDespatch = async (id, what, receivedBy = '', signature = '', note = '') => {
+  if (signature && (signature.length > 80000 || !signature.startsWith('data:image/png;base64,'))) throw new Error('Not saved: Not a signature.');
+  for (const j of jobs) for (const d of j.despatches) if (d.id === id) {
   if (what === 'emailed') d.emailedAt = new Date().toISOString();
-  if (what === 'delivered') { d.deliveredOn = '2026-10-15'; d.receivedBy = receivedBy; }
-  if (what === 'undelivered') { d.deliveredOn = null; d.receivedBy = ''; } } };
+  if (what === 'delivered') { const now = new Date(); Object.assign(d, { deliveredOn: now.toLocaleDateString('en-CA'), deliveredAt: now.toISOString(), deliveredBy: whoEmail(),
+    receivedBy: receivedBy.trim() || d.receivedBy || '', signature: signature || d.signature || '', deliveryNote: note.trim() || d.deliveryNote || '' }); }
+  if (what === 'undelivered') Object.assign(d, { deliveredOn: null, deliveredAt: null, deliveredBy: null, receivedBy: '', signature: '', deliveryNote: '' }); } };
+export const loadSignature = async id => { for (const j of jobs) for (const d of j.despatches) if (d.id === id) return d.signature || ''; return ''; };
 export const markAckEmailed = async id => { find(id).ackEmailedAt = new Date().toISOString(); };
 export let lastDraft = null;
 export const draftEmail = async m => { lastDraft = { ...m, pdfBytes: Math.round((m.pdfBase64 || "").length * 0.75) }; window.__lastDraft = lastDraft; return null; };
@@ -173,7 +182,7 @@ jobs.push(
 export const cancelDespatch = async id => { for (const j of jobs) { const d = j.despatches.find(x => x.id === id); if (d) {
   if (d.xero) throw new Error(`${d.dn} is invoiced in Xero, so it cannot be cancelled here.`);
   j.despatches = j.despatches.filter(x => x !== d); (j.cancelledDespatches ||= []).push({ ...d, cancelled: { at: new Date().toISOString(), by: 'levi@clarke-lane.co.uk' } }); } } };
-let book = { people: [{ id: 1, key: 'fourthexample', customer: 'Fourth Example Ltd', role: 'deliveries', name: 'Goods In Team', email: 'goodsin@example.com', phone: '', notes: '', main: true }],
+let book = { people: [{ id: 1, key: 'fourthexample', customer: 'Fourth Example Ltd', role: 'deliveries', name: 'Goods In Team', email: 'goodsin@example.com', phone: '07700 900123', notes: '', main: true }],
   sites: [{ id: 1, key: 'fourthexample', customer: 'Fourth Example Ltd', label: 'Main works', address: 'Example Road\nChandlers Ford SO53 2FE', contact: '', phone: '', main: true },
           { id: 2, key: 'fifthexample', customer: 'Fifth Example Ltd', label: '', address: 'Example Lane\nWinchester SO23 7BW', contact: '', phone: '', main: true }] };
 let bookId = 10;

@@ -12,7 +12,7 @@ const notes = n => `${n} note${n === 1 ? '' : 's'}`;
 const noteMatch = ({ job: j, d }, q) => [d.dn, j.so, j.po, j.customer, ...j.lines.map(l => l.po)].some(v => (v || '').toLowerCase().includes(q));
 
 export function renderDispatch({ lists: s, office, md = false, view, chosen, search, desp, form, cancelDn, xero }, h) {
-  const { esc, fmt, gbp, dueChip, parts } = h;
+  const { esc, fmt, gbp, dueChip, parts, fmtTime } = h;
   const cards = [
     card('ok', 'ready', s.ready.length, 'Ready to dispatch', s.ready.length > 0),
     card('warn', 'mail', s.notEmailed.length, 'Not emailed to the customer', s.notEmailed.length > 0),
@@ -41,7 +41,7 @@ export function renderDispatch({ lists: s, office, md = false, view, chosen, sea
   const deliver = (d, pri) => `<form class="inv" data-deliver="${d.id}"><input type="text" id="rcv-${d.id}" placeholder="Signed by (optional)" aria-label="Who signed for ${esc(d.dn)}"><button class="btn sm${pri ? ' pri' : ''}" type="submit">Mark delivered</button></form>`;
   const progress = d => d.cancelled ? chip(`Cancelled ${fmt(d.cancelled.at.slice(0, 10))}${d.cancelled.by ? ' by ' + esc(d.cancelled.by) : ''}`)
     : [emailed(d),
-      d.deliveredOn ? chip(`Delivered ${fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : ''}`, 'ok') + (d.xero ? '' : ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>`) : chip('Out for delivery'),
+      d.deliveredOn ? chip(`Delivered ${d.deliveredAt && fmtTime ? fmtTime(d.deliveredAt) : fmt(d.deliveredOn)}${d.receivedBy ? ' · ' + esc(d.receivedBy) : d.deliveryNote ? ' · nobody to sign' : ''}`, 'ok') + (d.xero ? '' : ` <button class="btn link sm" type="button" data-undeliver="${d.id}">undo</button>`) : chip('Out for delivery'),
       office ? (d.xero ? chip(esc(d.xero.no), 'ok') : d.deliveredOn ? chip('Waiting for Xero', 'soon') : '') : ''].join(' ');
   const cancelRow = (j, d) => cancelDn !== d.id ? '' : `<tr class="confirmrow"><td colspan="5"><div class="warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <span><b>Cancel ${esc(d.dn)}?</b> It stays on the list marked cancelled, its number is not reused, and everything on it goes back to outstanding on ${esc(j.so)}. Use this when the goods did not go, or came back.</span>
@@ -74,7 +74,7 @@ export function renderDispatch({ lists: s, office, md = false, view, chosen, sea
 
   return `<div class="home">
     <div class="hhead"><div><h2>Dispatch</h2><p class="sub">Send all of a job or part of it. Each dispatch gets its own note, and only what went out is invoiced.</p></div>
-      <div class="hbtns"><button class="btn" type="button" data-tab="map" title="Where deliveries are going, and what is nearby">Delivery map</button></div></div>
+      <div class="hbtns"><button class="btn" type="button" data-tab="deliveries" title="The phone screen the driver uses: tap a delivery, get it signed for, save">Driver's screen</button><button class="btn" type="button" data-tab="map" title="Where deliveries are going, and what is nearby">Delivery map</button></div></div>
     <div class="hcards">${cards}</div>
     ${form || ''}
     <section><div class="hsec-h"><h3>${q ? 'Search results' : V.title}</h3><span class="note">${q ? `${notes(list.length)} found` : V.sub}</span>${seg}${find}${v === 'xero' && xero ? xero.send : ''}</div>${table}${chooser}</section>
