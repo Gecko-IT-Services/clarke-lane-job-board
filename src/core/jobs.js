@@ -635,7 +635,7 @@ export function selectionTotals(jobs, ids) {
 }
 
 /** A Xero line as an order line's part text: the item code (often the customer's part number) in front of
- *  the description, unless the description already has it (Mandy, 20 Oct: VFS 01-11-1696). */
+ *  the description, unless the description already has it (Mandy, 20 Oct: SAM 01-11-1696). */
 export function xeroLinePart(l) {
   const code = String(l.code || '').trim(), d = String(l.description || '').trim();
   const has = new RegExp(`(^|[^A-Z0-9])${code.toUpperCase().replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}($|[^A-Z0-9])`).test(d.toUpperCase());   // as a whole word

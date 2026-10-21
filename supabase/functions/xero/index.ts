@@ -249,7 +249,7 @@ async function items() {
     throw e;
   }
   // Every product Xero has, sold or not: those converted from Sage are often not ticked as sold
-  // (Mandy, 20 Oct: VFS01-11-1696 is in Xero but never showed). The code is usually the part number.
+  // (Mandy, 20 Oct: SAM01-11-1696 is in Xero but never showed). The code is usually the part number.
   const all = r.Items || [];
   return { total: all.length, items: all.map((i: any) => ({
     code: (i.Code || '').trim(), name: (i.Name || '').trim(), description: (i.Description || i.Name || '').trim(),

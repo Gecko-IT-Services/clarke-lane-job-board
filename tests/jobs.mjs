@@ -3,7 +3,7 @@ import { repeatLines, deliveryDates, deliveryLabel, despatchStatus, invoiceStatu
   suggestProcesses, describeLine, unitPrice, allDone, salesSummary, boardLists, nextStep, floorQueue, floorStations, partsLeft, dayNo, dispatchLists } from '../src/core/jobs.js';
 
 const job = over => ({
-  id: 1, so: 'SO-9729', customer: 'BSA Regal Group Ltd', po: 'M32991', due: '2026-10-30', status: 'open',
+  id: 1, so: 'SO-9729', customer: 'Example Group Ltd', po: 'PO-0001', due: '2026-10-30', status: 'open',
   lines: [{ id: 10, lineNo: 1, part: 'Bracket', qty: 20, price: 13.1, due: '2026-10-30' }, { id: 11, lineNo: 2, part: 'Plate', qty: 5, price: 2, due: '2026-10-30' }],
   procs: { 'Laser': { done: false }, 'Fold': { done: false } }, despatches: [], ...over
 });
@@ -378,23 +378,23 @@ console.log('jobs: ok');
 {
   const { partSuggestions } = await import('../src/core/jobs.js');
   const jobs = [
-    { so: 'SO-1', customer: 'VFS Ltd', ordered: '2026-10-01', lines: [{ part: 'Bracket 3mm', price: 12 }] },
-    { so: 'SO-2', customer: 'VFS Ltd', ordered: '2026-10-10', lines: [{ part: 'bracket  3mm', price: 12.4 }, { part: 'Cover', price: 5 }] },
-    { so: 'SO-3', customer: 'Wessex', ordered: '2026-10-12', lines: [{ part: 'Guard', price: 8 }, { part: '', price: 1 }] },
+    { so: 'SO-1', customer: 'Sample Ltd', ordered: '2026-10-01', lines: [{ part: 'Bracket 3mm', price: 12 }] },
+    { so: 'SO-2', customer: 'Sample Ltd', ordered: '2026-10-10', lines: [{ part: 'bracket  3mm', price: 12.4 }, { part: 'Cover', price: 5 }] },
+    { so: 'SO-3', customer: 'Third Example', ordered: '2026-10-12', lines: [{ part: 'Guard', price: 8 }, { part: '', price: 1 }] },
   ];
   const items = [{ code: 'BR3', description: 'Bracket 3mm', price: 11 }, { code: 'PL', description: 'Plate 6mm', price: 30 }];
-  const s = partSuggestions(jobs, items, 'vfs ltd');
+  const s = partSuggestions(jobs, items, 'sample ltd');
   assert.deepEqual(s.map(x => [x.part, x.price, x.from]), [['bracket  3mm', 12.4, 'customer'], ['Cover', 5, 'customer'], ['Guard', 8, 'board'], ['PL · Plate 6mm', 30, 'xero']],
     'latest price for the customer wins; a Xero item already ordered is not repeated; blank parts ignored');
   assert.deepEqual(partSuggestions([], items, 'x').map(x => x.from), ['xero', 'xero']);
   // Xero products by part number (code in front), and Parts for the customer (Mandy, 20 Oct).
-  const vfs = partSuggestions([], [{ code: 'VFS01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'VFS (Southampton) Ltd');
-  assert.deepEqual(vfs.map(x => x.part), ['VFS01-11-1696 · Post - Rear LH - Support'], 'typing the part number finds it');
-  assert.deepEqual(vfs.map(x => [x.partNo, x.description]), [['VFS01-11-1696', 'Post - Rear LH - Support']], 'picking it fills both boxes (22 Oct)');
-  const withParts = partSuggestions([], [{ code: 'VFS01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'VFS (Southampton) Ltd',
-    [{ partNo: 'VFS01-11-1696', description: 'Post - Rear LH', customerKey: 'vfssouthampton' }, { partNo: 'EX-1', description: 'Shim', customerKey: 'other' }]);
-  assert.deepEqual(withParts.map(x => [x.part, x.from]), [['VFS01-11-1696 · Post - Rear LH', 'customer'], ['EX-1 · Shim', 'parts']], 'Parts first; the same number from Xero not repeated');
-  assert.deepEqual(withParts.map(x => [x.partNo, x.description]), [['VFS01-11-1696', 'Post - Rear LH'], ['EX-1', 'Shim']], 'a Parts part fills Part no. and Description');
+  const sam = partSuggestions([], [{ code: 'SAM01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'Sample (Hampshire) Ltd');
+  assert.deepEqual(sam.map(x => x.part), ['SAM01-11-1696 · Post - Rear LH - Support'], 'typing the part number finds it');
+  assert.deepEqual(sam.map(x => [x.partNo, x.description]), [['SAM01-11-1696', 'Post - Rear LH - Support']], 'picking it fills both boxes (22 Oct)');
+  const withParts = partSuggestions([], [{ code: 'SAM01-11-1696', description: 'Post - Rear LH - Support', price: 42 }], 'Sample (Hampshire) Ltd',
+    [{ partNo: 'SAM01-11-1696', description: 'Post - Rear LH', customerKey: 'samplehampshire' }, { partNo: 'EX-1', description: 'Shim', customerKey: 'other' }]);
+  assert.deepEqual(withParts.map(x => [x.part, x.from]), [['SAM01-11-1696 · Post - Rear LH', 'customer'], ['EX-1 · Shim', 'parts']], 'Parts first; the same number from Xero not repeated');
+  assert.deepEqual(withParts.map(x => [x.partNo, x.description]), [['SAM01-11-1696', 'Post - Rear LH'], ['EX-1', 'Shim']], 'a Parts part fills Part no. and Description');
   // An earlier order's line with a Part no. box offers both; one without offers its text with Part no. empty.
   const own = partSuggestions([{ so: 'SO-9', customer: 'Acme Fab', ordered: '2026-10-21', lines: [{ partNo: 'BRK-1001', part: 'Mounting bracket', price: 3 }, { partNo: '', part: 'Cover plate', price: 2 }] }], [], 'Acme Fab');
   assert.deepEqual(own.map(x => [x.part, x.partNo, x.description]), [['BRK-1001 · Mounting bracket', 'BRK-1001', 'Mounting bracket'], ['Cover plate', '', 'Cover plate']]);
@@ -473,8 +473,8 @@ console.log('jobs: ok');
 {
   const { poSuggestions } = await import('../src/core/jobs.js');
   const J = (id, customer, parts) => ({ id, so: 'SO-' + id, customer, lines: parts.map((part, i) => ({ id: id * 10 + i, part })) });
-  const jobs = [J(1, 'VFS (Southampton) Ltd', ['Valve Guard 2mm', 'Bracket A']), J(2, 'VFS (Southampton) Ltd', ['Cover plate']),
-    J(3, 'Wessex International', ['Panel']), J(4, 'VFS (Southampton) Ltd', ['Valve guard 2mm'])];
+  const jobs = [J(1, 'Sample (Hampshire) Ltd', ['Valve Guard 2mm', 'Bracket A']), J(2, 'Sample (Hampshire) Ltd', ['Cover plate']),
+    J(3, 'Third Example International', ['Panel']), J(4, 'Sample (Hampshire) Ltd', ['Valve guard 2mm'])];
   const pos = [
     { id: 1, jobId: 1, lines: [{ description: 'Powder coat RAL 9005' }], at: '2026-10-01T10:00:00Z' },
     { id: 2, jobId: 2, lines: [{ description: 'Zinc plate' }], at: '2026-10-05T10:00:00Z' },
@@ -552,12 +552,12 @@ console.log('jobs: ok');
 // partMatches: the Part box's list stays short however many Xero products there are.
 {
   const { partMatches } = await import('../src/core/jobs.js');
-  const list = [{ part: 'BRK-1 bracket', from: 'customer' }, ...Array.from({ length: 8000 }, (_, i) => ({ part: `X${i} plate`, from: 'xero' })), { part: 'VFS01-11-1696 cover', from: 'xero' }];
+  const list = [{ part: 'BRK-1 bracket', from: 'customer' }, ...Array.from({ length: 8000 }, (_, i) => ({ part: `X${i} plate`, from: 'xero' })), { part: 'SAM01-11-1696 cover', from: 'xero' }];
   const assert = (await import('node:assert')).strict;
   assert.deepEqual(partMatches(list, '').map(x => x.part), ['BRK-1 bracket']);
   assert.equal(partMatches(list, 'plate').length, 50);
-  assert.deepEqual(partMatches(list, 'vfs01-11').map(x => x.part), ['VFS01-11-1696 cover']);
-  assert.deepEqual(partMatches(list, '1696 COVER').map(x => x.part), ['VFS01-11-1696 cover']);
+  assert.deepEqual(partMatches(list, 'sam01-11').map(x => x.part), ['SAM01-11-1696 cover']);
+  assert.deepEqual(partMatches(list, '1696 COVER').map(x => x.part), ['SAM01-11-1696 cover']);
   console.log('partMatches ok');
 }
 
