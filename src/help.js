@@ -260,7 +260,7 @@ function mapAndCustomers(office) {
     <p>Xero's contacts are often the customer's accounts people. <b>Customers</b> (in the <b>CRM</b> tab) keeps the people operations actually deal with, and where goods go. Xero is not changed.</p>
     ${steps(['Pick a customer on the left (or type one under the list and press <b>Open</b>).',
       '<b>Add a person</b> with a role: Orders / buyer, Goods in / deliveries, Accounts or Other. Tick <b>Main contact</b> for the one to use first.',
-      '<b>Add a delivery address</b>, with the postcode, and tick <b>Usual delivery address</b> for the normal one.',
+      '<b>Add a delivery address</b>, with the postcode, and tick <b>Usual delivery address</b> for the normal one. <b>Copy in Xero\'s address</b> fills the form from Xero (their delivery address if Xero has one, else their main address) for you to check and save. <b>Copy in Xero\'s contact</b> does the same for a person.',
       'New orders then fill in the <b>main Orders / buyer</b> contact and the <b>usual address</b> instead of Xero\'s. Other saved addresses are in <b>Saved delivery addresses</b> on the order form, and saved people appear when you click in <b>Contact</b>.',
       'Delivery notes are emailed to the <b>main Goods in / deliveries</b> contact when there is one, otherwise to the order\'s contact.',
       'On the order form, <b>Save contact and address to the contact book</b> keeps what you typed for next time.'])}
