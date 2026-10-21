@@ -5,5 +5,5 @@
 verify_jwt = false
 
 [functions.sales-ai]
-# Checks the caller itself (Levi only), like the xero function.
+# Checks the caller itself (Levi and Mandy), like the xero function.
 verify_jwt = false

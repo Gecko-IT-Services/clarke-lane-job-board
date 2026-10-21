@@ -1,5 +1,5 @@
 /**
- * Ideas (Levi only, part of CRM): AI ideas for winning more work from what the board knows, and what each
+ * Ideas (Levi and Mandy, part of CRM): AI ideas for winning more work from what the board knows, and what each
  * customer's website and public pages say about them. Logic in core/ideas.js (tested); this file only draws.
  * Nothing is sent: ideas become emails (Outlook drafts) or tasks when Levi picks them.
  */

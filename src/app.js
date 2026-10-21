@@ -398,10 +398,10 @@ const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status ===
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
-  // Map lives under Dispatch and Customers under Sales orders (Philip: fewer tabs); their parent tab stays lit.
-  const lit = { map: 'dispatch', customers: 'orders', parts: 'orders', metal: 'orders' }[S.tab] || S.tab;
+  // Map lives under Dispatch, Customers under CRM (Philip, 21 Oct), Parts and Metal under Sales orders; their parent tab stays lit.
+  const lit = { map: 'dispatch', customers: 'sales', parts: 'orders', metal: 'orders' }[S.tab] || S.tab;
   $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
-  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal'].includes(k) && (k !== 'sales' || md())).map(([k, t]) => {
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck', sales: 'book' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -707,7 +707,7 @@ function renderCustomers() {
         ${sform || '<div class="actions"><button class="btn sm" type="button" data-addsite>Add a delivery address</button></div>'}</div>
       `}${(S.ctab || 'overview') === 'contacts' && orders.length ? `<div class="panel"><h3>Open orders <span class="note">${orders.length}</span></h3><div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${orders.map(j => `<button class="btn sm" type="button" data-open="${j.id}">${esc(j.so)} · due ${fmt(nextDue(j))}</button>`).join('')}</div></div>` : ''}`;
   }
-  $('v-customers').innerHTML = `<p class="crumb"><a href="#orders" data-tab="orders">← Sales orders</a></p><div class="sec-h"><h2>Customers</h2><span class="sub">Every customer: orders, invoices, quotes, emails, tasks and notes, and who to deal with. Xero and the quote calculator are not changed.</span></div>
+  $('v-customers').innerHTML = `${crmHead()}<div class="sec-h"><h2>Customers</h2><span class="sub">Every customer: orders, invoices, quotes, emails, tasks and notes, and who to deal with. Xero and the quote calculator are not changed.</span></div>
     ${enquiriesHtml()}<div class="cbook"><div class="clist"><input type="search" id="csearch" placeholder="Find a customer" value="${esc(S.csearch || '')}">
         <div class="citems">${items || '<div class="note">No customers yet.</div>'}</div>
         <form class="addcust" data-addcust><input type="text" id="newcust" list="xero-customers2" placeholder="Add a customer (from Xero or new)" autocomplete="off">
@@ -1155,7 +1155,7 @@ function customerPageHtml(key, name) {
   const F = S.salesF || { follow: {}, actions: [] };
   const quotes = (S.salesQ || []).filter(q => normName(q.customer) === key).map(q => ({ ...q, value: quoteValue(q), lost: F.follow?.[q.spId]?.state === 'lost' ? (F.follow[q.spId].lostReason || 'yes') : null }))
     .sort((a, b) => (b.quoteDate || '').localeCompare(a.quoteDate || ''));
-  const openQ = md() && S.salesQ ? salesModel().open.filter(q => normName(q.customer) === key) : quotes.filter(q => q.status !== 'Ordered' && !q.lost);
+  const openQ = office() && S.salesQ ? salesModel().open.filter(q => normName(q.customer) === key) : quotes.filter(q => q.status !== 'Ordered' && !q.lost);
   const stageOf = new Map(openQ.map(q => [q.spId, q.stage]));
   const jobs = S.jobs.filter(j => !j.preview && normName(j.customer) === key).sort((a, b) => (b.ordered || '').localeCompare(a.ordered || ''));
   const invoices = (S.hist?.invoices || []).filter(x => normName(x.customer) === key).sort((a, b) => b.date.localeCompare(a.date));
@@ -1169,7 +1169,7 @@ function customerPageHtml(key, name) {
   }
   const tab = S.ctab || 'overview';
   if (tab === 'emails' && !S.cmail?.[key]) setTimeout(() => loadCustomerMail(key), 0);
-  if (tab === 'overview' && md() && S.insight?.[key] === undefined) { S.insight = { ...(S.insight || {}), [key]: null }; data.loadInsight(key).then(x => { S.insight[key] = x; render(); }).catch(() => {}); }
+  if (tab === 'overview' && office() && S.insight?.[key] === undefined) { S.insight = { ...(S.insight || {}), [key]: null }; data.loadInsight(key).then(x => { S.insight[key] = x; render(); }).catch(() => {}); }
   const m = S.cmail?.[key], cf = ['overview', 'files'].includes(tab) && S.sp?.ready ? custFiles(key) : (spReady(), null);
   return renderCustomerPage({ filesHtml: tab === 'files' ? filesTabHtml(key, name) : '', quoteHist: quoteHistWords(cf?.hist), tab, c, md: md(), office: office(), today, staff: staffList(), jobs, invoices, tasks, timeline: timeline({ key, jobs, invoices, quotes, actions, tasks, enquiries: S.enq || [] }),
     quotes: quotes.map(q => ({ ...q, stage: stageOf.get(q.spId) })), openQuotes: openQ, openOrders: jobs.filter(j => ['upcoming', 'current'].includes(stage(j))).length,
@@ -1324,12 +1324,12 @@ function todayHtml() {
   if (!office()) return '';
   const today = todayIso(), tasks = taskGroups(S.tasks || [], today, S.me.email);
   let chase = [], reorders = [], quiet = [];
-  if (md()) { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { const base = customerBase(S.hist.invoices, today); reorders = reordersDue(base, today); quiet = quietCustomers(base); } }
+  { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { const base = customerBase(S.hist.invoices, today); reorders = reordersDue(base, today); quiet = quietCustomers(base); } }
   const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };
   return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt }) + floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc });
 }
 
-/* ---------- sales (Levi only): quotes to chase, the month against his target, customers gone quiet ---------- */
+/* ---------- CRM (Levi and Mandy; the month against the target Levi only): quotes to chase, customers gone quiet ---------- */
 async function loadSalesData(fresh) {
   if (S.salesLoading) return; S.salesLoading = true; S.salesErr = null;
   try {
@@ -1350,7 +1350,7 @@ function salesModel() {
   return { today, quotes, stats, open, chase: chaseList(open), actions: F.actions, base, quiet: base ? quietCustomers(base) : [],
     month: monthGap({ target: Number(S.settings?.monthly_target) || null, jobs: S.jobs, quotes, open, stats, today, jobValue: j => value(j) }) };
 }
-/* ---------- Ideas (CRM, Levi only): AI ideas from the board's facts, and customers' websites read by AI ---------- */
+/* ---------- Ideas (CRM, Levi and Mandy): AI ideas from the board's facts, and customers' websites read by AI ---------- */
 function ensureIdeas() {
   if (S.ideasLoaded) return; S.ideasLoaded = true;
   Promise.all([data.loadIdeas(), data.loadResearch()]).then(([i, r]) => { S.ideas = i; S.research = r; S.ideasErr = null; })
@@ -1403,12 +1403,14 @@ function renderSalesView() {
   if (!S.salesQ) { $('v-sales').innerHTML = renderSales({ loading: !S.salesErr, err: S.salesErr }, { esc, fmt, gbp }); return; }
   const m = salesModel();
   $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai,
-    reorders: m.base ? reordersDue(m.base, m.today) : [], more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml() }, { esc, fmt, gbp });
+    reorders: m.base ? reordersDue(m.base, m.today) : [], more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md() }, { esc, fmt, gbp });
 }
 function crmHead() {
   const n = (S.ideas || []).filter(i => i.status === 'new').length;
-  return `<div class="crmswitch"><div class="seg"><button type="button" data-crmview="main" aria-pressed="${S.crmView !== 'ideas'}">Follow-ups</button>
-    <button type="button" data-crmview="ideas" aria-pressed="${S.crmView === 'ideas'}">${icon('spark')}Ideas${n ? ` <em>${n}</em>` : ''}</button></div></div>`;
+  const on = v => S.tab === 'customers' ? v === 'customers' : v === (S.crmView === 'ideas' ? 'ideas' : 'main');
+  return `<div class="crmswitch"><div class="seg"><button type="button" data-crmview="main" aria-pressed="${on('main')}">Follow-ups</button>
+    <button type="button" data-tab="customers" aria-pressed="${on('customers')}">${icon('customers')}Customers</button>
+    <button type="button" data-crmview="ideas" aria-pressed="${on('ideas')}">${icon('spark')}Ideas${n ? ` <em>${n}</em>` : ''}</button></div></div>`;
 }
 const plusDays = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 const salesQuote = spId => salesModel().open.find(q => q.spId === spId) || (S.salesQ || []).find(q => q.spId === spId);
@@ -2532,14 +2534,14 @@ function render() {
   if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero', 'metal'].includes(S.tab)) S.tab = 'floor';
   if (S.kiosk && S.tab !== 'tv') { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
   if (!office() && !['floor', 'tv'].includes(S.tab)) S.tab = 'floor';
-  if (S.tab === 'sales' && !md()) S.tab = 'home';   // sales figures and the target are Levi's only   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
+  if (S.tab === 'sales' && !office()) S.tab = 'home';   // the CRM is Levi's and Mandy's; the month's figures in it are Levi's only   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
   document.body.classList.toggle('kiosk-mode', !!S.kiosk || S.tab === 'tv');
   document.body.classList.toggle('tv-mode', S.tab === 'tv'); tvAwake(S.tab === 'tv');
   renderTabs();
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); if (md()) { ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
@@ -2680,7 +2682,7 @@ function onClick(e) {
   if ('gosmart' in d) { S.tab = 'sales'; render(); setTimeout(() => $('smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
   if ('newsgo' in d) return newsEmails();
   if (d.sview) { S.salesView = d.sview; return render(); }
-  if (d.crmview) { S.crmView = d.crmview; render(); window.scrollTo(0, 0); return; }
+  if (d.crmview) { S.tab = 'sales'; S.crmView = d.crmview; render(); window.scrollTo(0, 0); return; }
   if ('ideasgo' in d) return thinkOfIdeas();
   if (d.ideastatus) { const id = +d.id, st = d.ideastatus; data.setIdea(id, st).then(() => { S.ideas.find(x => x.id === id).status = st; render(); }).catch(err => toast(err.message, null, true)); return; }
   if (d.ideaemail) { const i = (S.ideas || []).find(x => x.id === +d.ideaemail); if (i) { data.setIdea(i.id, 'doing').catch(() => {}); i.status = 'doing'; openAi(i.key, i.angle || i.title); } return; }

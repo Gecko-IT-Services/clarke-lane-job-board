@@ -17,8 +17,8 @@ export function renderToday({ m, tasks, md, me, staff }, h) {
   const tile = (n, label, attrs, tone) => `<button type="button" class="tcard${n ? ' t-' + tone : ''}" ${attrs}><b>${n}</b><span>${label}</span></button>`;
   const tiles = [tile(m.enquiries, m.enquiries === 1 ? 'new enquiry to answer' : 'new enquiries to answer', 'data-tab="customers" data-goenq', 'bad'),
     tile(m.overdueTasks + m.todayTasks, m.overdueTasks ? `tasks due (${m.overdueTasks} overdue)` : 'tasks due today', 'data-gotasks', m.overdueTasks ? 'bad' : 'warn'),
-    md ? tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn') : '', md ? tile(m.reorders, 'repeat parts due a reorder', 'data-tab="sales" data-gosmart', 'info') : '',
-    md ? tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info') : ''].join('');
+    tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn'), tile(m.reorders, 'repeat parts due a reorder', 'data-tab="sales" data-gosmart', 'info'),
+    tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info')].join('');
   const who = e => (staff.find(s => s.email === e)?.name || first(e)).split(' ')[0];
   const row = t => `<li class="${t.dueOn < m.today ? 'late' : ''}"><label><input type="checkbox" data-taskdone="${t.id}"> <b>${esc(t.title)}</b></label>
       ${t.customer ? `<button class="btn link sm" type="button" data-custpage="${esc(t.customerKey)}" data-custname="${esc(t.customer)}">${esc(t.customer)}</button>` : ''}
@@ -89,7 +89,7 @@ export function renderCustomerPage(p, h) {
       <button class="btn sm" type="button" data-cnote>Save</button> <button class="btn sm" type="button" data-taskadd="cust">${icon('plus')}Add a task</button></div>`;
   let body = '';
   if (tab === 'overview') {
-    const ins = p.insight, insBtn = md ? `<button class="btn sm" type="button" data-cinsight ${p.insightBusy ? 'disabled' : ''}>${p.insightBusy ? 'Writing…' : ins ? 'Write it again' : 'Write a summary with AI'}</button>` : '';
+    const ins = p.insight, insBtn = p.office ? `<button class="btn sm" type="button" data-cinsight ${p.insightBusy ? 'disabled' : ''}>${p.insightBusy ? 'Writing…' : ins ? 'Write it again' : 'Write a summary with AI'}</button>` : '';
     body = `<div class="cgrid">
       <section class="panel"><h3>At a glance</h3><ul class="cfacts">
         ${c ? `<li>${c.orders} invoiced order${c.orders === 1 ? '' : 's'} since ${esc(fmtY(c.first))}${c.usual ? `, usually every <b>${esc(days(c.usual))}</b>` : ''}.</li>
@@ -100,8 +100,8 @@ export function renderCustomerPage(p, h) {
         <li>${p.openOrders} open order${p.openOrders === 1 ? '' : 's'} on the board · ${p.openQuotes.length} open quote${p.openQuotes.length === 1 ? '' : 's'}${md && p.openQuotes.length ? ` (${gbp(p.openQuotes.reduce((a, q) => a + q.value, 0))})` : ''}.</li>
         ${owed.length ? `<li>${owed.length} invoice${owed.length === 1 ? '' : 's'} unpaid${overdue.length ? `, <b class="bad">${overdue.length} overdue</b>` : ''}${md ? ` (${gbp(owed.reduce((a, x) => a + x.owed, 0))})` : ''}.</li>` : ''}
       </ul></section>
-      ${md ? `<section class="panel"><h3>Summary and next step</h3>${ins ? `<p>${esc(ins.summary)}</p><p><b>Next step:</b> ${esc(ins.nextStep)}</p><p class="note">Written by AI from this customer's records on ${esc(fmt(ins.at.slice(0, 10)))}.</p>` : '<p class="note">A short AI read of this customer from their orders, quotes, notes and tasks, with one thing to do this week (about 1p).</p>'}${insBtn}</section>` : ''}
-      ${p.prompts.length ? `<section class="panel"><h3>Worth a call</h3><ul class="cfacts">${p.prompts.map(x => `<li>${x}</li>`).join('')}</ul>${md && c ? `<button class="btn sm pri" type="button" data-aiopen="${esc(c.key)}" data-aigo="1">Write them an email</button>` : ''}</section>` : ''}
+      ${p.office ? `<section class="panel"><h3>Summary and next step</h3>${ins ? `<p>${esc(ins.summary)}</p><p><b>Next step:</b> ${esc(ins.nextStep)}</p><p class="note">Written by AI from this customer's records on ${esc(fmt(ins.at.slice(0, 10)))}.</p>` : '<p class="note">A short AI read of this customer from their orders, quotes, notes and tasks, with one thing to do this week (about 1p).</p>'}${insBtn}</section>` : ''}
+      ${p.prompts.length ? `<section class="panel"><h3>Worth a call</h3><ul class="cfacts">${p.prompts.map(x => `<li>${x}</li>`).join('')}</ul>${p.office && c ? `<button class="btn sm pri" type="button" data-aiopen="${esc(c.key)}" data-aigo="1">Write them an email</button>` : ''}</section>` : ''}
       <section class="panel"><h3>Tasks</h3>${taskList(p.tasks.filter(t => !t.doneAt), false) || '<p class="note">No open tasks.</p>'}${quickNote}</section>
       <section class="panel cwide"><h3>Latest</h3>${tl(10)}</section></div>`;
   } else if (tab === 'orders') {
