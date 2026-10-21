@@ -299,9 +299,13 @@ ul.tasks li.late{border-color:var(--bad)} ul.tasks label{display:inline-flex;gap
 .enquiries .eempty svg{width:28px;height:28px;flex:none} .enquiries .eempty b{display:block;color:var(--ink);font-size:15px} .enquiries .eempty span{font-size:13px}
 .enquiries .ecust{border-top:1px solid var(--line);padding-top:12px} .enquiries .ecust-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px} .enquiries .ecust h4{margin:0;font-size:15px}
 .enquiries .ecust ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.enquiries .ecust li{display:grid;grid-template-columns:minmax(140px,220px) 1fr auto auto auto;gap:4px 12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
-.enquiries .ecust li:last-child{border-bottom:0} .enquiries .ecust .esub{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media (max-width:760px){.enquiries .ecust li{grid-template-columns:1fr auto}.enquiries .ecust .esub{grid-column:1/-1;order:3}}
+/* Customers' emails as actions (21 Oct): the topic chip, who, the order it names, what they said, when; the buttons below. */
+.enquiries .ecust li{display:flex;flex-direction:column;gap:6px;padding:10px 0 10px 12px;border-bottom:1px solid var(--line);border-left:3px solid transparent;font-size:14px}
+.enquiries .ecust li:last-child{border-bottom:0} .enquiries .ecust li.ebad{border-left-color:var(--ink)} .enquiries .ecust li.on{background:var(--field)}
+.enquiries .ecust .eline{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;min-width:0} .enquiries .ecust .eline .chip{align-self:center}
+.enquiries .ecust .eline .mono{font-family:var(--mono,ui-monospace,monospace);font-size:13px;padding:0 2px;min-height:0}
+.enquiries .ecust .esub{color:var(--muted);flex:1 1 260px;min-width:0}
+.enquiries .ecust .actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center} .enquiries .ecust .actions .note{font-size:12.5px;margin-right:6px} .enquiries .ecust .actions svg{width:15px;height:15px}
 .enquiries .elist tr[data-enqopen]{cursor:pointer} .enquiries .elist tr.open{background:var(--field)} .enquiries td small{display:block;color:var(--muted);font-size:12px}
 .enquiries .lines td,.enquiries .lines th{text-align:left} .enquiries .edetail td{background:var(--field)} .enquiries .edetail p{margin:0 0 6px}
 /* The quote pack (21 Oct): an enquiry read into parts, questions and risks, in the enquiry's opened row. */
@@ -316,6 +320,7 @@ ul.tasks li.late{border-color:var(--bad)} ul.tasks label{display:inline-flex;gap
 .enquiries .saibox{display:flex;flex-direction:column;gap:8px;max-width:760px;margin:8px 0} .enquiries .sinline{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 #v-sales .snewslist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 12px;margin:8px 0} #v-sales .snewslist label{font-size:14px}
 #v-sales .saipanel{border-color:var(--info)}
+#v-sales .sasked{margin:6px 0;font-size:14px} #v-sales .sasked .chip{margin-right:4px}   /* the customer's question on a quote (21 Oct) */
 /* Sales (Levi only) */
 #v-sales{display:flex;flex-direction:column;gap:18px} #v-sales .panel h3 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
 #v-sales .hcard b{display:block;font-size:22px} #v-sales .hcard span{color:var(--muted);font-size:13px} #v-sales .sline{margin:12px 0 0}
@@ -978,7 +983,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

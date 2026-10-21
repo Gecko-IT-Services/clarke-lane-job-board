@@ -6,6 +6,7 @@
 import { icon } from './icons.js';
 import { STAGES } from './core/sales.js';
 import { trendWords } from './core/crm.js';
+import { topicChip, topicTone } from './core/inbox.js';
 
 const days = n => `${n} day${n === 1 ? '' : 's'}`;
 const waited = h => h < 1 ? 'just now' : h < 24 ? `${h} hour${h === 1 ? '' : 's'}` : days(Math.round(h / 24));
@@ -67,7 +68,7 @@ export function taskForm(f, { staff, customers }, h) {
 export function renderEnquiries({ list, funnel, state, mailbox, open, busy, reply, checkedAt, settings, packBusy = null }, h) {
   const { esc, fmt, fmtTime } = h;
   const st = { new: '<span class="chip late">Not answered</span>', replied: '<span class="chip soon">Replied</span>', quoted: '<span class="chip soon">Quoted</span>', won: '<span class="chip ok">Won</span>',
-    lost: '<span class="chip">Lost</span>', ignored: '<span class="chip">Not an enquiry</span>' };
+    lost: '<span class="chip">Lost</span>', ignored: '<span class="chip">Not an enquiry</span>' };   // 'ignored' is Done for a customer's email
   const head = state === 'consent' ? `<div class="warn">Reading ${esc(mailbox)} needs a one-off Microsoft 365 permission (Mail.Read.Shared) that is not approved yet. Gecko IT approves it once; until then this list stays empty.</div>`
     : state === 'noaccess' ? `<div class="warn">Your Microsoft account cannot open ${esc(mailbox)}. Ask for access to that mailbox (Read and manage) in Microsoft 365.</div>`
     : state?.startsWith?.('error:') ? `<div class="err">${esc(state.slice(6))}</div>` : '';
@@ -108,10 +109,21 @@ export function renderEnquiries({ list, funnel, state, mailbox, open, busy, repl
   const enqBox = enq.length ? `<div class="tbl-wrap"><table class="lines elist"><thead><tr><th>Waiting</th><th>Who</th><th>What they want</th><th></th></tr></thead><tbody>${enq.slice(0, 40).map(row).join('')}</tbody></table></div>`
     : state === 'ok' ? `<div class="eempty">${icon('mail')}<div><b>No enquiries waiting</b><span>New emails asking for a price or a quote appear here, read and sorted by AI, with how long each has waited.</span></div></div>`
     : state === 'reading' ? '<p class="note">Reading the mailbox…</p>' : '';
-  const custBox = cust.length ? `<div class="ecust"><div class="ecust-h"><h4>Customers writing about their orders <span class="note">${cust.length}</span></h4><button class="btn sm" type="button" data-enqdoneall>Mark all seen</button></div>
-      <ul>${cust.slice(0, 8).map(e => `<li><b>${esc(e.company || e.fromName)}</b><span class="esub">${esc(e.summary || e.subject)}</span><span class="note">${esc(fmtTime(e.receivedAt))}</span>
-        ${e.webLink ? `<a class="btn sm" href="${esc(e.webLink)}" target="_blank" rel="noopener">Open</a>` : ''}${e.customerKey ? `<button class="btn sm link" type="button" data-custpage="${esc(e.customerKey)}">Customer</button>` : ''}</li>`).join('')}</ul>
-      ${cust.length > 8 ? `<p class="note">and ${cust.length - 8} more.</p>` : ''}</div>` : '';
+  // Customers writing about their orders (21 Oct: "emails become actions"): what each is about as a chip, the order it
+  // names, then the buttons for its topic (core/inbox.js emailActions), Open and Done. Complaints and POs come first.
+  const draftBox = e => reply?.id === e.id && reply.draft ? `<div class="saibox"><label class="fl">Subject<input type="text" id="er-subj" value="${esc(reply.draft.subject)}"></label>
+      <label class="fl">Reply (edit anything)<textarea id="er-body" rows="7">${esc([reply.draft.greeting, ...reply.draft.paragraphs].join('\n\n'))}</textarea></label>
+      <div class="actions"><button class="btn pri sm" type="button" data-enqsend="${e.id}">${icon('mail')}Put in my Outlook Drafts</button><button class="btn sm" type="button" data-enqreply="${e.id}">Write it again</button></div></div>` : '';
+  const btn = (b, e) => `<button class="btn sm${b.tone === 'pri' || b.tone === 'bad' ? ' pri' : ''}" type="button" ${b.attrs}${b.attrs.includes('data-enqreply') && busy === e.id ? ' disabled' : ''}>${b.attrs.includes('data-enqreply') && busy === e.id ? 'Writing…' : esc(b.label)}</button>${b.note ? `<span class="note">${esc(b.note)}</span>` : ''}`;
+  const custRow = e => { const chip = topicChip(e.topic);
+    return `<li id="em-${e.id}" class="${open === e.id ? 'on' : ''}${e.topic === 'complaint' ? ' ebad' : ''}"><div class="eline">${chip ? `<span class="chip ${topicTone(e.topic)}">${esc(chip)}</span>` : ''}<b>${esc(e.company || e.fromName)}</b>
+        ${e.jobSo ? `<button class="btn link sm mono" type="button" data-open="${e.jobId}" title="Open the order">${esc(e.jobSo)}</button>` : ''}<span class="esub">${esc(e.summary || e.subject)}</span><span class="note">${esc(fmtTime(e.receivedAt))}</span></div>
+      <div class="actions">${(e.actions || []).map(b => btn(b, e)).join('')}
+        ${e.webLink ? `<a class="btn sm" href="${esc(e.webLink)}" target="_blank" rel="noopener">Open</a>` : ''}${e.customerKey && e.topic !== 'invoice' ? `<button class="btn sm link" type="button" data-custpage="${esc(e.customerKey)}">Customer</button>` : ''}
+        <button class="btn sm" type="button" data-enqdone="${e.id}" title="Dealt with: take it off the list">Done</button></div>${draftBox(e)}</li>`; };
+  const custBox = cust.length ? `<div class="ecust"><div class="ecust-h"><h4>Customers writing about their orders <span class="note">${cust.length}</span></h4><button class="btn sm" type="button" data-enqdoneall>All done</button></div>
+      <ul>${cust.slice(0, 12).map(custRow).join('')}</ul>
+      ${cust.length > 12 ? `<p class="note">and ${cust.length - 12} more.</p>` : ''}</div>` : '';
   return `<section class="panel enquiries" id="enquiries">
     <div class="ehead"><div><h3>${icon('mail')}Enquiries</h3><span class="note">from <b>${esc(mailbox)}</b>, read and sorted by AI${checked ? ' · ' + checked : ''}</span></div>
       <div class="eact"><button class="btn sm" type="button" data-enqsync>${icon('refresh')}Check now</button><button class="btn sm link" type="button" data-enqsettings aria-expanded="${!!settings}">Mailbox</button></div></div>

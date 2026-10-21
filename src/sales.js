@@ -5,6 +5,7 @@
  */
 import { icon } from './icons.js';
 import { STAGES } from './core/sales.js';
+import { customerQuestion } from './core/inbox.js';
 
 export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply', 'Job cancelled', 'Other'];
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
@@ -15,6 +16,8 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
   if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
   const days = n => `${n} day${n === 1 ? '' : 's'}`;
   const touched = q => q.lastAction ? `${{ email: 'Emailed', call: 'Called', note: 'Note', reopen: 'Reopened', lost: 'Lost' }[q.lastAction.kind] || 'Touched'} ${esc(fmt(q.lastAction.at.slice(0, 10)))}` : 'Not chased yet';
+  // A customer's question on the quote (21 Oct: Put on the chase list from their email), so Levi has it in front of him.
+  const asked = q => { const t = customerQuestion(actions, q.spId, today); return t ? `<p class="sasked"><span class="chip soon">Customer asked</span> ${esc(t)}</p>` : ''; };
   const stageChip = q => `<span class="chip ${{ due: 'late', follow: 'soon', cold: 'soon', dead: '', fresh: 'ok', booked: 'ok' }[q.stage]}">${esc(STAGES[q.stage])}${q.stage === 'booked' && q.nextOn ? ' ' + esc(fmt(q.nextOn)) : ''}</span>`;
   const acts = q => `<div class="sacts">
       <button class="btn sm pri" type="button" data-qchase="${q.spId}"${q.contactEmail ? '' : ' title="No contact email on the quote: the draft opens without one"'}>${icon('mail')}Draft follow-up email</button>
@@ -37,7 +40,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
     ${chase.length ? `<div class="schase">${chase.map(q => `<article class="scard">
         <div class="stop"><div><b>${esc(q.customer)}</b><span class="mono">${esc(q.quoteNo)}</span>${q.contactName ? `<small>${esc(q.contactName)}</small>` : ''}</div>
           <div class="sval"><b>${gbp(q.value)}</b><small>${pc(q.chance)} chance · sent ${esc(days(q.age))} ago</small></div></div>
-        <p class="note">${stageChip(q)} ${touched(q)}${q.note ? ' · ' + esc(q.note) : ''}</p>${acts(q)}</article>`).join('')}</div>`
+        <p class="note">${stageChip(q)} ${touched(q)}${q.note ? ' · ' + esc(q.note) : ''}</p>${asked(q)}${acts(q)}</article>`).join('')}</div>`
       : '<p class="allclear ok">Nothing to chase today. Fresh quotes appear here after a week, and follow-ups on their day.</p>'}</section>`;
 
   const counts = Object.fromEntries(Object.keys(STAGES).map(k => [k, open.filter(q => q.stage === k).length]));
@@ -49,9 +52,9 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
     <div class="seg sseg"><button type="button" data-sview="live" aria-pressed="${v === 'live'}">Live <em>${live.length}</em></button>${Object.entries(STAGES).map(([k, t]) => counts[k] ? `<button type="button" data-sview="${k}" aria-pressed="${v === k}">${esc(t)} <em>${counts[k]}</em></button>` : '').join('')}</div>
     ${v === 'dead' ? `<p class="note">These are well past the point your won quotes usually come in, so they are rarely ordered now. Mark them lost with a reason to tidy up (the reasons show what to fix), or chase one if it still matters.</p>` : ''}
     ${shown.length ? `<div class="tbl-wrap"><table class="lines slist"><thead><tr><th>Quote</th><th>Customer</th><th class="num">Value</th><th class="num">Sent</th><th class="num">Chance</th><th class="num">Likely</th><th>Stage</th><th>Last</th></tr></thead><tbody>
-      ${shown.map(q => `<tr data-sopen="${q.spId}" class="${openId === q.spId ? 'open' : ''}" tabindex="0"><td class="mono">${esc(q.quoteNo)}</td><td>${esc(q.customer)}</td><td class="num">${gbp(q.value)}</td><td class="num">${esc(days(q.age))} ago</td>
+      ${shown.map(q => `<tr data-sopen="${q.spId}" class="${openId === q.spId ? 'open' : ''}" tabindex="0"><td class="mono">${esc(q.quoteNo)}</td><td>${esc(q.customer)}${customerQuestion(actions, q.spId, today) ? ' <span class="chip soon" title="' + esc(customerQuestion(actions, q.spId, today)) + '">Customer asked</span>' : ''}</td><td class="num">${gbp(q.value)}</td><td class="num">${esc(days(q.age))} ago</td>
         <td class="num">${pc(q.chance)}</td><td class="num">${gbp(q.likely)}</td><td>${stageChip(q)}</td><td class="note">${touched(q)}</td></tr>
-        ${openId === q.spId ? `<tr class="sdetail"><td colspan="8">${acts(q)}
+        ${openId === q.spId ? `<tr class="sdetail"><td colspan="8">${asked(q)}${acts(q)}
           <label class="fl">Note<input type="text" data-qnote="${q.spId}" value="${esc(q.note)}" placeholder="e.g. waiting on their customer, call Thursday"></label>
           ${hist(q).length ? `<ul class="shist">${hist(q).map(a => `<li>${esc(fmt(a.at.slice(0, 10)))}: ${esc({ email: 'Email drafted', call: 'Call', note: 'Note', lost: 'Marked lost', reopen: 'Reopened' }[a.kind])}${a.note ? ' · ' + esc(a.note) : ''}</li>`).join('')}</ul>` : ''}</td></tr>` : ''}`).join('')}</tbody></table></div>`
       : '<p class="note">None at this stage.</p>'}</section>`;
