@@ -12,9 +12,12 @@ const waited = h => h < 1 ? 'just now' : h < 24 ? `${h} hour${h === 1 ? '' : 's'
 const first = s => String(s || '').split(/[ @]/)[0];
 
 /** Home: what is waiting today, and my tasks. */
-export function renderToday({ m, tasks, md, me, staff }, h) {
+export function renderToday({ m, tasks, md, me, staff, panel = false }, h) {
   const { esc, fmt } = h;
   const tile = (n, label, attrs, tone) => `<button type="button" class="tcard${n ? ' t-' + tone : ''}" ${attrs}><b>${n}</b><span>${label}</span></button>`;
+  // Levi's Home (Philip, 21 Oct: "remove what doesn't matter"): the four sales numbers he acts on, then his tasks.
+  const salesTiles = [tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn'), tile(m.reorders, 'repeat parts to ask about', 'data-tab="sales" data-gosmart', 'info'),
+    tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info'), tile(m.enquiries, m.enquiries === 1 ? 'enquiry waiting for a reply' : 'enquiries waiting for a reply', 'data-tab="customers" data-goenq', 'bad')].join('');
   const tiles = [tile(m.enquiries, m.enquiries === 1 ? 'new enquiry to answer' : 'new enquiries to answer', 'data-tab="customers" data-goenq', 'bad'),
     tile(m.overdueTasks + m.todayTasks, m.overdueTasks ? `tasks due (${m.overdueTasks} overdue)` : 'tasks due today', 'data-gotasks', m.overdueTasks ? 'bad' : 'warn'),
     tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn'), tile(m.reorders, 'repeat parts due a reorder', 'data-tab="sales" data-gosmart', 'info'),
@@ -25,6 +28,10 @@ export function renderToday({ m, tasks, md, me, staff }, h) {
       <span class="chip ${t.dueOn < m.today ? 'late' : t.dueOn === m.today ? 'soon' : ''}">${t.dueOn < m.today ? 'was due ' : t.dueOn === m.today ? '' : 'due '}${t.dueOn === m.today ? 'today' : esc(fmt(t.dueOn))}</span>
       ${t.assignedTo !== me ? `<span class="note">${esc(who(t.assignedTo))}</span>` : ''}</li>`;
   const list = [...tasks.overdue, ...tasks.today, ...tasks.soon];
+  if (panel) return `<section class="panel today sales-today" id="today"><div class="hsec-h"><h3>Sales this week</h3><span class="note">what to chase</span>
+      <button class="btn sm" type="button" data-taskadd="">${icon('plus')}Add a task</button></div>
+    <div class="tcards">${salesTiles}</div>
+    ${list.length ? `<ul class="tasks">${list.map(row).join('')}</ul>` : '<p class="note">No tasks due in the next week.</p>'}</section>`;
   return `<section class="today" id="today"><div class="hsec-h"><h3>Today</h3><span class="note">what is waiting for you</span>
       <button class="btn sm" type="button" data-taskadd="">${icon('plus')}Add a task</button></div>
     <div class="tcards">${tiles}</div>

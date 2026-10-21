@@ -1410,8 +1410,9 @@ function todayHtml() {
   const rm = reorderModel();
   { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { quiet = quietCustomers(customerBase(S.hist.invoices, today)); reorders = rm.round.filter(r => r.state === 'due'); } }
   const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };   // the tile counts only those still to ask
-  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt }) + floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc });
+  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList(), panel: md() }, { esc, fmt });
 }
+const floorNotesHtml = () => office() ? floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc }) : '';
 
 /**
  * The reorder round (Philip, 21 Oct): the repeat parts due again with what was done about each (asked, not needed,
@@ -2664,7 +2665,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),

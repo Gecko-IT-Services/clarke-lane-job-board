@@ -14,7 +14,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ todayBox = '', reorderBox = '', jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
+export function renderHome({ todayBox = '', notesBox = '', reorderBox = '', jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -24,18 +24,23 @@ export function renderHome({ todayBox = '', reorderBox = '', jobs, me, office, m
     ? `<button class="btn" type="button" data-tab="dispatch">${icon('truck')}Dispatch</button><button class="btn pri" type="button" data-neworder>${icon('plus')}New order</button>`
     : `<button class="btn pri" type="button" data-tab="floor">${icon('floor')}Shop floor</button>`;
 
-  const cards = [
+  const cards = {
     // Each card opens the jobs behind its number in the table below.
-    card('bad', 'late', d.late.length, md && d.late.length && d.lateValue != null ? `Running late · ${gbp(d.lateValue)}` : 'Running late', d.late.length > 0,
+    late: card('bad', 'late', d.late.length, md && d.late.length && d.lateValue != null ? `Running late · ${gbp(d.lateValue)}` : 'Running late', d.late.length > 0,
       'data-homeview="late" title="Show the jobs running late"'),
-    card('warn', 'soon', d.soon.length, 'Due in the next 7 days', d.soon.length > 0, 'data-homeview="soon" title="Show the jobs due in the next 7 days"'),
-    card('ok', 'ready', d.ready.length, 'Ready to dispatch', d.ready.length > 0, 'data-homeview="ready" title="Show the jobs ready to dispatch"'),
-    md && d.orderBook != null ? card('info', 'book', gbp(d.orderBook), `Order book · ${d.open.length} open`, d.open.length > 0, 'data-homeview="book" title="Show every open order"')
+    soon: card('warn', 'soon', d.soon.length, 'Due in the next 7 days', d.soon.length > 0, 'data-homeview="soon" title="Show the jobs due in the next 7 days"'),
+    ready: card('ok', 'ready', d.ready.length, 'Ready to dispatch', d.ready.length > 0, 'data-homeview="ready" title="Show the jobs ready to dispatch"'),
+    book: md && d.orderBook != null ? card('info', 'book', gbp(d.orderBook), `Order book · ${d.open.length} open`, d.open.length > 0, 'data-homeview="book" title="Show every open order"')
       : card('info', 'book', d.open.length, 'Open jobs', d.open.length > 0, 'data-homeview="book" title="Show every open job"'),
-  ].join('');
+  };
 
   // Invoicing (office only): delivered but not yet in Xero, and drafts in Xero not yet approved there.
   const ap = approval, apN = ap.list ? ap.list.length : 0;
+  // Aged debt (Levi and Mandy): customers with invoices over 60 days and past due in Xero.
+  const debtCard = debts.off ? '' : !debts.list ? card('info', 'late', '—', debts.err ? 'Over 60 days · could not check Xero' : 'Over 60 days · checking Xero…', false, debts.err ? `title="${esc(debts.err)}"` : '')
+      : card(debts.list.length ? 'bad' : 'ok', 'late', debts.list.length ? gbp(debts.list.reduce((a, c) => a + c.over, 0)) : 0,
+        debts.list.length ? `Over 60 days · ${plural(debts.list.length, 'customer')}` : 'Over 60 days · nobody', debts.list.length > 0,
+        'data-homeview="debts" title="Show the customers with invoices over 60 days"');
   const money2 = office ? [
     card('warn', 'invoice', md && d.toXeroValue != null ? gbp(d.toXeroValue) : d.toXero.length, md ? `Delivered, not invoiced · ${plural(d.toXero.length, 'note')}` : 'Delivered, not invoiced', d.toXero.length > 0,
       'data-homeview="uninv" title="Show the delivered notes not yet sent to Xero"'),
@@ -43,11 +48,7 @@ export function renderHome({ todayBox = '', reorderBox = '', jobs, me, office, m
       : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
       : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
         'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
-    // Aged debt (Levi and Mandy): customers with invoices over 60 days and past due in Xero.
-    debts.off ? '' : !debts.list ? card('info', 'late', '—', debts.err ? 'Over 60 days · could not check Xero' : 'Over 60 days · checking Xero…', false, debts.err ? `title="${esc(debts.err)}"` : '')
-      : card(debts.list.length ? 'bad' : 'ok', 'late', debts.list.length ? gbp(debts.list.reduce((a, c) => a + c.over, 0)) : 0,
-        debts.list.length ? `Over 60 days · ${plural(debts.list.length, 'customer')}` : 'Over 60 days · nobody', debts.list.length > 0,
-        'data-homeview="debts" title="Show the customers with invoices over 60 days"'),
+    debtCard,
     // Work at other companies (powder coat, plating): opens the Sent out whiteboard on the Shop floor.
     sentOut && (sentOut.out || sentOut.ready) ? card(sentOut.late ? 'bad' : 'info', 'truck', sentOut.out, sentOut.late ? `Sent out · ${sentOut.late} overdue back` : sentOut.ready ? `Sent out · ${sentOut.ready} ready to go` : 'Sent out to other companies',
       sentOut.out > 0 || sentOut.ready > 0, 'data-gostation="out" title="Show what is at other companies for powder coat or plating"') : '',
@@ -137,14 +138,19 @@ export function renderHome({ todayBox = '', reorderBox = '', jobs, me, office, m
     <button type="button" data-homeview="out" aria-pressed="${isOut}">Going out <em>${d.goingOut.length}</em></button></div>`
     + (drill ? ' <button type="button" class="btn sm" data-homeview="attention" title="Back to Needs attention">✕ Close this list</button>' : '');
 
-  return `<div class="home">
-    <div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>
-    ${todayBox}
-    <div class="${month ? 'hglance' : ''}"><div class="hcol"><div class="hcards">${cards}</div>
-      ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}</div>
-      ${month}</div>
+  const top = `<div class="hhead"><div><h2>${hello}</h2><p class="sub">${longDate} · ${d.ticksToday} process${d.ticksToday === 1 ? '' : 'es'} ticked off today</p></div><div class="hbtns">${btns}</div></div>`;
+  // Levi's Home (Philip, 21 Oct): the month beside what to chase, then four cards that are his (order book, late, due,
+  // owed over 60 days), the shop floor's notes, the reorder round and what needs attention. Dispatch, invoicing and the
+  // station snapshot are Mandy's and the shop floor's: they stay on their Homes.
+  const main = md ? `<div class="hmd">${month}${todayBox}</div>
+    <div class="hcards">${[cards.book, cards.late, cards.soon, debtCard].join('')}</div>
+    ${notesBox}${reorderBox}`
+  : `${todayBox}${notesBox}
+    <div class="hcards">${Object.values(cards).join('')}</div>
+    ${money2 ? `<div class="hcards inv" aria-label="Invoicing">${money2}</div>` : ''}
     ${reorderBox}
-    <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>
+    <section><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><a href="#floor" data-tab="floor">Open shop floor →</a></div>${snap}</section>`;
+  return `<div class="home">${top}${main}
     <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;
 }

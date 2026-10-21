@@ -72,6 +72,7 @@ function home(office) {
       ${card('Station snapshot', 'How many jobs are waiting at each station, and how many of those are late. Tap one to open the shop floor there.', 't-info')}
       ${card('Needs attention', `What is late, at risk (due within 3 working days with processes still to do), on hold or ready to go${office ? ', plus won quotes waiting and deliveries to invoice' : ''}. Worst first, each with one button for the next step.`, 't-warn')}
       ${card('Going out', 'Switch to this to see everything due from today to the Friday of next week.', 't-ok')}</div>
+    ${office ? '<p class="note">Levi\'s Home is shorter: the month beside <b>Sales this week</b> (quotes to chase, repeat parts to ask about, customers gone quiet, enquiries waiting) and his tasks; then the order book, running late, due in 7 days and owed over 60 days; the shop floor\'s notes; the reorder round; and what needs attention. Dispatch, invoicing and the station snapshot are on Mandy\'s Home.</p>' : ''}
   </section>`;
 }
 
