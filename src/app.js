@@ -22,6 +22,8 @@ import { notesPanel, floorNotesBox } from './notes.js';
 import { newNotes } from './core/notes.js';
 import { renderMetal } from './metal.js';
 import { renderSales } from './sales.js';
+import { renderReorders } from './reorders.js';
+import { reorderRound, reorderTally, roundNudge, reorderNote, snoozeNote, SNOOZE_FOR } from './core/reorders.js';
 import { renderIdeas } from './ideas.js';
 import { ideasFacts, websiteGuess, ideaBoard } from './core/ideas.js';
 import { renderToday, taskForm, renderEnquiries, renderCustomerPage } from './customer.js';
@@ -1405,9 +1407,39 @@ function todayHtml() {
   if (!office()) return '';
   const today = todayIso(), tasks = taskGroups(S.tasks || [], today, S.me.email);
   let chase = [], reorders = [], quiet = [];
-  { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { const base = customerBase(S.hist.invoices, today); reorders = reordersDue(base, today); quiet = quietCustomers(base); } }
-  const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };
-  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt }) + floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc });
+  const rm = reorderModel();
+  { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { quiet = quietCustomers(customerBase(S.hist.invoices, today)); reorders = rm.round.filter(r => r.state === 'due'); } }
+  const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet }), today };   // the tile counts only those still to ask
+  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList() }, { esc, fmt }) + reordersHtml(true) + floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc });
+}
+
+/**
+ * The reorder round (Philip, 21 Oct): the repeat parts due again with what was done about each (asked, not needed,
+ * came back in), from Xero's invoices, the calls and emails logged, and the board's orders. Null until Xero is read.
+ */
+function reorderModel() {
+  if (!S.hist) return null;
+  const today = todayIso(), acts = S.salesActs || S.salesF?.actions || [];
+  const round = reorderRound(reordersDue(customerBase(S.hist.invoices, today), today), acts, S.jobs, today);
+  return { round, tally: reorderTally(round, today, md() ? j => value(j) : null), nudge: roundNudge(round, acts, today) };
+}
+/** The Reorder round panel: compact on Home (top 5, the Monday nudge), in full on CRM › Follow-ups. */
+function reordersHtml(compact) {
+  if (!office()) return '';
+  const r = reorderModel();
+  if (!r) return renderReorders({ round: [], tally: {}, compact, loading: !!S.xero && !S.histErr, err: !S.xero ? 'Xero is not connected, so the repeat parts are not known. Connect it on the Xero tab.' : S.histErr ? `Xero's invoices could not be read, so the repeat parts are not known: ${S.histErr}` : '' }, { esc, fmt, gbp });
+  return renderReorders({ ...r, md: md(), compact, nudge: compact ? r.nudge : 0 }, { esc, fmt, gbp });
+}
+/** Asked about a repeat part (by hand after a call, or by the AI email), or not needed for 90 days. */
+async function reorderAction(key, item, kind) {
+  const r = reorderModel()?.round.find(x => x.key === key && x.item === item); if (!r) return;
+  const until = plusDays(todayIso(), SNOOZE_FOR);
+  try {
+    await data.addSalesAction({ customer: r.customer, kind, note: kind === 'reorder' ? reorderNote(item) : snoozeNote(item, until) });
+    S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
+    toast(kind === 'reorder' ? `Noted: ${r.customer} asked about ${item}.` : `${item} for ${r.customer} is put away until ${fmt(until)}.`);
+  } catch (e) { toast(e.message, null, true); }
+  render();
 }
 
 /* ---------- CRM (Levi and Mandy; the month against the target Levi only): quotes to chase, customers gone quiet ---------- */
@@ -1484,7 +1516,7 @@ function renderSalesView() {
   if (!S.salesQ) { $('v-sales').innerHTML = renderSales({ loading: !S.salesErr, err: S.salesErr }, { esc, fmt, gbp }); return; }
   const m = salesModel();
   $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histEarliest: S.hist?.earliest, ai: S.ai,
-    reorders: m.base ? reordersDue(m.base, m.today) : [], more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md() }, { esc, fmt, gbp });
+    reorderBox: reordersHtml(false), more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md() }, { esc, fmt, gbp });
 }
 function crmHead() {
   const n = (S.ideas || []).filter(i => i.status === 'new').length;
@@ -1528,9 +1560,10 @@ async function markQuoteLost(spId, reason) {
   } catch (e) { toast(e.message, null, true); }
   loadSalesData();
 }
-async function openAi(key, angle = '') {
+async function openAi(key, angle = '', reorder = '') {
   const c = (salesModel().base || []).find(x => x.key === key); if (!c) return toast('There are no Xero invoices for this customer yet, so there is nothing for the AI to go on.', null, true);
-  S.ai = { key, angle, to: '', person: '' }; S.tab = 'sales'; S.crmView = 'main'; render(); $('saibox')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // reorder: the repeat part this email asks about (the reorder round), noted as asked once it is in Drafts.
+  S.ai = { key, angle, to: '', person: '', reorder }; S.tab = 'sales'; S.crmView = 'main'; render(); $('saibox')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   if (c.contactId && /^[0-9a-f-]{36}$/i.test(c.contactId)) data.xero('contact', { id: c.contactId }).then(x => { if (S.ai?.key === key) { S.ai.to = x.email || ''; S.ai.person = x.person || ''; } }).catch(() => {});
 }
 async function writeAi(key) {
@@ -1573,7 +1606,8 @@ async function draftAi(key) {
   try {
     const link = await data.draftEmail({ to, subject, html: aiEmailHtml({ greeting: parts[0], paragraphs: parts.slice(1) }, S.me.name) });
     await data.addSalesAction({ customer: c.customer, kind: 'email', note: subject });
-    S.ai = null;
+    if (S.ai?.reorder) await data.addSalesAction({ customer: c.customer, kind: 'reorder', note: reorderNote(S.ai.reorder) }).catch(() => {});   // the reorder round: asked
+    S.ai = null; S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
     toast(`The email to ${c.customer} is in your Outlook Drafts${to ? '' : ' (add their email address there)'}. Check it and press Send.`);
     if (link) window.open(link, '_blank', 'noopener');
   } catch (e) { toast(mailErr(e), null, true); }
@@ -2733,7 +2767,7 @@ function onClick(e) {
   if (d.wondrill) return wonDrill(d.wondrill, d.key);
   if (d.wonlines) { S.wonOpen = S.wonOpen === d.wonlines ? null : d.wonlines; return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
-  if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; render(); setTimeout(() => $('goenq' in d ? 'enquiries' : 'smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
+  if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; if ('gosmart' in d) S.crmView = 'main'; render(); setTimeout(() => $('goenq' in d ? 'enquiries' : 'smart')?.scrollIntoView({ behavior: 'smooth' }), 50); return; }
   if (d.tab) { e.preventDefault(); S.tab = d.tab; render(); window.scrollTo(0, 0); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if (d.sendout) { e.stopPropagation(); return sendOutForm(+d.job, d.sendout); }
@@ -2787,7 +2821,9 @@ function onClick(e) {
   if (d.qchase) return chaseQuote(+d.qchase);
   if (d.qcall) return logCall(+d.qcall, null);
   if (d.ccall) return logCall(null, d.ccall);
-  if (d.aiopen) return openAi(d.aiopen, d.angle || '');
+  if (d.aiopen) return openAi(d.aiopen, d.angle || '', d.reitem || '');
+  if (d.reasked) return reorderAction(d.reasked, d.reitem, 'reorder');
+  if (d.resnooze) return reorderAction(d.resnooze, d.reitem, 'reorder_snooze');
   if (d.aiwrite) return writeAi(d.aiwrite);
   if (d.aidraft) return draftAi(d.aidraft);
   if ('aiclose' in d) { S.ai = null; return render(); }

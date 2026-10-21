@@ -258,6 +258,11 @@ body.kiosk-mode #app > header.top,body.kiosk-mode #app > nav.tabs,body.kiosk-mod
 .kiosk .allclear{margin:0;padding:24px;font-size:20px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:14px}
 /* Home: Today */
 .today{display:flex;flex-direction:column;gap:10px} .today .hsec-h .btn{margin-left:auto}
+/* The reorder round (Home and CRM, 21 Oct): repeat parts due again, with asked and not-needed ones greyed below. */
+.reround .hsec-h{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap;margin:0} .reround .hsec-h h3{margin:0} .reround .hsec-h .btn{margin-left:auto}
+.reround .renudge{margin:0;padding:8px 12px;border-radius:10px;background:var(--info-soft);color:var(--info);display:flex;align-items:center;gap:8px}
+.reround table.reorders td.act{white-space:normal} .reround table.reorders td.act .btn{margin:2px 0} .reround td small{display:block;color:var(--muted);font-size:12px}
+.reround .redone{margin:0;padding-left:18px;color:var(--muted);font-size:13px} .reround .rewon{margin:0;color:var(--ok);display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
 .tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
 .tcard{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
 .tcard b{font-size:24px;font-variant-numeric:tabular-nums} .tcard span{color:var(--muted);font-size:13px}
@@ -939,7 +944,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

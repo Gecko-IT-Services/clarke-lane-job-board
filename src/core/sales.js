@@ -26,7 +26,8 @@ const DECIDED_AFTER = 60;        // a quote not ordered after 60 days counts as 
 /**
  * What his quote history says. Quotes dated in the last `months`; a quote counts once it is won, marked lost,
  * or older than 60 days. Returns win rates (by count and value), how long won quotes take, the chance a quote
- * still open at each age is ordered later (curve), and per-customer win rates.
+ * still open at each age is ordered later (curve), and per-customer win rates. timingUnknown: there is enough
+ * history but no real ordered dates, so the rates are his and the timing is the general curve.
  */
 export function winStats(quotes, follow, today, months = 12) {
   const from = dayNo(today) - Math.round(months * 30.44), t = dayNo(today);
@@ -35,17 +36,24 @@ export function winStats(quotes, follow, today, months = 12) {
   const won = decided.filter(isWon);
   const days = won.map(q => Math.max(0, dayNo(q.wonDate || q.quoteDate) - dayNo(q.quoteDate)));
   const own = decided.length >= MIN_HISTORY;
-  const curve = own ? GENERAL_CURVE.map(([a]) => {
+  // Is the timing usable? The quote calculator has no ordered date, so a won quote's date falls back to when the
+  // SharePoint item was last changed, which for most is the day it was quoted. Then every won quote looks ordered
+  // on day 0, nothing still open after a week ever looks won, and the curve said 1% for everything (Philip, 21 Oct:
+  // "every open quote shows 1-3%"). With no real timing, his own win RATE still counts but the timing is general.
+  const p80 = pct(days, 0.8), timingUnknown = own && (p80 == null || p80 <= 1 || days.filter(d => d > 0).length < 5);
+  const general = a => GENERAL_CURVE.find(([x]) => x === a)[1];
+  const curve = own && !timingUnknown ? GENERAL_CURVE.map(([a]) => {
     const still = decided.filter(q => (isWon(q) ? dayNo(q.wonDate || q.quoteDate) - dayNo(q.quoteDate) > a : t - dayNo(q.quoteDate) > a));
     const later = still.filter(isWon).length;
-    return [a, still.length ? Math.max(0.01, later / still.length) : 0.01];
+    // Never under half the general curve: a thin history must not declare every older quote dead.
+    return [a, Math.max(0.01, general(a) / 2, still.length ? later / still.length : 0)];
   }) : GENERAL_CURVE;
   const byCust = new Map();
   for (const q of decided) { const k = normName(q.customer); const c = byCust.get(k) || { customer: q.customer, decided: 0, won: 0, wonValue: 0 }; c.decided++; if (isWon(q)) { c.won++; c.wonValue = r2(c.wonValue + quoteValue(q)); } byCust.set(k, c); }
   const sum = xs => r2(xs.reduce((a, q) => a + quoteValue(q), 0));
   const rate = decided.length ? won.length / decided.length : null;
-  return { own, decided: decided.length, won: won.length, rate, rateValue: sum(decided) ? sum(won) / sum(decided) : null,
-    avgWon: won.length ? r2(sum(won) / won.length) : null, medianDays: median(days), p80Days: pct(days, 0.8), curve, byCustomer: byCust };
+  return { own, timingUnknown, decided: decided.length, won: won.length, rate, rateValue: sum(decided) ? sum(won) / sum(decided) : null,
+    avgWon: won.length ? r2(sum(won) / won.length) : null, medianDays: timingUnknown ? null : median(days), p80Days: timingUnknown ? null : p80, curve, byCustomer: byCust };
 }
 
 /** Chance from the curve for a quote this many days old (straight line between the points). */
@@ -71,7 +79,7 @@ export function customerFactor(stats, customer) {
  */
 export function pipeline(quotes, follow, actions, stats, today) {
   const t = dayNo(today);
-  const deadAfter = stats.own && stats.p80Days != null ? Math.max(45, Math.round(stats.p80Days * 1.5)) : 60;
+  const deadAfter = stats.own && !stats.timingUnknown && stats.p80Days != null ? Math.max(45, Math.round(stats.p80Days * 1.5)) : 60;
   const last = new Map();
   for (const a of actions || []) { const p = last.get(a.spId); if (!p || a.at > p.at) last.set(a.spId, a); }
   return quotes.filter(q => !isWon(q) && !lostByStatus(q) && follow?.[q.spId]?.state !== 'lost').map(q => {
