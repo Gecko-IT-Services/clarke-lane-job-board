@@ -22,9 +22,33 @@ assert.equal(st.decided, 20); assert.equal(st.won, 8); assert.equal(st.rate, 0.4
 assert.equal(st.avgWon, 1000);
 assert.equal(st.medianDays, 6.5);
 assert.ok(st.curve[0][1] === 0.4, 'at day 0 every quote is still open: 8 of 20');
-assert.equal(st.curve.find(([a]) => a === 30)[1], 0.01, 'none of his were ordered after 30 days');
+assert.equal(st.timingUnknown, false);
+assert.equal(st.p80Days, 9);
+// None of his were ordered after 30 days, but a curve point never falls under half the general curve (0.12 / 2).
+assert.equal(st.curve.find(([a]) => a === 30)[1], 0.06, 'half the general curve at 30 days');
+for (const [a, p] of st.curve) assert.ok(p >= GENERAL_CURVE.find(([x]) => x === a)[1] / 2, `day ${a} not under half the general curve`);
 assert.ok(customerFactor(st, 'A Ltd') > 1.5 && customerFactor(st, 'C Ltd') < 0.6);
 assert.equal(chanceAt([[0, 0.4], [10, 0.2]], 5), 0.30000000000000004);
+
+
+// No real ordered dates (Philip, 21 Oct): every won quote's date is its quote date (SharePoint's last change),
+// so the timing is unknown; the win rate is still his, the timing is the general curve, and nothing is dead before 60 days.
+const flat = [];
+for (let i = 0; i < 8; i++) flat.push(q(i < 6 ? 'A Ltd' : 'B Ltd', 70 + i, 1000, 0));
+for (let i = 0; i < 12; i++) flat.push(q(i < 2 ? 'A Ltd' : 'C Ltd', 65 + i, 800));
+const fs = winStats(flat, {}, today);
+assert.equal(fs.own, true); assert.equal(fs.timingUnknown, true);
+assert.equal(fs.rate, 0.4, 'his own win rate still counts');
+assert.equal(fs.medianDays, null); assert.equal(fs.p80Days, null);
+assert.deepEqual(fs.curve, GENERAL_CURVE);
+assert.ok(Math.abs(chanceAt(fs.curve, 7) - 0.3) < 1e-9, 'a week-old quote is about 30% before the customer factor, not 1%');
+const week = q('D Ltd', 7, 1000), fp = pipeline([...flat, week, q('C Ltd', 50, 500)], {}, [], fs, today);
+assert.ok(Math.abs(fp.find(x => x.spId === week.spId).chance - 0.3) < 1e-9, 'a new customer at 7 days: 30%, not 1-3%');
+assert.equal(fp.find(x => x.age === 50).stage, 'cold', 'not dead before the 60-day default');
+assert.equal(pipeline([q('C Ltd', 61, 500)], {}, [], fs, today)[0].stage, 'dead', 'dead after 60 days');
+// Fewer than 5 won quotes with real timing is not enough either.
+const thin = flat.map((x, i) => i < 3 ? { ...x, wonDate: ago(70 + i - 5) } : x);
+assert.equal(winStats(thin, {}, today).timingUnknown, true);
 
 // The pipeline: stages and order.
 const open = [q('A Ltd', 2, 2000), q('C Ltd', 12, 5000), q('A Ltd', 20, 1000), q('C Ltd', 200, 9000)];

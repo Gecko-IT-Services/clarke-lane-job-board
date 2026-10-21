@@ -234,9 +234,13 @@ function salesHistory() {
   add('Fourth Example Ltd', 'cx2', 30, 12, 20, 'Guard plate 2mm Zintec', 520);
   add('Old Example Ltd', 'cx9', 45, 260, 8, 'Stainless hopper 304', 2200);                            // lapsed
   add('Tenth Example Ltd', 'cx7', 20, 30, 6, 'Shelf bracket 2mm Zintec', 380);                          // usually every 20 days: due a reorder
+  add('Second Example Ltd', 'cx3', 28, 40, 5, 'Mounting plate 3mm aluminium 5083', 290);                // usually every 4 weeks: due a reorder
+  add('Fifth Example Ltd', 'cx5', 35, 50, 4, 'Cable tray lid 1.5mm galvanised', 460);                    // usually every 5 weeks: due a reorder
   return { invoices: inv, earliest: inv.reduce((m, x) => (!m || x.date < m ? x.date : m), '') };
 }
-const follow = {}; const salesActs = []; let actNo = 1;
+const follow = {}; let actNo = 1;
+// The reorder round: Mandy asked Tenth Example about its brackets on the phone three days ago, so it shows as asked.
+const salesActs = [{ id: actNo++, spId: null, customer: 'Tenth Example Ltd', kind: 'reorder', note: 'Reorder: Shelf bracket 2mm Zintec', by: 'mandy@clarke-lane.example', at: ago(3) + 'T10:00:00Z' }];
 export const loadSales = async () => ({ follow: structuredClone(follow), actions: structuredClone(salesActs) });
 export const setFollow = async (q, p) => { follow[q.spId] = { ...(follow[q.spId] || { state: 'open' }), ...p }; };
 export const addSalesAction = async a => { salesActs.unshift({ id: actNo++, spId: a.spId ?? null, customer: a.customer, kind: a.kind, note: a.note || '', by: 'levi@example.com', at: new Date().toISOString() }); };

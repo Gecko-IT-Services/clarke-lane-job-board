@@ -8,9 +8,8 @@ import { STAGES } from './core/sales.js';
 
 export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply', 'Job cancelled', 'Other'];
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
-const later = x => x <= 0.01 ? 'almost none are ordered' : pc(x) + ' are ordered';
 
-export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today, reorders = [], more = [], news = null, enquiriesBox = '', md = false }, h) {
+export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false }, h) {
   const { esc, fmt, gbp } = h;
   if (err) return `<div class="hhead"><div><h2>CRM</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
   if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
@@ -58,11 +57,13 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
       : '<p class="note">None at this stage.</p>'}</section>`;
 
   // What his own quotes say.
-  const s = stats;
+  // timingUnknown (Philip, 21 Oct): no ordered dates, so the timing is general (core/sales.js winStats).
+  const s = stats, at = a => s.curve.find(([x]) => x === a)[1];
   const says = `<section class="panel"><h3>What your quotes say</h3>${s.decided ? `<ul class="ssays">
       <li>Over the last 12 months you won <b>${s.won} of ${s.decided}</b> quotes (${pc(s.rate)}), and ${pc(s.rateValue)} of the value quoted.</li>
       ${s.medianDays != null ? `<li>A won quote usually comes in within <b>${days(Math.round(s.medianDays))}</b>; 8 in 10 within ${days(s.p80Days)}. After that the chance drops fast, so chase in the first week or two.</li>` : ''}
-      ${s.own ? `<li>Of quotes still open after 30 days, ${later(s.curve.find(([a]) => a === 30)[1])}; after 60 days, ${later(s.curve.find(([a]) => a === 60)[1])}.</li>` : `<li>Only ${s.decided} quotes are decided so far, so the chances use a cautious general curve until there are ${15}.</li>`}
+      ${s.timingUnknown ? `<li>The quote calculator does not record when a quote was ordered, so the board cannot tell how long your won quotes take. The chances use a general curve for timing, adjusted for each customer's own win rate with you. Add an <b>Ordered Date</b> column to the Quotes list in SharePoint (filled in when a quote is ordered) and the board will use your own history instead.</li>`
+        : s.own ? `<li>Of quotes still open after 7 days, ${pc(at(7))} are ordered later; after 30 days, ${pc(at(30))}; after 60, ${pc(at(60))}.</li>` : `<li>Only ${s.decided} quotes are decided so far, so the chances use a cautious general curve until there are ${15}.</li>`}
       ${[...s.byCustomer.values()].filter(c => c.decided >= 3).sort((a, b) => b.won / b.decided - a.won / a.decided).slice(0, 3).map(c => `<li><b>${esc(c.customer)}</b> orders ${c.won} of ${c.decided} quotes.</li>`).join('')}
     </ul>` : '<p class="note">No decided quotes in the last 12 months yet.</p>'}</section>`;
 
@@ -90,12 +91,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
           <td>${writeBtn(c)} <button class="btn sm" type="button" data-ccall="${esc(c.key)}">Log a call</button> <button class="btn sm link" type="button" data-custpage="${esc(c.key)}">Page</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="allclear ok">Nobody has gone quiet.</p>'}`}</section>`;
 
-  // Repeat parts due again, and work a regular customer could also give us.
-  const reorderBox = `<section class="panel" id="smart"><h3>Due a reorder <small>repeat items past their usual gap</small></h3>${!base ? '<p class="note">Reading Xero\'s invoices…</p>' : reorders.length
-      ? `<div class="tbl-wrap"><table class="lines"><thead><tr><th>Customer</th><th>Item</th><th>Usually</th><th>Last ordered</th><th></th></tr></thead><tbody>${reorders.slice(0, 20).map(r => `<tr><td><b>${esc(r.customer)}</b></td><td>${esc(r.item)}</td>
-          <td>every ${esc(days(r.every))}<small>${r.times} orders</small></td><td>${esc(fmt(r.last))}<small>${esc(days(r.since))} ago</small></td>
-          <td>${writeBtn(r, `Their regular order of "${r.item}" looks due: they usually order it about every ${r.every} days and last ordered it on ${r.last}. Ask whether they need the next batch.`)} <button class="btn sm" type="button" data-ccall="${esc(r.key)}">Log a call</button></td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="note">No repeat items are overdue.</p>'}</section>`;
+  // Repeat parts due again: the Reorder round (src/reorders.js, drawn by app.js); and work a regular customer could also give us.
   const moreBox = more.length ? `<section class="panel"><h3>Could give us more <small>regular customers who have never had these from us</small></h3>
       <div class="tbl-wrap"><table class="lines"><thead><tr><th>Customer</th><th>Has from us</th><th>Worth asking about</th><th></th></tr></thead><tbody>${more.slice(0, 15).map(x => `<tr><td><b>${esc(x.customer)}</b></td>
         <td>${esc(x.has.join(', '))}</td><td>${esc(x.missing.join(', '))}</td><td>${writeBtn(x, `Mention that we also do ${x.missing.join(' and ')} in-house or through our partners, so they can send the whole job to one supplier. Do not assume they need it.`)}</td></tr>`).join('')}</tbody></table></div>
