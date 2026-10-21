@@ -12,7 +12,9 @@ const median = xs => { const a = [...xs].sort((x, y) => x - y); if (!a.length) r
 
 /** Webmail addresses: search by the whole address, never by the domain (everyone at gmail.com is not one customer). */
 export const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.co.uk', 'outlook.com', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk',
-  'icloud.com', 'me.com', 'aol.com', 'btinternet.com', 'sky.com', 'virginmedia.com', 'talktalk.net', 'ntlworld.com', 'protonmail.com', 'proton.me']);
+  'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'btinternet.com', 'btopenworld.com', 'btconnect.com', 'sky.com', 'virginmedia.com', 'virgin.net', 'blueyonder.co.uk',
+  'talktalk.net', 'tiscali.co.uk', 'ntlworld.com', 'talk21.com', 'protonmail.com', 'proton.me', 'pm.me', 'gmx.com', 'gmx.co.uk', 'mail.com', 'zoho.com', 'zohomail.com',
+  'outlook.co.uk', 'hotmail.de', 'yahoo.ie', 'ymail.com', 'rocketmail.com', 'fastmail.com', 'hey.com', 'live.ie', 'plus.com', 'plusnet.com', 'o2.co.uk', 'orange.net', 'lineone.net', 'freeserve.co.uk']);
 export const domainOf = email => (String(email || '').trim().toLowerCase().match(/@([a-z0-9.-]+\.[a-z]{2,})$/) || [])[1] || '';
 const validEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || '').trim());
 
@@ -27,15 +29,20 @@ export function mailTerms(emails, ownDomain = '') {
   return [...out].slice(0, 5);
 }
 
-/** Who an email address belongs to: an exact address first, then the company domain. index from customerIndex(). */
-export function customerIndex(entries) {
-  const byEmail = new Map(), byDomain = new Map();
+/** Who an email address belongs to: an exact address first, then the company domain. index from customerIndex().
+ *  Never the firm's own domain (a colleague is not a customer), and a domain shared by two different
+ *  customers (a parent company, an agent) is left out rather than guessed. */
+export function customerIndex(entries, ownDomain = '') {
+  const byEmail = new Map(), byDomain = new Map(), shared = new Set();
   for (const { key, customer, email } of entries) for (const e of String(email || '').split(/[,;\s]+/)) {
     if (!validEmail(e)) continue;
     const a = e.trim().toLowerCase(), d = domainOf(a);
+    if (d === ownDomain) continue;
     if (!byEmail.has(a)) byEmail.set(a, { key, customer });
-    if (d && !FREE_MAIL.has(d) && !byDomain.has(d)) byDomain.set(d, { key, customer });
+    if (!d || FREE_MAIL.has(d)) continue;
+    if (byDomain.has(d) && byDomain.get(d).key !== key) shared.add(d); else if (!byDomain.has(d)) byDomain.set(d, { key, customer });
   }
+  for (const d of shared) byDomain.delete(d);
   return { byEmail, byDomain };
 }
 export const whoIs = (index, email) => { const a = String(email || '').trim().toLowerCase(); return index.byEmail.get(a) || index.byDomain.get(domainOf(a)) || null; };

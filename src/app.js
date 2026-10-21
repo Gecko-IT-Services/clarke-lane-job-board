@@ -274,6 +274,7 @@ document.addEventListener('pointerdown', e => {
 });
 document.addEventListener('pointermove', e => {
   if (!drag) return;
+  if (!drag.tr.isConnected) { drag = null; document.body.classList.remove('is-dragging'); return; }   // the list was redrawn under the drag
   const i = drag.rows.findIndex(r => { const b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
   const to = i < 0 ? drag.rows.length : i;
   drag.rows.forEach((r, n) => { r.classList.toggle('drop-before', n === to); r.classList.toggle('drop-after', to === drag.rows.length && n === drag.rows.length - 1); });
@@ -283,7 +284,7 @@ const endDrag = () => {
   if (!drag) return;
   const { id, rows, to, tr } = drag; drag = null;
   rows.forEach(r => r.classList.remove('drop-before', 'drop-after')); tr.classList.remove('dragging'); document.body.classList.remove('is-dragging');
-  if (to == null) return;
+  if (to == null || !tr.isConnected) return;   // redrawn mid-drag: the rows' positions mean nothing now
   const from = rows.indexOf(tr), dest = to > from ? to - 1 : to;
   if (dest !== from) moveJob(id, dest, boardVisible());
 };
@@ -771,8 +772,9 @@ async function saveBookForm(kind) {
     : { ...base, label: v('bk-label').trim(), address: v('bk-address').trim(), contact: v('bk-contact').trim(), phone: v('bk-phone').trim() };
   if (kind === 'person' && !rec.name && !rec.email) return toast('Enter a name or an email.', null, true);
   if (kind === 'site' && !rec.address) return toast('Enter the address.', null, true);
-  try { await (kind === 'person' ? data.savePerson(rec) : data.saveSite(rec)); S.bookEdit = null; await reload(); toast('Saved.'); }
-  catch (e) { toast(e.message, null, true); }
+  if (S.busy) return; S.busy = true;
+  try { await (kind === 'person' ? data.savePerson(rec) : data.saveSite(rec)); S.busy = false; S.bookEdit = null; await reload(); toast('Saved.'); }
+  catch (e) { S.busy = false; toast(e.message, null, true); }
 }
 async function copyXeroToBook() {
   const name = S.custShown || S.custName || [...S.book.people, ...S.book.sites].find(x => x.key === S.cust && x.customer)?.customer || S.jobs.find(j => normName(j.customer) === S.cust)?.customer;
@@ -1146,7 +1148,7 @@ function customerIdx() {
   const entries = [...S.book.people.map(p => ({ key: p.key, customer: p.customer, email: p.email })),
     ...S.jobs.filter(j => !j.preview).map(j => ({ key: normName(j.customer), customer: j.customer, email: j.contactEmail })),
     ...(S.salesQ || []).map(q => ({ key: normName(q.customer), customer: q.customer, email: q.contactEmail }))];
-  return customerIndex(entries);
+  return customerIndex(entries, ownDomain());
 }
 
 /** Reads new emails in the enquiries mailbox: each one not seen before is sorted by AI and kept as one row. */
@@ -1310,6 +1312,7 @@ async function sendEnquiryReply(id) {
   const e = (S.enq || []).find(x => x.id === id); if (!e) return;
   const subject = $('er-subj').value.trim(), parts = $('er-body').value.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
   if (!subject || !parts.length) return toast('The reply needs a subject and some text.', null, true);
+  if (S.busy) return; S.busy = true;
   try {
     const link = await data.draftEmail({ to: e.fromEmail, subject, html: aiEmailHtml({ greeting: parts[0], paragraphs: parts.slice(1) }, S.me.name) });
     await data.setEnquiry(id, { status: 'replied', by: S.me.email });
@@ -1318,7 +1321,7 @@ async function sendEnquiryReply(id) {
     toast(`The reply to ${e.fromName || e.fromEmail} is in your Outlook Drafts. Check it and press Send.`);
     if (link) window.open(link, '_blank', 'noopener');
   } catch (x) { toast(mailErr(x), null, true); }
-  render();
+  S.busy = false; render();
 }
 /**
  * A customer's question on a quote, onto the chase list (Philip, 21 Oct: "can you break down the price increase", "does
@@ -1569,11 +1572,13 @@ function openTaskForm(src) {
 async function saveTask() {
   const f = S.taskForm, title = $('tk-title').value.trim(), customer = $('tk-cust').value.trim(), dueOn = $('tk-due').value, assignedTo = $('tk-who').value;
   if (!title || !dueOn) { $('tk-err').textContent = 'Say what needs doing and when.'; $('tk-err').hidden = false; return; }
+  if (S.busy) return; S.busy = true;
   try {
     await data.addTask({ title, customer, customerKey: customer ? normName(customer) : '', dueOn, assignedTo, source: f.source, sourceRef: f.sourceRef });
     S.taskForm = null; closeDoc(); S.tasks = await data.loadTasks();
     toast(`Task saved for ${(staffList().find(x => x.email === assignedTo)?.name || assignedTo).split(' ')[0]}, due ${fmt(dueOn)}.`);
   } catch (e) { $('tk-err').textContent = e.message; $('tk-err').hidden = false; return; }
+  finally { S.busy = false; }
   render();
 }
 async function toggleTask(id, done) {
@@ -1642,7 +1647,7 @@ async function loadSalesData(fresh) {
 /** Everything the Sales screen shows, worked out from the quotes, follow-ups, orders and Xero. */
 function salesModel() {
   const today = todayIso(), F = S.salesF || { follow: {}, actions: [] };
-  const quotes = (S.salesQ || []).map(q => ({ ...q, jobId: S.jobs.find(j => j.spQuoteId === q.spId)?.id || null }));
+  const quotes = (S.salesQ || []).map(q => ({ ...q, jobId: S.jobs.find(j => j.spQuoteId === q.spId)?.id || null, dismissed: (S.dismissed || []).includes(q.spId) }));
   const stats = winStats(quotes, F.follow, today);
   const open = pipeline(quotes, F.follow, F.actions, stats, today);
   const base = S.hist ? customerBase(S.hist.invoices, today) : null;
@@ -1715,6 +1720,7 @@ const plusDays = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).to
 const salesQuote = spId => salesModel().open.find(q => q.spId === spId) || (S.salesQ || []).find(q => q.spId === spId);
 async function chaseQuote(spId) {
   const q = salesQuote(spId); if (!q) return;
+  if (S.busy) return; S.busy = true;
   try {
     const { subject, html } = quoteChaseEmail(q, S.me.name);
     const link = await data.draftEmail({ to: q.contactEmail, subject, html });
@@ -1724,7 +1730,7 @@ async function chaseQuote(spId) {
     toast(`Follow-up for ${q.quoteNo} is in your Outlook Drafts${q.contactEmail ? ` to ${q.contactEmail}` : ' (no email on the quote: add one)'}. Check it and press Send. Next follow-up booked for a week's time.`);
     if (link) window.open(link, '_blank', 'noopener');
   } catch (e) { toast(mailErr(e), null, true); }
-  loadSalesData();
+  S.busy = false; loadSalesData();
 }
 async function logCall(spId, customerKey) {
   const q = spId ? salesQuote(spId) : null, c = customerKey ? (salesModel().base || []).find(x => x.key === customerKey) : null;
@@ -1768,6 +1774,7 @@ async function newsEmails() {
   const text = $('news-text').value.trim(); if (!text) return toast('Write what is new first: the AI builds each email around it.', null, true);
   const picked = [...document.querySelectorAll('[data-newspick]:checked')].map(x => x.dataset.newspick);
   if (!picked.length) return toast('Tick at least one customer.', null, true);
+  if (S.news?.busy) return;   // already drafting
   if (!confirm(`Draft ${picked.length} email${picked.length === 1 ? '' : 's'} in your Outlook Drafts, one per customer? (About ${picked.length}p of AI.) Nothing is sent.`)) return;
   const m = salesModel(); S.news = { text, picked, busy: '' }; let done = 0, noMail = 0;
   for (const key of picked) {
@@ -2451,8 +2458,10 @@ async function removeDrawingFrom(id) {
 }
 let viewUrl = null;
 /** Full screen on any screen, the shop floor included: PDFs and pictures shown here, anything else opens in SharePoint. */
+let drawingSeq = 0;   // which tap the viewer belongs to, so a slower download cannot overwrite a later one
 async function showDrawing(jobId, fileId) {
   const j = job(jobId), f = j?.files.find(x => x.id === fileId); if (!f) return;
+  const seq = ++drawingSeq;
   const others = j.files.length > 1 ? j.files.map(x => `<button class="btn${x.id === f.id ? ' pri' : ''}" type="button" data-drawing="${x.id}" data-job="${j.id}">${esc(x.name)}</button>`).join('') : '';
   $('doc').innerHTML = `<div class="docbar"><span>${esc(j.so)} · ${esc(j.customer)} · <b>${esc(f.name)}</b></span>${others}
       ${f.url && f.url !== '#' ? `<a class="btn" href="${esc(f.url)}" target="_blank" rel="noopener">Open in SharePoint</a>` : ''}<button class="btn" type="button" data-closedoc>Close</button></div>
@@ -2460,13 +2469,14 @@ async function showDrawing(jobId, fileId) {
   $('doc').hidden = false; document.body.classList.add('doc-open', 'viewing');
   try {
     const blob = await data.drawingBlob(f);
+    if (seq !== drawingSeq) return;   // another drawing was opened meanwhile
     if (viewUrl) URL.revokeObjectURL(viewUrl);
     const type = blob.type || f.mime || '', pdf = /pdf/i.test(type) || /\.pdf$/i.test(f.name), img = /^image\//i.test(type) || /\.(png|jpe?g|gif|webp)$/i.test(f.name);
     viewUrl = URL.createObjectURL(pdf && !/pdf/i.test(blob.type) ? new Blob([blob], { type: 'application/pdf' }) : blob);
     $('viewer').innerHTML = pdf ? `<iframe class="vframe" src="${viewUrl}#view=FitH" title="${esc(f.name)}"></iframe>`
       : img ? `<img class="vimg" src="${viewUrl}" alt="${esc(f.name)}">`
       : `<div class="panel"><b>${esc(f.name)}</b><p class="note">This kind of file cannot be shown on the board. ${f.url && f.url !== '#' ? 'Open it in SharePoint, or ' : ''}<a href="${viewUrl}" download="${esc(f.name)}">download it</a>.</p></div>`;
-  } catch (e) { $('viewer').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+  } catch (e) { if (seq === drawingSeq) $('viewer').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 
 /* ---------- purchase orders: bought-in parts or outside work for a sales order, as DRAFT POs in Xero

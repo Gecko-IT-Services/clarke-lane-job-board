@@ -200,7 +200,7 @@ export function describeLine(l) {
  *  gives back the quoted total to the penny. */
 export const unitPrice = (sellTotal, qty) => qty > 0 ? Math.round((sellTotal / qty) * 1e6) / 1e6 : 0;
 
-export const round2 = n => Math.round(n * 100) / 100;
+export const round2 = n => (n < 0 ? -1 : 1) * Math.round(Math.round(Math.abs(n) * 1e8) / 1e6) / 100;   // to the penny, half up, after flattening float noise (7 × 0.145 is 1.0149999…)
 
 /** A date n working days (Mon–Fri) after `from`. The quote calculator's DeliveryDays are working days. */
 export function addWorkingDays(from, n) {

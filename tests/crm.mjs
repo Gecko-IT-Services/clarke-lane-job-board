@@ -12,6 +12,12 @@ const idx = customerIndex([{ key: 'example', customer: 'Example Ltd', email: 'sa
 assert.equal(whoIs(idx, 'new.person@example.co.uk').customer, 'Example Ltd', 'same company domain');
 assert.equal(whoIs(idx, 'SOLO@gmail.com').customer, 'Solo Trader');
 assert.equal(whoIs(idx, 'other@gmail.com'), null, 'never by a webmail domain');
+const idxDom = customerIndex([{ key: 'a', customer: 'A Ltd', email: 'a@btopenworld.com' }, { key: 'b', customer: 'B Ltd', email: 'b@group.example' }, { key: 'c', customer: 'C Ltd', email: 'c@group.example' },
+  { key: 'us', customer: 'Clarke staff', email: 'mandy@clarke-lane.co.uk' }], 'clarke-lane.co.uk');
+assert.equal(whoIs(idxDom, 'bob@btopenworld.com'), null, 'an ISP mailbox is not a company');
+assert.equal(whoIs(idxDom, 'new@group.example'), null, 'a domain two customers share is not guessed');
+assert.equal(whoIs(idxDom, 'c@group.example').customer, 'C Ltd', 'their own address still is');
+assert.equal(whoIs(idxDom, 'levi@clarke-lane.co.uk'), null, 'a colleague is never a customer');
 
 assert.equal(plainText('<p>Hi&nbsp;there</p><style>x{}</style><div>Need 40 brackets</div>'), 'Hi there\n Need 40 brackets');
 const chain = 'Please quote 10 of the attached.' + ' x'.repeat(120) + '\nFrom: Someone\nSent: Monday\nOld stuff';

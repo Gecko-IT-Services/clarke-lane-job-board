@@ -10,7 +10,7 @@ export const MATERIALS = ['Aluminium', 'Stainless steel', 'Mild steel', 'Zintec'
 export const FORMS = ['Sheet', 'Plate', 'Flat bar', 'Round bar', 'Box section', 'Tube', 'Angle', 'Channel', 'Other'];
 export const UNITS = ['sheets', 'lengths', 'pieces', 'kg', 'm'];
 
-const r2 = n => Math.round(n * 100) / 100;
+const r2 = n => (n < 0 ? -1 : 1) * Math.round(Math.round(Math.abs(n) * 1e8) / 1e6) / 100;   // to the penny, half up, after flattening float noise (7 × 0.145 is 1.0149999…)
 const lower = s => String(s || '').trim().toLowerCase();
 
 export const rfqRef = id => 'RFQ-' + String(id).padStart(4, '0');

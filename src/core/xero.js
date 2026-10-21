@@ -23,7 +23,7 @@ export function matchContact(customer, contacts, saved) {
   return hits.length === 1 ? { id: hits[0].id, name: hits[0].name, how: 'auto' } : null;
 }
 
-const round2 = n => Math.round(n * 100) / 100;
+const round2 = n => (n < 0 ? -1 : 1) * Math.round(Math.round(Math.abs(n) * 1e8) / 1e6) / 100;   // to the penny, half up, after flattening float noise (7 × 0.145 is 1.0149999…)
 
 /**
  * One Xero invoice line for qty × exact unit price. Xero keeps unit prices to 4dp; when that
@@ -96,7 +96,11 @@ export function buildPurchaseOrder(d, contactId) {
     Reference: [d.so, d.customer ? `for ${d.customer}` : ''].filter(Boolean).join(' ').slice(0, 255),
     Status: 'DRAFT', LineAmountTypes: 'Exclusive',
     LineItems: d.lines.filter(l => l.qty > 0 && String(l.description || '').trim())
-      .map(l => ({ Description: String(l.description).trim().slice(0, 4000), Quantity: l.qty, UnitAmount: round2(Number(l.unit) || 0),
-        ...(d.accountCode ? { AccountCode: String(d.accountCode) } : {}) })),
+      .map(l => {   // like invoiceLine: 4dp unit prices, else 1 × the exact total so the PO never differs from the quote
+        const unit = Number(l.unit) || 0, u4 = Math.round(unit * 10000) / 10000, total = round2(l.qty * unit), desc = String(l.description).trim();
+        const line = round2(l.qty * u4) === total ? { Description: desc.slice(0, 4000), Quantity: l.qty, UnitAmount: u4 }
+          : { Description: `${desc} (${l.qty} @ £${unit})`.slice(0, 4000), Quantity: 1, UnitAmount: total };
+        return { ...line, ...(d.accountCode ? { AccountCode: String(d.accountCode) } : {}) };
+      }),
   };
 }

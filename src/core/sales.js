@@ -9,7 +9,7 @@
 import { normName } from './xero.js';
 
 const dayNo = s => Math.round(Date.parse(String(s).slice(0, 10) + 'T12:00:00Z') / 864e5);
-const r2 = n => Math.round(n * 100) / 100;
+const r2 = n => (n < 0 ? -1 : 1) * Math.round(Math.round(Math.abs(n) * 1e8) / 1e6) / 100;   // to the penny, half up, after flattening float noise (7 × 0.145 is 1.0149999…)
 const median = xs => { const a = [...xs].sort((x, y) => x - y); if (!a.length) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
 const pct = (xs, p) => { const a = [...xs].sort((x, y) => x - y); return a.length ? a[Math.min(a.length - 1, Math.floor(p * a.length))] : null; };
 
@@ -104,7 +104,7 @@ export const chaseList = (open, n = 8) => [...open.filter(q => q.stage === 'due'
 export function monthGap({ target, jobs, quotes, open, stats, today, jobValue }) {
   const m = today.slice(0, 7);
   const booked = r2((jobs || []).filter(j => j.status !== 'cancelled' && !j.preview && (j.ordered || '').slice(0, 7) === m).reduce((a, j) => a + (jobValue(j) || 0), 0)
-    + (quotes || []).filter(q => isWon(q) && (q.wonDate || '').slice(0, 7) === m && !q.jobId).reduce((a, q) => a + quoteValue(q), 0));
+    + (quotes || []).filter(q => isWon(q) && (q.wonDate || '').slice(0, 7) === m && !q.jobId && !q.dismissed).reduce((a, q) => a + quoteValue(q), 0));   // a job's own value is counted above; a dismissed quote was never an order
   const likely = r2((open || []).filter(q => q.stage !== 'dead').reduce((a, q) => a + q.likely, 0));
   const gap = target ? r2(Math.max(0, target - booked)) : null;
   const perQuote = stats.rate && stats.avgWon ? stats.rate * stats.avgWon : null;

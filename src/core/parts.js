@@ -12,11 +12,13 @@ export const normPartNo = s => String(s || '').toUpperCase().replace(/[\s_]+/g, 
 /** The drawing new orders get: the newest. */
 export const currentFile = part => [...(part.files || [])].sort((a, b) => (b.at || '').localeCompare(a.at || '') || b.id - a.id)[0] || null;
 
-/** Does a line's text name this part number (as a whole token, ignoring case and spacing)? */
+/** Does a line's text name this part number? As a whole word of the text, ignoring case, spacing and
+ *  surrounding punctuation: "10448" is not named by "UL-PR-10448", nor "ABC-100" by "ABC-100-2". */
 export function namesPart(text, partNo) {
   const want = normPartNo(partNo); if (want.length < 3) return false;
-  const esc = want.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-  return new RegExp(`(^|[^A-Z0-9])${esc}($|[^A-Z0-9])`).test(normPartNo(text));
+  const pat = want.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&').replace(/-/g, '[- ]');   // the number's own dashes may be spaces in the text
+  const t = String(text || '').toUpperCase().replace(/[\s_]+/g, ' ').replace(/-+/g, '-');
+  return new RegExp(`(^|[^A-Z0-9-])${pat}($|[^A-Z0-9-])`).test(t);
 }
 
 /**

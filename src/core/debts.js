@@ -10,7 +10,7 @@ import { normName } from './xero.js';
 
 export const DEBT_DAYS = 60;
 const dayNo = s => Math.round(Date.parse(s + 'T12:00:00Z') / 864e5);
-const round2 = n => Math.round(n * 100) / 100;
+const round2 = n => (n < 0 ? -1 : 1) * Math.round(Math.round(Math.abs(n) * 1e8) / 1e6) / 100;   // to the penny, half up, after flattening float noise (7 × 0.145 is 1.0149999…)
 
 /** Customers owing money on invoices over `days`, most owed first. */
 export function agedDebt(invoices, today, days = DEBT_DAYS) {

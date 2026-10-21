@@ -8,6 +8,9 @@ assert.ok(namesPart('EX PR 20001 x 40', 'EX-PR-20001'), 'spaces for dashes');
 assert.ok(!namesPart('Shim EX-PR-200012', 'EX-PR-20001'), 'a longer number is a different part');
 assert.ok(!namesPart('Bracket', 'BR'), 'too short to match');
 assert.ok(namesPart('Handle 990000001 (stainless)', '990000001'));
+assert.ok(!namesPart('UL-PR-10448 bracket', '10448'), 'the tail of a longer number is not this part');
+assert.ok(!namesPart('ABC-100-2 plate', 'ABC-100'), 'nor the head of one');
+assert.ok(namesPart('Bracket 10448, galv', '10448'), 'punctuation around it is fine');
 
 const parts = [
   { id: 1, customer: 'Example Racers Ltd', customerKey: 'exampleracers', partNo: 'EX-PR-20001', files: [
