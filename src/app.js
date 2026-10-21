@@ -570,10 +570,10 @@ function procTable(n) {
 /** Under the customer box: whether the order is on a Xero contact, as Sage insists on an account. */
 function customerNote(n) {
   if (!S.xero) return 'Connect Xero on the Xero tab to pick customers from it.';
-  if (S.xcErr) return 'Could not read the customers from Xero: ' + S.xcErr;
+  if (S.xcErr) return 'Could not read the customers from Xero: ' + esc(S.xcErr);
   if (!S.xc) return 'Reading the customers from Xero…';
   const m = n.customer.trim() && contactFor(n.customer);
-  if (m) return `✓ Xero contact: ${m.name}`;
+  if (m) return `✓ Xero contact: ${esc(m.name)}`;
   return n.customer.trim() ? 'Not a Xero customer yet. Pick one from the list, or add them in Xero first (then Read the customers again on the Xero tab), so the invoice lands on the right account.'
     : `Start typing to pick from ${S.xc.contacts.length} Xero contacts.`;
 }
@@ -585,7 +585,7 @@ async function customerPicked(name) {
   if (!c) {
     collectForm();
     applyBook(n); keepInputs = false; render();   // also brings this customer's parts to the top of the list
-    if ($('of-custnote')) $('of-custnote').textContent = customerNote({ ...n, customer: name });
+    if ($('of-custnote')) $('of-custnote').innerHTML = customerNote({ ...n, customer: name });   // customerNote escapes
     return;
   }
   collectForm();
@@ -1161,7 +1161,7 @@ async function syncEnquiries(manual) {
     const since = new Date(Math.max(Date.now() - 14 * 864e5, last ? Date.parse(last) - 36e5 : 0)).toISOString();
     const msgs = (await data.inboxMessages(mailbox, since)).filter(m => !known.has(m.messageId) && worthReading({ from: m.fromEmail }, ownDomain()));
     let read = 0;
-    for (const m of msgs.slice(0, 8)) {
+    for (const m of msgs.slice(0, 8)) {   // oldest first (inboxMessages), so the ones left over are newer than anything stored and come next time
       const attachments = m.hasAttachments ? await data.attachmentNames(mailbox, m.graphId).catch(() => []) : [];
       const x = await data.salesAi({ from: m.fromEmail, fromName: m.fromName, subject: m.subject, text: plainText(m.text), attachments }, 'enquiry');
       const id = await data.claimEnquiry({ ...m, mailbox });
@@ -2105,6 +2105,9 @@ async function sendToXero() {
     const r = await data.xero('send', { items });
     const ok = r.results.filter(x => x.ok), bad = r.results.filter(x => !x.ok);
     bad.forEach(x => { S.sendErr[x.despatchId] = x.error; });
+    // Made in Xero but not written down here: the note would otherwise sit in the list as if never sent.
+    ok.filter(x => !x.already && !x.recorded).forEach(x => { bad.push(x);
+      S.sendErr[x.despatchId] = `Draft ${x.invoiceNo || 'invoice'} is in Xero but the board could not record it (${x.recordError || 'unknown'}). Press Send again once that is put right: Xero hands back the same draft, not a second one.`; });
     const odd = ok.filter(x => x.mismatch);
     toast(`${ok.length} draft invoice${ok.length === 1 ? '' : 's'} created in Xero${ok.length ? ` (${ok.map(x => x.invoiceNo).filter(Boolean).join(', ')})` : ''}.` +
       (bad.length ? ` ${bad.length} not sent: see the list.` : '') + (odd.length ? ' Check the totals of ' + odd.map(x => x.invoiceNo).join(', ') + ' in Xero.' : ''), null, !!bad.length);
@@ -2603,7 +2606,7 @@ function pfEditor(j) {
     ${j.lines.map(l => `<tr><td style="text-align:left">${lineHtml(l, esc)}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${left(j, l)}</td><td>${unit(l.price)}</td>
       <td><input type="number" min="0" max="${l.qty}" step="1" value="${S.pfDraft.qty[l.id] || 0}" data-pq="${l.id}" style="width:90px" aria-label="Quantity on this pro forma: ${esc(lineLabel(l))}"></td></tr>`).join('')}</tbody></table></div>
     ${settings}
-    <div class="actions"><button class="btn pri" type="button" data-pfcreate="${j.id}" ${S.officeSet?.payment_details ? '' : 'disabled title="Save the payment details first"'}>${icon('doc')}Make the pro forma</button></div></div>`;
+    <div class="actions"><button class="btn pri" type="button" data-pfcreate="${j.id}" ${S.busy ? 'disabled' : S.officeSet?.payment_details ? '' : 'disabled title="Save the payment details first"'}>${icon('doc')}Make the pro forma</button></div></div>`;
 }
 function pfLinesFrom(j) {   // the draft's lines with the order's prices (the server takes its own prices when it is made)
   return j.lines.filter(l => (S.pfDraft.qty[l.id] || 0) > 0).map(l => ({ job_line_id: l.id, part: l.part, qty: S.pfDraft.qty[l.id], unit_price: l.price, net: round2(S.pfDraft.qty[l.id] * l.price) }));
@@ -2615,14 +2618,16 @@ async function createProforma(jobId) {
   const j = job(jobId);
   const lines = j.lines.map(l => ({ job_line_id: l.id, qty: S.pfDraft.qty[l.id] || 0 })).filter(l => l.qty > 0);
   if (!lines.length) return toast('Enter a quantity for at least one part.', null, true);
+  if (S.busy) return;   // a second tap while the first is still being made would make PF-0002 for the same goods
+  S.busy = true; render();
   try {
     const p = await data.createProforma(jobId, lines);
-    S.pfDraft = null; await reload();
+    S.busy = false; S.pfDraft = null; await reload();
     showDoc('pf', jobId, p.id);
     toast(`${p.pf_number} made. Email it to the customer, or print it.`, async () => {
       closeDoc(); try { await data.markProforma(p.id, 'cancel'); toast(`${p.pf_number} cancelled.`); } catch (e) { toast(e.message, null, true); } reload();
     });
-  } catch (e) { toast(e.message, null, true); }
+  } catch (e) { S.busy = false; toast(e.message, null, true); }
 }
 async function markPf(id, what) {
   const p = S.pfs.find(x => x.id === id); if (!p) return;

@@ -26,6 +26,9 @@ assert.equal(value(job({ lines: [{ id: 1, qty: 2, price: null }] })), null);
 // — Call-offs, Sage style: the same part on several lines with their own due dates. —
 assert.deepEqual(calloffDates('2026-10-16', 3, 7), ['2026-10-16', '2026-10-23', '2026-10-30']);
 assert.deepEqual(calloffDates('2026-10-16', 2, 14), ['2026-10-16', '2026-10-30']);
+assert.deepEqual(calloffDates('2026-01-15', 3, 'm'), ['2026-01-15', '2026-02-15', '2026-03-15']);
+assert.deepEqual(calloffDates('2026-01-31', 4, 'm'), ['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30'], 'month-end call-offs never skip a month');
+assert.deepEqual(calloffDates('2026-11-30', 3, 'm'), ['2026-11-30', '2026-12-30', '2027-01-30'], 'across the year end');
 const split = splitIntoCalloffs([{ part: 'Bezel LH', qty: 152, price: 76.26 }, { part: 'Bezel RH', qty: 2, price: 76.26 }], ['2026-10-16', '2026-10-23', '2026-10-30']);
 assert.deepEqual(split.map(l => `${l.part} ${l.qty} ${l.due}`), ['Bezel LH 51 2026-10-16', 'Bezel RH 1 2026-10-16',
   'Bezel LH 51 2026-10-23', 'Bezel RH 1 2026-10-23', 'Bezel LH 50 2026-10-30'], 'remainder on the earliest; no zero lines');

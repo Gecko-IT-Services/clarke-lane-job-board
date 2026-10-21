@@ -56,6 +56,8 @@ guarded only by role.
 
 ## High
 
+All four fixed in PR 98 (branch fix/review-high).
+
 ### H1. pdf.js 3.11.174 parses customer PDFs with eval on (app.js:1952-1961)
 CVE-2024-4367: pdf.js before 4.2.67 runs JavaScript embedded in a crafted font. "Attach drawings" and
 "Check processes" feed every customer PDF to `getDocument` with no `isEvalSupported: false`. A malicious
@@ -82,6 +84,8 @@ anyone ticks anything. Date pickers on the Jobs board are destroyed mid-pick the
 `bk-name`, `bk-email`, etc. from form A is restored into form B. Save then writes A's details over B.
 
 ## Medium
+
+M1, M2, M3, M7 and the pro forma half of M10 fixed in PR 99 (branch fix/review-medium).
 
 ### M1. Enquiry sync permanently skips mail when more than 8 arrive between runs (app.js:1090-1093)
 `since` is the newest stored `receivedAt` minus 1 h, and each run reads only the newest 8. Twelve emails

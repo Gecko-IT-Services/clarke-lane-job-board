@@ -640,7 +640,9 @@ const boxPath = box => box === 'me' ? '/me' : `/users/${encodeURIComponent(box)}
 const boxScopes = box => box === 'me' ? CONFIG.MAIL_SCOPES : CONFIG.SHARED_MAIL_SCOPES;
 /** The newest messages in a shared mailbox's inbox since a date, with their text (for enquiries). Never asks to approve. */
 export async function inboxMessages(mailbox, sinceIso) {
-  const r = await graph(`${boxPath(mailbox)}/mailFolders/inbox/messages?$filter=${encodeURIComponent(`receivedDateTime ge ${sinceIso}`)}&$orderby=receivedDateTime desc&$top=30&$select=${MAIL_SELECT},body`,
+  // Oldest first: the sync reads a few at a time and moves on from the newest it has stored, so
+  // nothing older than that mark may be left unread.
+  const r = await graph(`${boxPath(mailbox)}/mailFolders/inbox/messages?$filter=${encodeURIComponent(`receivedDateTime ge ${sinceIso}`)}&$orderby=receivedDateTime asc&$top=30&$select=${MAIL_SELECT},body`,
     { scopes: boxScopes(mailbox), quiet: true, headers: { Prefer: 'outlook.body-content-type="text"' } });
   return (r.value || []).map(m => ({ graphId: m.id, messageId: m.internetMessageId || m.id, subject: m.subject || '', fromEmail: m.from?.emailAddress?.address || '', fromName: m.from?.emailAddress?.name || '',
     receivedAt: m.receivedDateTime, text: m.body?.content || m.bodyPreview || '', webLink: m.webLink || '', hasAttachments: !!m.hasAttachments }));
