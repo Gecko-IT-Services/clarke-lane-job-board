@@ -705,7 +705,7 @@ function renderCustomers() {
           ${b.sites.map(x => `<tr><td style="text-align:left">${x.label ? `<b>${esc(x.label)}</b><br>` : ''}<span style="white-space:pre-line">${esc(x.address)}</span>${x.main ? ' <span class="chip ok">usual</span>' : ''}${postcodeOf(x.address) ? '' : ' <span class="chip late">no postcode</span>'}</td>
             <td style="text-align:left">${esc(x.contact)}</td><td style="text-align:left">${esc(x.phone)}</td>
             <td style="white-space:nowrap"><button class="btn sm" type="button" data-editsite="${x.id}">Edit</button> <button class="btn link sm" type="button" data-delsite="${x.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No delivery addresses yet.</div>'}
-        ${sform || '<div class="actions"><button class="btn sm" type="button" data-addsite>Add a delivery address</button></div>'}</div>
+        ${sform || '<div class="actions"><button class="btn sm" type="button" data-addsite>Add a delivery address</button>' + (xc ? ' <button class="btn sm" type="button" data-fromxerosite>Copy in Xero\'s address</button>' : '') + '</div>'}</div>
       `}${(S.ctab || 'overview') === 'contacts' && orders.length ? `<div class="panel"><h3>Open orders <span class="note">${orders.length}</span></h3><div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${orders.map(j => `<button class="btn sm" type="button" data-open="${j.id}">${esc(j.so)} · due ${fmt(nextDue(j))}</button>`).join('')}</div></div>` : ''}`;
   }
   $('v-customers').innerHTML = `${crmHead()}<div class="sec-h"><h2>Customers</h2><span class="sub">Every customer: orders, invoices, quotes, emails, tasks and notes, and who to deal with. Xero and the quote calculator are not changed.</span></div>
@@ -735,6 +735,16 @@ async function copyXeroToBook() {
     S.bookEdit = { kind: 'person', role: 'accounts', name: d.person || '', email: d.email || '', main: !bookFor(name).people.some(p => p.role === 'accounts') };
     if (d.address && !bookFor(name).sites.length) toast('Xero\'s address can be added under Delivery addresses if goods go there.');
     render();
+  } catch (e) { toast(e.message, null, true); }
+}
+
+/** Xero's address for the customer (its delivery address if it has one) into the delivery address form, to check and save. */
+async function copyXeroAddress() {
+  const name = S.custShown || S.custName, xc = contactFor(name); if (!xc) return;
+  try { const d = await data.xero('contact', { id: xc.id });
+    if (!d.address) return toast(`Xero has no address for ${xc.name}.`, null, true);
+    S.bookEdit = { kind: 'site', label: '', address: d.address, contact: d.person || '', phone: '', main: !bookFor(name).sites.length };
+    toast('Xero\'s address is in the form. Check it, then press Add.'); render();
   } catch (e) { toast(e.message, null, true); }
 }
 
@@ -2628,6 +2638,7 @@ function onClick(e) {
   if (d.delperson) return data.deletePerson(+d.delperson).then(reload).then(() => toast('Removed.')).catch(err => toast(err.message, null, true));
   if (d.delsite) return data.deleteSite(+d.delsite).then(reload).then(() => toast('Removed.')).catch(err => toast(err.message, null, true));
   if ('fromxerobook' in d) return copyXeroToBook();
+  if ('fromxerosite' in d) return copyXeroAddress();
   if ('booksave' in d) return saveFormToBook();
   if ('leavepreview' in d) return leavePreview();
   if (d.gostation) { S.station = d.gostation; S.tab = 'floor'; render(); window.scrollTo(0, 0); return; }
