@@ -6,6 +6,13 @@
 <meta name="robots" content="noindex">
 <title>Clarke Lane Job Board</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<!-- On a phone's home screen it opens like an app (the driver's screen, 22 Oct). -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CL Jobs">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Archivo:wght@400;500;600;700&display=swap">
@@ -546,9 +553,61 @@ table.lprocs tr.allrow td{background:var(--field);border-bottom:2px solid var(--
 body.on-floor .toast{font-size:20px;padding:14px 16px 14px 24px;gap:20px}
 body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;background:var(--bg);color:var(--ink);text-decoration:none;font-size:19px}
 
+/* Proof of delivery on the delivery note: who signed, the signature drawn on the driver's phone, when and by whom. */
+.paper .received{border-top:1px solid var(--paper-ink);padding-top:6px;display:flex;flex-direction:column;gap:6px}
+.paper .received .rb{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:20px;align-items:end}
+.paper .received .rsig img{display:block;max-width:240px;height:auto}
+.paper .received .rb > div:last-child{text-align:right;color:var(--paper-mute)}
+
+/* Deliveries: the driver's screen. Phone first: one column, big targets, 16px gutters (from .wrap) plus the
+   phone's safe areas; on a desktop it stays a phone-width column. */
+.deliv{width:100%;max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-inline:env(safe-area-inset-left,0px) env(safe-area-inset-right,0px);padding-bottom:calc(72px + env(safe-area-inset-bottom,0px));min-width:0}
+.deliv [hidden]{display:none!important}
+.deliv .dhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.deliv .dhead h2{font-size:28px;font-weight:600;line-height:1.1}
+.deliv .dhead .sub{color:var(--muted);font-size:15px}
+.deliv .dback{min-height:48px;padding:0 16px;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;font:700 16px var(--body)}
+.deliv .note{font-size:15px}
+.deliv .dlist{display:flex;flex-direction:column;gap:12px}
+.deliv .dcard{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;min-height:96px;padding:16px 18px;background:var(--surface);border:2px solid var(--line);border-radius:16px;color:var(--ink);overflow-wrap:anywhere}
+.deliv .dcard:active{border-color:var(--ink)}
+.deliv .dcard:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.deliv .dcard .cu{font-size:21px;line-height:1.2}
+.deliv .dcard .addr{font-size:17px}
+.deliv .meta{font-size:14px;color:var(--muted)}
+.deliv .allclear{margin:0;padding:22px;font-size:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;color:var(--ok);font-weight:600}
+.deliv .ddone h3{font-size:16px;margin-bottom:6px;color:var(--muted)}
+.deliv .ddone ul{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.deliv .ddone li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 14px;font-size:15px;border-top:1px solid var(--line);overflow-wrap:anywhere}
+.deliv .ddone li:first-child{border-top:0}
+.deliv .ddone li .sig{grid-column:1/-1;color:var(--muted);font-size:13.5px}
+.deliv .dsheet,.deliv .dform{background:var(--surface);border:2px solid var(--line);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow-wrap:anywhere;min-width:0}
+.deliv .dsheet .cu{font-size:24px;font-weight:700}
+.deliv .dsheet .addr{font-size:19px;line-height:1.35}
+.deliv .dsheet .addr.none{color:var(--warn);font-size:16px}
+.deliv .dsheet .dcontact{font-size:16px;color:var(--ink)}
+.deliv .dacts{display:flex;gap:10px;flex-wrap:wrap}
+.deliv .dacts .btn{min-height:52px;padding:0 22px;font-size:18px;border-radius:12px;text-decoration:none;justify-content:center;flex:1 1 140px}
+.deliv .dparts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:17px}
+.deliv .dparts b{font-size:19px}
+.deliv .dform h3{font-size:22px;font-weight:600}
+.deliv .dform label.fl{font-size:15px;color:var(--ink)}
+.deliv .dform input[type=text]{min-height:52px;font-size:18px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--field);width:100%;box-sizing:border-box}
+.deliv .dwho{display:flex;flex-direction:column;gap:12px;transition:opacity .15s}
+.deliv .dwho.off{opacity:.35}
+.deliv .sigbox{display:flex;flex-direction:column;gap:6px}
+.deliv .sighead{display:flex;align-items:center;justify-content:space-between;font-size:15px;font-weight:600}
+.deliv .sighead .btn{min-height:48px;padding:0 18px;border-radius:12px}
+.deliv canvas{display:block;width:100%;max-width:600px;height:180px;background:#fff;border:2px dashed var(--line);border-radius:12px;touch-action:none;cursor:crosshair;box-sizing:border-box}
+.deliv .dchk{display:flex;align-items:center;gap:12px;min-height:48px;font-size:18px;font-weight:600;cursor:pointer}
+.deliv .dchk input{width:26px;height:26px;flex:none;accent-color:var(--ink)}
+.deliv .bad{font-size:16px;font-weight:600}
+.deliv .dsave{min-height:60px;font-size:20px;border-radius:14px;justify-content:center}
+
 @media (max-width:820px){
   .paper{padding:24px 20px}
-  .paper .two,.paper .sign{grid-template-columns:minmax(0,1fr)}
+  .paper .two,.paper .sign,.paper .received .rb{grid-template-columns:minmax(0,1fr)}
+  .paper .received .rb > div:last-child{text-align:left}
 }
 @media (max-width:560px){
   .top .logo{height:26px}
@@ -978,6 +1037,7 @@ form.inv input{width:110px}
   <section class="view" id="v-tv" hidden></section>
   <section class="view" id="v-metal" hidden></section>
   <section class="view" id="v-sales" hidden></section>
+  <section class="view" id="v-deliveries" hidden></section>
 </main>
 </div>
 <div class="scrim" id="scrim" hidden></div>
@@ -989,7 +1049,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/deliveries.js', 'src/core/deliveries.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

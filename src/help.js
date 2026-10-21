@@ -235,7 +235,8 @@ function dispatch(office) {
         <td class="act"><div class="next"><span class="btn sm pri">Email note…</span>${n(2)} <form class="inv"><input type="text" placeholder="Signed by (optional)"><span class="btn sm">Mark delivered</span></form>${n(3)}</div></td></tr></tbody></table>`)}
     ${steps([`${n(1)} <b>Dispatch</b> opens the delivery note with everything due filled in. It opens above the list; <b>Close</b> puts it away. Change a quantity to send part of it: the rest stays outstanding, as in Sage. Press <b>Create dispatch note</b>, then print it to go with the goods. To send part of a job that isn't finished, choose it under the Ready list.`,
       `${n(2)} <b>Email note…</b> opens the delivery note. <b>Email to customer</b> puts it in Outlook Drafts with the PDF.`,
-      `${n(3)} When the goods have arrived, type who signed for them (if known) and press <b>Mark delivered</b>.${office ? ' Only delivered notes can be invoiced.' : ''}`,
+      `${n(3)} When the goods have arrived, the driver marks it delivered on the phone and the customer signs on the screen (<b>Driver's screen</b>, top right; see <a href="#help-faq">Marking a delivery on the phone</a> under Questions). From the office: type who signed for them (if known) and press <b>Mark delivered</b>.${office ? ' Only delivered notes can be invoiced.' : ''}`,
+      `A note signed for on the phone prints and emails with a filled-in <b>Received by</b> box: the name (or where it was left), the signature, the date and time, and who delivered it. ${office ? 'Open it from <b>All notes</b> or <b>Waiting for Xero</b> and press <b>Email to customer</b> to send it as proof of delivery.' : ''}`,
       ...(office ? ['<b>Made a note by mistake, or the goods came back?</b> On <b>All notes</b> press <b>Cancel</b> beside it, then <b>Yes</b>. It stays on the list crossed out (its number is never reused) and the quantities go back to outstanding. A note already invoiced in Xero can only be credited in Xero.'] : [])])}
   </section>`;
 }
@@ -296,6 +297,12 @@ function faq(office) {
     ['The screen looks out of date.', 'It updates by itself when anyone makes a change. If in doubt, refresh the page.'],
     ['How do I print a front sheet?', 'Open the job (tap its sales order number) and press <b>Front sheet</b>. It is set out like Xero\'s sales order front sheet: a row per part with a tick box for each process that part needs, the Required date in bold and a Certificate batch no. box to write in. Check the To make quantities (they start on the next delivery and can be changed for this sheet only), then press Print.'],
     ['It says I am not on the staff list.', 'Ask Gecko IT to add your Microsoft 365 address.'],
+    ['Marking a delivery on the phone (the driver\'s screen)?', 'On the phone, open <b>jobs.clarke-lane.co.uk/#deliveries</b> and sign in with your Clarke Lane Microsoft account. '
+      + 'Then put it on the home screen so it opens like an app: on an iPhone press <b>Share</b> › <b>Add to Home Screen</b>; on Android press the menu (⋮) › <b>Add to Home screen</b> or <b>Install app</b>. '
+      + 'The first time you open it from the home screen, sign in once more (the phone keeps the app separate from the browser). It opens on Home (the office) or the Shop floor: press <b>Deliveries</b> (on Dispatch it is <b>Driver\'s screen</b>). '
+      + 'Every note out for delivery is a big card. Tap the one you are at: the address, <b>Navigate</b> (opens Maps with directions), <b>Call</b> when the contact book has a number, the parts and their PO. '
+      + 'Under <b>Delivered</b>, type who is signing and hand them the phone to sign in the box with a finger (<b>Clear</b> to start again). If nobody can sign, tick <b>Nobody to sign</b> and say where it was left. Press <b>Save delivery</b>. '
+      + 'Straight away the office sees it under <b>Dispatch › Waiting for Xero</b>, ready to invoice, and the delivery note shows who signed, the signature and the time, so Mandy can open it and press <b>Email to customer</b> as proof of delivery. Saved by mistake? Press Undo on the message, or undo on Dispatch › All notes. No prices are shown on this screen.'],
   ];
   if (office) q.push(
     ['A quote I marked Ordered is not on Won quotes.', 'Press Refresh. If it is still missing, check the quote says Ordered in the calculator.'],

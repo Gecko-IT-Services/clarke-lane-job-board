@@ -41,6 +41,8 @@ import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, 
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
+import { renderDeliveries, signaturePad } from './deliveries.js';
+import { deliveryRuns, deliveryProblem, signatureOk } from './core/deliveries.js';
 import { drawMap, focusStop, fitAll, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
 import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps } from './core/jobs.js';
@@ -98,7 +100,8 @@ const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.get
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null, xcErr: null, xcMap: new Map(), sendPick: {}, sendErr: {}, xero: null, xeroRead: null, xeroErr: null, xeroBusy: false, newJob: null, me: null, jobs: [], quotesRaw: null, dismissed: [], quotesErr: null, cancelAsk: null, stageChosen: false, book: { people: [], sites: [] }, cust: null, bookEdit: null, mapMiles: 10, mapShow: { late: true, out: true, ready: true, soon: true, later: false }, tab: 'home', stage: 'open', search: '',
-  station: null, open: null, conv: null, desp: null, dispView: 'ready', dispChosen: false, dsearch: '', error: null, busy: false };
+  station: null, open: null, conv: null, desp: null, dispView: 'ready', dispChosen: false, dsearch: '', error: null, busy: false,
+  dpick: null, sig: '', dsign: {} };   // the driver's screen: the note tapped, its signature so far (a PNG data URL), its form
 const office = () => ['md', 'office'].includes(S.me?.role);
 /** Levi (MD): the business figures (target, order book and other totals). Mandy (office) keeps prices on orders. */
 const md = () => S.me?.role === 'md';
@@ -376,14 +379,17 @@ async function cancelDispatchNote(id) {
   catch (e) { toast(e.message, null, true); }
   reload();
 }
-async function markDelivery(id, what, receivedBy = '') {
+/** signature, note: from the driver's screen. phone: true when saved there (its own message). Returns whether it saved. */
+async function markDelivery(id, what, receivedBy = '', signature = '', note = '', phone = false) {
+  let ok = false;
   try {
-    await data.markDespatch(id, what, receivedBy);
-    toast(what === 'delivered' ? 'Marked delivered. It is now waiting for Xero.' : 'Set back to out for delivery.',
+    await data.markDespatch(id, what, receivedBy, signature, note); ok = true;
+    toast(what === 'delivered' ? (phone ? 'Delivered. Mandy will see it on Waiting for Xero.' : 'Marked delivered. It is now waiting for Xero.') : 'Set back to out for delivery.',
       what === 'delivered' ? () => markDelivery(id, 'undelivered') : null);
   }
   catch (e) { toast(e.message, null, true); }
-  reload();
+  await reload();
+  return ok;
 }
 async function setStatus(id, status, undoing = false) {
   const j = job(id), was = j.status;
@@ -402,16 +408,16 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'CRM'], ['tv', 'TV board'], ['metal', 'Metal prices']];   // CRM (was Sales) last (Levi, 21 Oct)   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'CRM'], ['tv', 'TV board'], ['metal', 'Metal prices'], ['deliveries', 'Deliveries']];   // CRM (was Sales) last (Levi, 21 Oct)   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
   const ready = (quotes() || []).filter(q => q.state === 'waiting').length;
   const toXero = S.jobs.reduce((a, j) => a + j.despatches.filter(d => !d.xero && d.deliveredOn).length, 0);
   // Map lives under Dispatch, Customers under CRM (Philip, 21 Oct), Parts and Metal under Sales orders; their parent tab stays lit.
-  const lit = { map: 'dispatch', customers: 'sales', parts: 'orders', metal: 'orders' }[S.tab] || S.tab;
+  const lit = { map: 'dispatch', customers: 'sales', parts: 'orders', metal: 'orders', deliveries: 'dispatch' }[S.tab] || S.tab;
   $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
-  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal'].includes(k)).map(([k, t]) => {
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal', 'deliveries'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck', sales: 'book' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -1902,6 +1908,44 @@ function renderFloor() {
     kiosk: !!S.kiosk, canMove: office(), outwork: S.outwork || [], notes: S.notes || [], office: office(), outForm: S.outForm, canRemove: office() }, { esc, fmt, fmtTime, TICK });
 }
 
+/* ---------- Deliveries: the driver's screen on the phone (Philip, 22 Oct) ---------- */
+// A realtime reload while a finger is on the signature box waits until the stroke ends, so nothing half-drawn is lost.
+let sigDrawing = false, sigPending = false, sigPad = null;
+function renderDeliveriesView() {
+  if (sigDrawing) { sigPending = true; return; }
+  const today = todayIso();
+  if (S.dpick != null && !deliveryRuns(S.jobs, today).some(r => r.d.id === S.dpick)) {   // delivered (or cancelled) meanwhile
+    const dn = S.jobs.flatMap(j => j.despatches).find(d => d.id === S.dpick)?.dn;
+    if (!S.dsign?.busy && dn) toast(`${dn} has already been marked delivered.`);
+    Object.assign(S, { dpick: null, sig: '', dsign: {} }); keepInputs = false;
+  }
+  $('v-deliveries').innerHTML = renderDeliveries({ jobs: S.jobs, today, now: new Date(), me: S.me, pick: S.dpick, signing: S.dsign || {} },
+    { esc, fmt, fmtTime, lineHtml, phoneFor: deliveryPhone });
+  const c = $('dl-sig');
+  sigPad = c ? signaturePad(c, { value: S.sig, onStart: () => { sigDrawing = true; },
+    onEnd: url => { sigDrawing = false; S.sig = url; if (S.dsign?.err) { S.dsign.err = ''; $('dl-err').hidden = true; } if (sigPending) { sigPending = false; render(); } } }) : null;
+}
+/** A phone number for the delivery, from the contact book (Levi and Mandy's logins read it): the site at this
+ *  address, else the customer's goods-in person. '' when there is none, so no Call button. */
+function deliveryPhone(j) {
+  const b = bookFor(j.customer), first = s => String(s || '').split('\n')[0].trim().toLowerCase();
+  const site = first(j.address) && b.sites.find(x => x.phone && first(x.address) === first(j.address));
+  return (site?.phone || b.people.find(p => p.role === 'deliveries' && p.phone)?.phone || '').trim();
+}
+async function saveDelivery(id) {
+  if (S.dsign?.busy) return;
+  const nobody = !!$('dl-nobody')?.checked, name = nobody ? '' : ($('dl-name')?.value || '').trim(), note = nobody ? ($('dl-note')?.value || '').trim() : '';
+  const signature = nobody ? '' : S.sig;
+  const err = deliveryProblem({ name, nobody, signature, note });
+  S.dsign = { nobody, err };
+  if (err) { render(); return $('dl-err')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  S.dsign.busy = true; render();
+  const ok = await markDelivery(id, 'delivered', name, signature, note, true);
+  if (ok) { Object.assign(S, { dpick: null, sig: '', dsign: {} }); keepInputs = false; history.replaceState({ ...navOf(), i: history.state?.i || 0 }, '', '#deliveries'); }
+  else S.dsign.busy = false;
+  render(); window.scrollTo(0, 0);
+}
+
 /* ---------- work sent out: powder coat and plating at another company (the whiteboard) ---------- */
 function sendOutForm(jobId, process) {
   const j = job(jobId); if (!j) return;
@@ -2097,7 +2141,7 @@ function renderDespatch() {
   const money = office();
   $('v-dispatch').innerHTML = renderDispatch({ lists, office: money, md: md(), view: S.dispView, chosen: S.dispChosen, search: S.dsearch, desp: S.desp,
     form: S.desp ? despatchForm(job(S.desp)) : '', cancelDn: S.cancelDn, xero: money && lists.toXero.length ? waitingForXero(lists.toXero) : null },
-    { esc, fmt, gbp, dueChip, parts: dispatchParts });
+    { esc, fmt, fmtTime, gbp, dueChip, parts: dispatchParts });
 }
 
 /* ---------- job drawer ---------- */
@@ -2673,10 +2717,33 @@ function docHtml(kind, jobId, despId) {
       <table><thead><tr><th>Description</th><th>Ordered</th><th>Previously sent</th><th>This delivery</th><th>Outstanding</th></tr></thead><tbody>
       ${j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => `<tr><td>${lineHtml(l, esc)}${deliveryDates(j).length > 1 ? ` <span style="color:var(--paper-mute)">(due ${fmt(l.due)})</span>` : ''}</td><td>${l.qty}</td><td>${before(l)}</td><td><b>${d.lines[l.id]}</b></td><td>${l.qty - before(l) - d.lines[l.id]}</td></tr>`).join('')}</tbody></table>
       ${stillToCome(j, di)}
-      <div class="sign"><div>Received by (print)</div><div>Signature</div><div>Date</div></div>
+      ${receivedBlock(d)}
       <div class="foot">Please check the goods on delivery and report any shortage or damage within 48 hours, quoting ${esc(d.dn)}.</div>`;
   }
   return body;
+}
+/* Proof of delivery (22 Oct): a note marked delivered with a name, a signature or where it was left prints them in
+   place of the blank Received by lines. A note not delivered yet, or delivered with nothing recorded (older ones),
+   keeps the blank lines to sign on paper. The signature is read when the note is opened (data.loadSignature). */
+const sigCache = new Map();
+const sigKey = d => `${d.id}@${d.deliveredAt || ''}`;
+const sigOf = d => d.signature ?? sigCache.get(sigKey(d));   // undefined: not read yet
+async function ensureSignature(d) {
+  if (!d?.deliveredOn || !d.deliveredAt || sigOf(d) !== undefined) return false;
+  sigCache.set(sigKey(d), await data.loadSignature(d.id).catch(() => ''));
+  return true;
+}
+function receivedBlock(d) {
+  const sig = sigOf(d) || '';
+  if (!d.deliveredOn || !(d.receivedBy || d.deliveryNote || sig)) return '<div class="sign"><div>Received by (print)</div><div>Signature</div><div>Date</div></div>';
+  const t = d.deliveredAt ? new Date(d.deliveredAt) : null;
+  const when = t && !isNaN(t) ? `${fmtLong(iso(t))} at ${t.toTimeString().slice(0, 5)}` : fmtLong(d.deliveredOn);
+  const by = d.deliveredBy ? staffList().find(x => x.email?.toLowerCase() === d.deliveredBy.toLowerCase())?.name || d.deliveredBy : '';
+  const name = d.receivedBy ? `<b class="lg">${esc(d.receivedBy)}</b>${d.deliveryNote ? `<div>${esc(d.deliveryNote)}</div>` : ''}`
+    : `<b class="lg">Nobody to sign</b>${d.deliveryNote ? `<div>${esc(d.deliveryNote)}</div>` : ''}`;
+  return `<div class="received"><div class="k">Received by</div><div class="rb"><div>${name}</div>
+    <div class="rsig">${signatureOk(sig) ? `<img src="${esc(sig)}" alt="Signature" style="max-height:70px">` : ''}</div>
+    <div><div>Delivered ${when}</div>${by ? `<div>Delivered by ${esc(by)}</div>` : ''}</div></div></div>`;
 }
 /** Before printing a front sheet: choose what this sheet is for (call-off customers make part of an
  *  order at a time). Defaults to the next delivery; the order itself is never changed here. */
@@ -2718,6 +2785,10 @@ function showDoc(kind, jobId, despId) {
     <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
   $('doc').hidden = false;
   document.body.classList.add('doc-open');
+  if (d) ensureSignature(d).then(got => {   // the signature arrives a moment after the note opens
+    const p = $('doc').querySelector('.paper');
+    if (got && p && !$('doc').hidden && $('doc').querySelector(`[data-savedoc][data-dnid="${despId}"]`)) p.innerHTML = docHtml(kind, jobId, despId);
+  });
 }
 
 /** The file name a document is saved under (Philip, 20 Oct: they keep despatch notes, so the customer's name is in it). */
@@ -2731,6 +2802,7 @@ function docName(kind, jobId, despId) {
 async function saveDoc(kind, jobId, despId) {
   const btn = document.querySelector('[data-savedoc]'), was = btn?.innerHTML; if (btn) { btn.disabled = true; btn.textContent = 'Making the PDF…'; }
   try {
+    if (kind === 'dn') await ensureSignature(job(jobId)?.despatches.find(x => x.id === despId));
     const b64 = await pdfBase64(docHtml(kind, jobId, despId));
     const a = document.createElement('a'); a.href = 'data:application/pdf;base64,' + b64; a.download = docName(kind, jobId, despId) + '.pdf';
     document.body.append(a); a.click(); a.remove();
@@ -2778,6 +2850,7 @@ async function emailDoc(kind, jobId, despId) {
   try {
     const pf = kind === 'pf' ? S.pfs.find(x => x.id === despId) : null;
     const no = kind === 'soa' ? j.so : pf ? pf.pf : d.dn;
+    if (d) await ensureSignature(d);
     const pdf = await pdfBase64(docHtml(kind, jobId, despId));
     // Delivery notes go to the customer's goods-in contact when the contact book has one.
     const goodsIn = kind === 'dn' ? mainPerson(j.customer, 'deliveries') : kind === 'pf' ? mainPerson(j.customer, 'orders') : null;
@@ -2789,6 +2862,8 @@ async function emailDoc(kind, jobId, despId) {
       ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached pro forma invoice ${esc(pf.pf)} for ${gbp(pfTotal(pf), 2)} including VAT, for payment before dispatch.</p><p>Please use <b>${esc(pf.pf)}</b> as the payment reference. The VAT invoice follows when the goods are sent.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
       : kind === 'soa'
       ? `<p>${hello}</p><p>Thank you for your order${ref}. Please find attached our sales order acknowledgement ${esc(j.so)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
+      : d.deliveredOn && (d.receivedBy || d.deliveryNote || sigOf(d))   // proof of delivery: the note as signed for
+      ? `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} were delivered on ${fmtLong(d.deliveredOn)}. Please find attached the signed delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`
       : `<p>${hello}</p><p>Your goods for order ${esc(j.so)}${ref} have been dispatched. Please find attached delivery note ${esc(d.dn)}.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
     const subject = pf ? `Pro forma invoice ${pf.pf} – order ${j.so}${j.po ? ' / ' + j.po : ''}` : kind === 'soa' ? `Sales order acknowledgement ${j.so}${j.po ? ' – your order ' + j.po : ''}` : `Delivery note ${d.dn} – order ${j.so}${po ? ' / ' + po : ''}`;
     const cc = pf ? S.officeSet?.accounts_email || '' : '';
@@ -2839,8 +2914,8 @@ function render() {
   if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
   if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero', 'metal'].includes(S.tab)) S.tab = 'floor';
-  if (S.kiosk && S.tab !== 'tv') { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
-  if (!office() && !['floor', 'tv'].includes(S.tab)) S.tab = 'floor';
+  if (S.kiosk && !['tv', 'deliveries'].includes(S.tab)) { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
+  if (!office() && !['floor', 'tv', 'deliveries'].includes(S.tab)) S.tab = 'floor';   // the driver's screen is the shop floor login's too (22 Oct)
   if (S.tab === 'sales' && !office()) S.tab = 'home';   // the CRM is Levi's and Mandy's; the month's figures in it are Levi's only   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
   document.body.classList.toggle('kiosk-mode', !!S.kiosk || S.tab === 'tv');
   document.body.classList.toggle('tv-mode', S.tab === 'tv'); tvAwake(S.tab === 'tv');
@@ -2853,8 +2928,8 @@ function render() {
       wonQuotes: wonWaiting(),
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
-    tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
-  document.body.classList.toggle('on-floor', S.tab === 'floor');
+    tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, deliveries: renderDeliveriesView, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+  document.body.classList.toggle('on-floor', S.tab === 'floor' || S.tab === 'deliveries');   // big messages for big fingers
   renderDrawer();
   restoreInputs(kept);
 }
@@ -2885,18 +2960,19 @@ nudge();
 
 /* ---------- Back: every change of screen is a step that the browser's Back, and ← Back, undoes ---------- */
 const navOf = () => ({ v: 1, tab: S.tab, open: S.open ?? null, homeView: S.homeView ?? 'attention', station: S.station ?? null, wonView: S.wonView ?? 'waiting',
-  dispView: S.dispView ?? null, orderView: S.orderView ?? null, desp: S.desp ?? null, form: !!S.form });
-const sameNav = (a, b) => ['tab', 'open', 'homeView', 'station', 'wonView', 'dispView', 'orderView', 'desp', 'form'].every(k => (a?.[k] ?? null) === (b?.[k] ?? null));
+  dispView: S.dispView ?? null, orderView: S.orderView ?? null, desp: S.desp ?? null, form: !!S.form, dpick: S.dpick ?? null });
+const sameNav = (a, b) => ['tab', 'open', 'homeView', 'station', 'wonView', 'dispView', 'orderView', 'desp', 'form', 'dpick'].every(k => (a?.[k] ?? null) === (b?.[k] ?? null));
 function navPush() {
   if (sameNav(navOf(), history.state)) return;
   history.pushState({ ...navOf(), i: (history.state?.i || 0) + 1 }, '', '#' + S.tab); renderBack();
 }
-function renderBack() { const b = $('backrow'); if (b) b.hidden = S.tab === 'home' || !(history.state?.i > 0); }   // Home is the start: no Back there (Philip, 20 Oct)
+function renderBack() { const b = $('backrow'); if (b) b.hidden = S.tab === 'home' || S.tab === 'deliveries' || !(history.state?.i > 0); }   // Home is the start: no Back there (Philip, 20 Oct); Deliveries has its own big back button
 window.addEventListener('popstate', e => {
   const n = e.state;
   if (!n?.v) { fromHash(); render(); renderBack(); return; }
   if (S.form && !n.form && !confirm('Leave this order? What you have typed is not saved.')) { history.pushState({ ...navOf(), i: (n.i || 0) + 1 }, '', '#' + S.tab); return; }
-  Object.assign(S, { tab: n.tab, open: n.open, station: n.station, desp: n.desp, ask: null, cancelDn: null });
+  if ((n.dpick ?? null) !== S.dpick) Object.assign(S, { sig: '', dsign: {} });   // another delivery: a clean form
+  Object.assign(S, { tab: n.tab, open: n.open, station: n.station, desp: n.desp, dpick: n.dpick ?? null, ask: null, cancelDn: null });
   for (const k of ['homeView', 'wonView', 'dispView', 'orderView']) if (n[k] != null) S[k] = n[k];
   if (!n.form) S.form = null;
   closeDoc(); keepInputs = false; render(); renderBack(); window.scrollTo(0, 0);
@@ -2953,6 +3029,9 @@ function onClick(e) {
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
   if (d.tab && ('goenq' in d || 'gosmart' in d)) { e.preventDefault(); S.tab = d.tab; if ('gosmart' in d) S.crmView = 'main'; if (d.goenqid) { S.cust = null; S.enqOpen = +d.goenqid; } render(); setTimeout(() => ((d.goenqid && $('em-' + d.goenqid)) || $('goenq' in d ? 'enquiries' : 'smart'))?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); return; }   // a customer's email: its own row
   if (d.tab) { e.preventDefault(); S.tab = d.tab; render(); window.scrollTo(0, 0); return; }
+  if (d.dpick) { Object.assign(S, { dpick: +d.dpick, sig: '', dsign: {} }); keepInputs = false; render(); window.scrollTo(0, 0); return; }
+  if ('dlist' in d) { Object.assign(S, { dpick: null, sig: '', dsign: {} }); keepInputs = false; render(); window.scrollTo(0, 0); return; }
+  if ('sigclear' in d) { S.sig = ''; sigPad?.clear(); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
   if (d.sendout) { e.stopPropagation(); return sendOutForm(+d.job, d.sendout); }
   if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
@@ -3114,7 +3193,11 @@ function onClick(e) {
   }
   if (d.savedoc) return saveDoc(d.savedoc, +d.job, d.dnid ? +d.dnid : null);
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
-  if (d.undeliver) return markDelivery(+d.undeliver, 'undelivered');
+  if (d.undeliver) {   // a delivery marked on the phone: undoing it removes the signature, so ask first
+    const x = S.jobs.flatMap(j => j.despatches).find(y => y.id === +d.undeliver);
+    if (x?.deliveredAt && (x.receivedBy || x.deliveryNote) && !confirm(`Set ${x.dn} back to out for delivery? Who signed for it${x.deliveryNote && !x.receivedBy ? ' (where it was left)' : ' and their signature'} will be removed.`)) return;
+    return markDelivery(+d.undeliver, 'undelivered');
+  }
   if (d.cancdn) { S.cancelDn = +d.cancdn; return render(); }
   if ('cancdnno' in d) { S.cancelDn = null; return render(); }
   if (d.cancdnyes) return cancelDispatchNote(+d.cancdnyes);
@@ -3186,6 +3269,13 @@ document.addEventListener('focusin', e => {
   if (dl && dl.dataset.k !== key) { dl.innerHTML = partOptions(want); dl.dataset.k = key; }
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'dl-nobody') {   // Nobody to sign: the name and signature step aside, Where it was left shows
+    const on = e.target.checked; S.dsign = { ...S.dsign, nobody: on, err: '' };
+    $('dl-who')?.classList.toggle('off', on); $('dl-leftwrap').hidden = !on; $('dl-err').hidden = true;
+    $('dl-who')?.querySelectorAll('input,button').forEach(x => { x.disabled = on; });
+    if (on) $('dl-note')?.focus();
+    return;
+  }
   if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
   if (e.target.id === 'po-copy' && S.poForm && e.target.value) { collectPo(); copyPo(+e.target.value); return; }
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
@@ -3286,6 +3376,7 @@ document.addEventListener('submit', async e => {
   if (f.dataset.bookform) return saveBookForm(f.dataset.bookform);
   if ('addcust' in f.dataset) { const v = $('newcust').value.trim(); if (!v) return; S.cust = normName(v); S.custName = v; S.bookEdit = null; return render(); }
   if (f.dataset.deliver) return markDelivery(+f.dataset.deliver, 'delivered', f.querySelector('input').value.trim());
+  if (f.id === 'delivf') return saveDelivery(+f.dataset.dnote);
   if (f.dataset.inv) {
     const no = f.querySelector('input').value.trim(); if (!no) return;
     try { await data.markInvoiced(+f.dataset.inv, no); toast(`Recorded as ${no}.`); } catch (err) { toast(err.message, null, true); }
