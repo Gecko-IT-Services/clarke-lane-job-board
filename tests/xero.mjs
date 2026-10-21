@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import { normName, matchContact, invoiceLine, buildInvoice, invoiceNet, salesDefaults, buildPurchaseOrder } from '../src/core/xero.js';
 
 // — Customer names. —
-assert.equal(normName('BSA Regal Group LTD'), normName('BSA Regal Group Limited'));
-assert.equal(normName('VFS (Southampton) Ltd'), normName('VFS (SOUTHAMPTON) LTD'));
+assert.equal(normName('Example Group LTD'), normName('Example Group Limited'));
+assert.equal(normName('Sample (Hampshire) Ltd'), normName('Sample (HAMPSHIRE) LTD'));
 assert.equal(normName('Elite Air Handling Unit & Heat Exchange'), normName('Elite Air Handling Unit and Heat Exchange'));
 assert.notEqual(normName('INDO Technologies Ltd'), normName('Indo Tech Ltd'));
 
-const contacts = [{ id: 'a', name: 'BSA Regal Group Limited' }, { id: 'b', name: 'MultiMount' }, { id: 'c', name: 'Multi Mount' }];
-assert.deepEqual(matchContact('BSA REGAL GROUP LTD', contacts, new Map()), { id: 'a', name: 'BSA Regal Group Limited', how: 'auto' });
-assert.equal(matchContact('MultiMount', contacts, new Map()), null, 'two contacts normalise the same: never guess');
+const contacts = [{ id: 'a', name: 'Example Group Limited' }, { id: 'b', name: 'MetroMount' }, { id: 'c', name: 'Metro Mount' }];
+assert.deepEqual(matchContact('EXAMPLE GROUP LTD', contacts, new Map()), { id: 'a', name: 'Example Group Limited', how: 'auto' });
+assert.equal(matchContact('MetroMount', contacts, new Map()), null, 'two contacts normalise the same: never guess');
 assert.equal(matchContact('Unknown Ltd', contacts, new Map()), null);
-assert.equal(matchContact('MultiMount', contacts, new Map([[normName('MultiMount'), { id: 'c', name: 'Multi Mount' }]])).id, 'c', 'saved choice wins');
+assert.equal(matchContact('MetroMount', contacts, new Map([[normName('MetroMount'), { id: 'c', name: 'Metro Mount' }]])).id, 'c', 'saved choice wins');
 
 // — Money is never altered by Xero's 4dp unit prices. —
 assert.deepEqual(invoiceLine('Bracket', 10, 11.327, '200', 'OUTPUT2'), { Description: 'Bracket', Quantity: 10, UnitAmount: 11.327, AccountCode: '200', TaxType: 'OUTPUT2' });

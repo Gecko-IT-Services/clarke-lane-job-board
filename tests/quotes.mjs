@@ -28,8 +28,8 @@ assert.equal(lc.desc, 'Drawing_x002f_Description');
 assert.equal(quoteLookupColumn(lcols, 'abc-123'), 'Quote');
 assert.throws(() => quoteLookupColumn(lcols, 'other'), /no lookup column/);
 
-const q = toQuote({ id: '307', fields: { QuoteNo: 'Q-0307', CustomerName: ' BSA Regal Group LTD ', Status: 'Ordered', CarriageCost: '12.5' } }, qc);
-assert.deepEqual([q.spId, q.quoteNo, q.customer, q.status, q.carriage], [307, 'Q-0307', 'BSA Regal Group LTD', 'Ordered', 12.5]);
+const q = toQuote({ id: '307', fields: { QuoteNo: 'Q-0307', CustomerName: ' Example Group LTD ', Status: 'Ordered', CarriageCost: '12.5' } }, qc);
+assert.deepEqual([q.spId, q.quoteNo, q.customer, q.status, q.carriage], [307, 'Q-0307', 'Example Group LTD', 'Ordered', 12.5]);
 assert.equal(q.wonDate, '', 'no dates at all');
 const qm = toQuote({ id: '308', lastModifiedDateTime: '2026-10-14T08:15:00Z', fields: { QuoteNo: 'Q-0308', CustomerName: 'Example Ltd', Status: 'Ordered', QuoteDate: '2026-09-20T00:00:00Z' } }, qc);
 assert.equal(qm.wonDate, '2026-10-14', 'won when last changed, not when quoted');

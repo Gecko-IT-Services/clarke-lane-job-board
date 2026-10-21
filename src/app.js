@@ -1054,7 +1054,7 @@ function productsCheck() {
     ${S.xitemsErr ? `<div class="err">Xero said: ${esc(S.xitemsErr)}</div>` : !S.xitems ? '<p class="note">Not read yet.</p>'
       : `<p>Xero sent <b>${S.xitemsTotal ?? list.length}</b> product${(S.xitemsTotal ?? list.length) === 1 ? '' : 's'}; <b>${list.length}</b> can be offered in the Part box (${list.filter(i => !i.sold).length} not ticked as sold in Xero).</p>`}
     <div class="actions"><button class="btn sm" type="button" data-pcheckread>${icon('refresh')}Read them again</button>
-      <input type="search" id="pcheck-q" placeholder="Look up a code, e.g. VFS01-11-1696" value="${esc(pc.q || '')}" style="min-width:260px"></div>
+      <input type="search" id="pcheck-q" placeholder="Look up a code, e.g. SAM01-11-1696" value="${esc(pc.q || '')}" style="min-width:260px"></div>
     ${q ? `<p class="note"><b>In Xero's products:</b> ${hits.length ? hits.map(i => `<span class="mono">${esc(i.code || '(no code)')}</span> ${esc(i.description)}${i.price != null ? ' · ' + gbp(i.price, 2) : ''}`).join(' · ') : 'not found'}</p>
       <p class="note"><b>On imported Xero sales orders:</b> ${lineHits.length ? lineHits.map(l => `${esc(l.so)}: <span class="mono">${esc(l.code || '(no item code)')}</span> ${esc(l.description)}`).join(' · ') : 'not found'}</p>` : ''}</div>`;
 }

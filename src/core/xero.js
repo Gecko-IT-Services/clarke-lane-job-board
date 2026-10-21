@@ -3,7 +3,7 @@
  * function (building the draft invoice). No window, no network: tested in tests/xero.mjs.
  */
 
-/** "BSA Regal Group LTD" and "BSA Regal Group Limited" are the same customer. */
+/** "Example Group LTD" and "Example Group Limited" are the same customer. */
 export function normName(s) {
   return String(s || '').toLowerCase()
     .replace(/&/g, ' and ')
