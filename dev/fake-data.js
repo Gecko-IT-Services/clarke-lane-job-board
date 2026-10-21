@@ -254,7 +254,7 @@ export const salesAi = async (facts, kind = 'checkin') => {
     ? { kind: 'enquiry', summary: 'Asks for a price on laser cut and folded brackets.', company: 'Newco Fabrications Ltd', person: facts.fromName, phone: '01234 567890', wants: '50 brackets, 3mm mild steel, laser cut and folded, powder coated black', hasDrawings: true }
     : /delivery|order/i.test(facts.subject) ? { kind: 'customer', summary: 'Asks when their order will be delivered.', company: 'Example Customer Ltd', person: facts.fromName, phone: '', wants: '', hasDrawings: false }
     : { kind: 'other', summary: 'A sales pitch.', company: '', person: facts.fromName, phone: '', wants: '', hasDrawings: false };
-  if (kind === 'reply') return { subject: 'Re: ' + facts.subject, greeting: 'Hi ' + String(facts.fromName || '').split(' ')[0] + ',', paragraphs: ['Made-up AI reply for the practice page: thank you for your enquiry about ' + facts.wants + '.', 'We will price this and come back to you. Could you confirm when you need them and the delivery address?'], model: 'practice' };
+  if (kind === 'reply') return { subject: 'Re: ' + facts.subject, greeting: 'Hi ' + String(facts.fromName || '').split(' ')[0] + ',', paragraphs: ['Made-up AI reply for the practice page: thank you for your enquiry about ' + facts.wants + '.', facts.questions?.length ? 'We will price this and come back to you. To quote it properly, could you tell us:\n' + facts.questions.map((q, i) => `${i + 1}. ${q}`).join('\n') : 'We will price this and come back to you. Could you confirm when you need them and the delivery address?'], model: 'practice' };
   if (kind === 'summary') return { summary: 'Made-up AI summary: a regular customer for brackets, ordering about every two weeks and steady on last year.', nextStep: 'Ask whether they would like their brackets powder coated by us next time.', model: 'practice' };
   if (kind === 'research') return { found: true, about: `Made-up research for the practice page: ${facts.customer} designs and builds equipment from a works in the south of England.`,
     news: [{ text: 'Posted on LinkedIn about a new product range launching next spring.', url: 'https://www.linkedin.com/company/example' }],
@@ -263,8 +263,23 @@ export const salesAi = async (facts, kind = 'checkin') => {
   if (kind === 'ideas') return { ideas: (facts.customers || []).slice(0, 4).map((c, i) => ({ title: ['Ask about their next batch', 'Offer powder coating', 'Book a visit', 'Send a short catch-up'][i] + ': ' + c.customer,
     why: `Made-up idea for the practice page: they are ${c.trend} and buy ${(c.theyBuy || []).join(', ') || 'parts'}.`, action: ['call', 'email', 'visit', 'email'][i], customer: c.customer,
     angle: 'Made-up angle: a short, friendly note about what they usually order.' })).concat([{ title: 'Ask your three best customers who else they know', why: 'Made-up: referrals from happy regulars.', action: 'other', customer: '', angle: '' }]), model: 'practice', costUsd: 0.03 };
+  // The quote pack and Three things today (21 Oct): made-up answers in the real shape.
+  if (kind === 'quotepack') return { summary: `Made-up quote pack for the practice page: ${facts.company || facts.fromName || 'they'} want brackets, laser cut, folded and powder coated.`,
+    parts: [{ partNo: 'BRK-100 rev B', description: 'Mounting bracket', material: 'S275 mild steel', thickness: '3mm', qty: '50', finish: 'Powder coat RAL 9005 black', processes: ['Laser', 'Fold', 'P/Coat Paint'], notes: 'Two folds at 90°' },
+      { partNo: 'PLT-20', description: 'Backing plate', material: 'S275 mild steel', thickness: '3mm', qty: '', finish: 'Powder coat RAL 9005 black', processes: ['Laser', 'Tap & C/Sink'], notes: '4 × M6 tapped' }],
+    questions: ['How many backing plates do you need?', 'Is revision B of the bracket the latest?', 'When do you need them, and where should they be delivered?'],
+    watchOut: ['Hole positions are toleranced at ±0.1mm on the bracket.'], model: 'practice', costUsd: 0.1 };
+  if (kind === 'digest') return { greeting: `Morning ${facts.name || 'there'}, three things worth doing first.`,
+    lines: (facts.picks || []).map(p => ({ enquiry: 'Made-up: a new customer has waited over a day, and a quick reply wins most first orders.', task: 'Made-up: it is overdue and the customer is expecting to hear back.',
+      quote: 'Made-up: the follow-up is due, and a call this morning is the best chance to win it.', late: 'Made-up: ring the customer before they ring you, with a new date.',
+      reorder: 'Made-up: their usual gap has passed, so they are probably about to order again.' })[p.kind] || ''), model: 'practice', costUsd: 0.004 };
   return salesAiCheckin(facts);
 };
+export const enquiryAttachments = async () => [];
+export const enquiryText = async () => 'Hello, could you quote for 50 brackets, 3mm mild steel, laser cut and folded, powder coated black? Drawing attached. Thanks, Jo';
+const digests = new Map();   // in memory, like the daily_digests table (one row per person per day)
+export const loadDigest = async day => structuredClone(digests.get(day) || null);
+export const saveDigest = async (day, x) => { digests.set(day, structuredClone({ ...x, at: new Date().toISOString() })); };
 const staffRows = [{ email: 'levi@clarke-lane.example', name: 'Levi', role: 'md' }, { email: 'mandy@clarke-lane.example', name: 'Mandy', role: 'office' }, { email: 'workshop@clarke-lane.example', name: 'Shop Floor', role: 'floor' }];
 export const loadStaff = async () => structuredClone(staffRows);
 const tasks = [{ id: 1, title: 'Call Sam about the next bracket batch', customer: 'Example Customer Ltd', customerKey: 'examplecustomer', dueOn: ago(1), assignedTo: 'levi@clarke-lane.example', source: '', sourceRef: '', note: '', doneAt: null, doneBy: null, by: 'levi@clarke-lane.example', createdAt: ago(5) + 'T09:00:00Z' },
@@ -277,7 +292,7 @@ export const deleteTask = async id => { tasks.splice(tasks.findIndex(x => x.id =
 const enqs = []; let enqNo = 1;
 export const loadEnquiries = async () => structuredClone(enqs).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
 export const claimEnquiry = async m => { if (enqs.some(e => e.messageId === m.messageId)) return null; const id = enqNo++; enqs.push({ id, ...m, kind: null, summary: '', company: '', person: '', phone: '', wants: '', hasDrawings: false, customerKey: '', status: 'new', handledBy: null, handledAt: null, error: null }); return id; };
-export const setEnquiry = async (id, p) => { const e = enqs.find(x => x.id === id); Object.assign(e, p); if ('status' in p) { e.handledBy = p.by || null; e.handledAt = p.status === 'new' ? null : new Date().toISOString(); } };
+export const setEnquiry = async (id, p) => { const e = enqs.find(x => x.id === id); Object.assign(e, p); if ('quotePack' in p) e.quotePackAt = p.quotePack ? new Date().toISOString() : null; if ('status' in p) { e.handledBy = p.by || null; e.handledAt = p.status === 'new' ? null : new Date().toISOString(); } };
 const insights = {};
 export const loadInsight = async k => insights[k] || null;
 export const saveInsight = async (k, c, x) => { insights[k] = { ...x }; };

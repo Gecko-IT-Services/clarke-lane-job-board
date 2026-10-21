@@ -6,6 +6,7 @@ import { CONFIG } from './config.js';
 import { getSupabase, graph, graphRaw } from './auth.js';
 import { emailList } from './core/jobs.js';
 import { QUOTE_FIELDS, LINE_FIELDS, resolveColumns, quoteLookupColumn, toQuote, toLine } from './core/quotes.js';
+import { attachmentsToRead } from './core/quotepack.js';
 
 /** UK spelling on screen: the database names and older messages say despatch. */
 const uk = m => String(m ?? '').replace(/espatch/g, 'ispatch');
@@ -460,6 +461,8 @@ export async function logSalesEmail({ customer, kind }) {
   const sb = await getSupabase();
   await sb.from('sales_emails').insert({ customer, kind, ai: false });
 }
+/** One AI call (sales-ai). extra: more fields in the body beside facts, e.g. { news: true } or the quote pack's
+ *  { documents: [{ name, mediaType, base64 }] } (sent beside the facts, so the function's size check on facts ignores them). */
 export async function salesAi(facts, kind = 'checkin', extra = {}) {
   const sb = await getSupabase();
   const { data: { session } } = await sb.auth.getSession();
@@ -512,7 +515,7 @@ export async function deleteTask(id) {
 }
 const enqRow = e => ({ id: e.id, messageId: e.message_id, graphId: e.graph_id, mailbox: e.mailbox, receivedAt: e.received_at, fromName: e.from_name, fromEmail: e.from_email, subject: e.subject,
   webLink: e.web_link, kind: e.kind, summary: e.summary, company: e.company, person: e.person, phone: e.phone, wants: e.wants, hasDrawings: e.has_drawings, customerKey: e.customer_key,
-  status: e.status, handledBy: e.handled_by, handledAt: e.handled_at, error: e.error });
+  status: e.status, handledBy: e.handled_by, handledAt: e.handled_at, error: e.error, quotePack: e.quote_pack || null, quotePackAt: e.quote_pack_at || null });
 export async function loadEnquiries() {
   const sb = await getSupabase();
   const since = new Date(Date.now() - 180 * 864e5).toISOString();
@@ -534,9 +537,25 @@ export async function setEnquiry(id, p) {
   for (const [k, c] of [['kind', 'kind'], ['summary', 'summary'], ['company', 'company'], ['person', 'person'], ['phone', 'phone'], ['wants', 'wants'], ['hasDrawings', 'has_drawings'],
     ['customerKey', 'customer_key'], ['status', 'status'], ['error', 'error']]) if (k in p) row[c] = p[k];
   if ('status' in p) { row.handled_by = p.by || null; row.handled_at = p.status === 'new' ? null : new Date().toISOString(); }
+  if ('quotePack' in p) { row.quote_pack = p.quotePack || null; row.quote_pack_at = p.quotePack ? new Date().toISOString() : null; }   // the quote pack (21 Oct)
   const { error } = await sb.from('enquiries').update(row).eq('id', id);
   if (error) fail('The enquiry was not updated', error);
 }
+/* ---------- Three things today (Levi and Mandy): the day's picks and the AI's lines, kept per person per day ---------- */
+export async function loadDigest(day) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('daily_digests').select('picks, greeting, lines, model, created_at').eq('day', day).maybeSingle();   // RLS: only my own row
+  if (error) fail('Could not read today\'s three things', error);
+  return data ? { picks: data.picks || [], greeting: data.greeting || '', lines: data.lines || [], model: data.model || '', at: data.created_at } : null;
+}
+export async function saveDigest(day, { picks, greeting = '', lines = [], model = '' }) {
+  const sb = await getSupabase();
+  const { data: { session } } = await sb.auth.getSession();
+  const email = String(session?.user?.email || '').toLowerCase(); if (!email) return;
+  const { error } = await sb.from('daily_digests').upsert({ user_email: email, day, picks, greeting, lines, model, created_at: new Date().toISOString() });
+  if (error) fail('Today\'s three things were not saved', error);
+}
+
 /* ---------- ideas (Levi and Mandy): customers' websites read by AI, and ideas for winning more work ---------- */
 const researchRow = r => ({ key: r.customer_key, customer: r.customer, website: r.website, about: r.about, news: r.news || [], openings: r.openings || [], sources: r.sources || [], at: r.created_at });
 export async function loadResearch() {
@@ -586,6 +605,26 @@ export async function inboxMessages(mailbox, sinceIso) {
     { scopes: boxScopes(mailbox), quiet: true, headers: { Prefer: 'outlook.body-content-type="text"' } });
   return (r.value || []).map(m => ({ graphId: m.id, messageId: m.internetMessageId || m.id, subject: m.subject || '', fromEmail: m.from?.emailAddress?.address || '', fromName: m.from?.emailAddress?.name || '',
     receivedAt: m.receivedDateTime, text: m.body?.content || m.bodyPreview || '', webLink: m.webLink || '', hasAttachments: !!m.hasAttachments }));
+}
+/** One email's text (plain), for the quote pack: the enquiries table keeps what the AI made of it, not the email. */
+export async function enquiryText(mailbox, graphId) {
+  const m = await graph(`${boxPath(mailbox)}/messages/${encodeURIComponent(graphId)}?$select=body,bodyPreview`,
+    { scopes: boxScopes(mailbox), quiet: true, headers: { Prefer: 'outlook.body-content-type="text"' } });
+  return m.body?.content || m.bodyPreview || '';
+}
+/**
+ * The quote pack's attachments (21 Oct): the email's PDFs and pictures, 4 MB or less each, at most 4 and 12 MB in all
+ * (attachmentsToRead in core/quotepack.js), each fetched with its bytes. Returns [{ name, contentType, size, base64 }].
+ */
+export async function enquiryAttachments(mailbox, graphId) {
+  const base = `${boxPath(mailbox)}/messages/${encodeURIComponent(graphId)}/attachments`, opts = { scopes: boxScopes(mailbox), quiet: true };
+  const list = await graph(`${base}?$select=id,name,contentType,size,isInline`, opts);
+  const out = [];
+  for (const a of attachmentsToRead(list.value || [])) {
+    const f = await graph(`${base}/${encodeURIComponent(a.id)}`, opts);   // a file attachment's JSON carries contentBytes (base64)
+    if (f.contentBytes) out.push({ name: a.name, contentType: a.contentType || '', size: a.size, base64: f.contentBytes });
+  }
+  return out;
 }
 export async function attachmentNames(mailbox, graphId) {
   const r = await graph(`${boxPath(mailbox)}/messages/${encodeURIComponent(graphId)}/attachments?$select=name`, { scopes: boxScopes(mailbox), quiet: true });
