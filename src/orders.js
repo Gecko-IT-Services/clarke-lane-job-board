@@ -10,7 +10,7 @@ import { icon } from './icons.js';
 
 const orders = n => `${n} order${n === 1 ? '' : 's'}`;
 
-export function renderSalesOrders({ jobs, md = false, today, view, search, form, selected = new Set() }, h) {
+export function renderSalesOrders({ jobs, md = false, today, view, sort = 'due', search, form, selected = new Set() }, h) {
   const { esc, fmt, gbp, dueChip, match } = h;
   const s = salesSummary(jobs, today);
   const cards = [
@@ -31,7 +31,11 @@ export function renderSalesOrders({ jobs, md = false, today, view, search, form,
   };
   const v = VIEWS[view] ? view : 'outstanding', V = VIEWS[v];
   const q = (search || '').trim().toLowerCase();
-  const list = q ? jobs.filter(j => match(j, q)).sort((a, b) => compareValues(a.ordered, b.ordered, -1) || compareValues(a.so, b.so, -1)) : V.list;
+  // Mandy (22 Oct): "listed in SO number, most recent at the top". By SO number is newest first; the
+  // default keeps each list's own order (soonest due, or newest dispatched).
+  const bySo = sort === 'so';
+  const list = q ? jobs.filter(j => match(j, q)).sort((a, b) => compareValues(a.ordered, b.ordered, -1) || compareValues(a.so, b.so, -1))
+    : bySo ? [...V.list].sort((a, b) => compareValues(a.so, b.so, -1)) : V.list;
 
   const chip = (t, ok) => `<span class="chip${ok ? ' ok' : ''}">${t}</span>`;
   const progress = j => [j.status === 'cancelled' ? chip('Cancelled') : chip(despatchStatus(j), despatchStatus(j) === 'Dispatched'),
@@ -47,6 +51,7 @@ export function renderSalesOrders({ jobs, md = false, today, view, search, form,
     : `<div class="tbl-wrap"><p class="allclear${!q && v === 'outstanding' ? ' ok' : ''}">${q ? 'No orders match that search.' : V.empty}</p></div>`;
   const seg = `<div class="seg" role="group" aria-label="Which sales orders to show">${Object.entries(VIEWS).map(([k, x]) =>
     `<button type="button" data-orderview="${k}" aria-pressed="${k === v}">${x.tab} <em>${x.n ?? x.list.length}</em></button>`).join('')}</div>`;
+  const sortSeg = q ? '' : `<div class="seg" role="group" aria-label="Order of the list"><button type="button" data-ordersort="due" aria-pressed="${!bySo}">${v === 'dispatched' || v === 'cancelled' ? 'Newest first' : 'Soonest due'}</button><button type="button" data-ordersort="so" aria-pressed="${bySo}">By SO number</button></div>`;
   const find = `<input type="search" id="osearch" placeholder="Search order, customer or PO" aria-label="Search sales orders" value="${esc(search || '')}">`;
 
   // The running total of ticked orders: stays in the corner while you tick (Levi, 20 Oct).
@@ -59,7 +64,7 @@ export function renderSalesOrders({ jobs, md = false, today, view, search, form,
       ${form ? '' : `<div class="hbtns"><button class="btn" type="button" data-tab="parts" title="Repeat parts and their drawings">Parts</button><button class="btn" type="button" data-tab="metal" title="Ask several suppliers for metal prices and compare them">Metal prices</button><button class="btn pri" type="button" data-neworder>${icon('plus')}New order</button></div>`}</div>
     ${form || ''}
     <div class="hcards">${cards}</div>
-    <section><div class="hsec-h"><h3>${q ? 'Search results' : V.title}</h3><span class="note">${q ? `${orders(list.length)} found` : V.sub}</span>${seg}${find}</div>${table}<p class="note">Tick orders to see their total in the corner.</p></section>
+    <section><div class="hsec-h"><h3>${q ? 'Search results' : V.title}</h3><span class="note">${q ? `${orders(list.length)} found` : bySo ? 'by SO number, newest first' : V.sub}</span>${seg}${sortSeg}${find}</div>${table}<p class="note">Tick orders to see their total in the corner.</p></section>
     ${bar}
   </div>`;
 }
