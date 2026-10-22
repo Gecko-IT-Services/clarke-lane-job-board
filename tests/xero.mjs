@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { normName, matchContact, invoiceLine, buildInvoice, invoiceNet, salesDefaults, buildPurchaseOrder } from '../src/core/xero.js';
+import { normName, matchContact, withoutCode, nameWords, looksSame, rankContacts, invoiceLine, buildInvoice, invoiceNet, salesDefaults, buildPurchaseOrder } from '../src/core/xero.js';
 
 // — Customer names. —
 assert.equal(normName('Example Group LTD'), normName('Example Group Limited'));
@@ -12,6 +12,33 @@ assert.deepEqual(matchContact('EXAMPLE GROUP LTD', contacts, new Map()), { id: '
 assert.equal(matchContact('MetroMount', contacts, new Map()), null, 'two contacts normalise the same: never guess');
 assert.equal(matchContact('Unknown Ltd', contacts, new Map()), null);
 assert.equal(matchContact('MetroMount', contacts, new Map([[normName('MetroMount'), { id: 'c', name: 'Metro Mount' }]])).id, 'c', 'saved choice wins');
+
+// — The account code at the end of a Xero contact's name (22 Oct). —
+assert.equal(withoutCode('Sample (Hampshire) Ltd (SAM1)'), 'Sample (Hampshire) Ltd');
+assert.equal(withoutCode('1111 LIGHTING SOLUTIONS LTD (1111)'), '1111 LIGHTING SOLUTIONS LTD');
+assert.equal(withoutCode('Sample (Hampshire) Ltd'), 'Sample (Hampshire) Ltd', 'a place in brackets is part of the name');
+assert.equal(withoutCode('Example Parts (UK)'), 'Example Parts (UK)', 'no digit: not a code');
+const coded = [{ id: 'h', name: 'Haig Example Ltd (HAI1)' }, { id: 'i', name: 'Ice Example Servicing Ltd' }, { id: 's', name: 'Sample (Hampshire) Ltd (SAM1)' }];
+assert.deepEqual(matchContact('Haig Example Ltd', coded, new Map()), { id: 'h', name: 'Haig Example Ltd (HAI1)', how: 'auto' }, 'matched without the code');
+assert.equal(matchContact('Sample (Hampshire) Ltd', coded, new Map()).id, 's');
+assert.equal(matchContact('Sample (Hampshire) Ltd (SAM1)', coded, new Map()).id, 's', 'a customer typed with the code too');
+assert.equal(matchContact('Haig Example Ltd', [...coded, { id: 'h2', name: 'Haig Example Ltd (HAI2)' }], new Map()), null, 'two accounts: Mandy chooses');
+
+// — Does the contact look like the customer? Asked before linking, and before sending a saved link. —
+assert.deepEqual(nameWords('Haig Engineering Ltd (HAI1)'), ['haig']);
+assert.ok(looksSame('Haig Engineering Ltd', 'Haig Engineering Ltd (HAI1)'));
+assert.ok(!looksSame('Haig Engineering Ltd', 'Ice Cool Servicing Ltd'), "today's mistake is caught");
+assert.ok(!looksSame('Haig Engineering Ltd', 'Other Engineering Ltd'), 'a shared everyday word is not enough');
+assert.ok(looksSame('MetroMount', 'Metro Mount'));
+assert.ok(looksSame('Sample (Southampton) Ltd', 'Sample (Southampton) Ltd (SAM1)'));
+assert.ok(looksSame('Miscellaneous', 'MISCELLANEOUS'));
+
+// — The picker: likely ones first; a search finds any. —
+const book = [{ id: 'i', name: 'Ice Cool Servicing Ltd' }, { id: 'h', name: 'Haig Engineering Ltd (HAI1)' }, { id: 'g', name: 'Haig Group Holdings' }, { id: 'z', name: 'Zed Ltd' }];
+assert.deepEqual(rankContacts('Haig Engineering Ltd', book).map(c => c.id), ['h', 'g'], 'only the Haig ones, the same name first');
+assert.deepEqual(rankContacts('Haig Group Holdings', book).map(c => c.id), ['g', 'h'], 'the same name first, whatever the alphabet says');
+assert.deepEqual(rankContacts('Haig Engineering Ltd', book, 'ice').map(c => c.id), ['i'], 'typing finds any contact');
+assert.deepEqual(rankContacts('Nobody Ltd', book), [], 'no likely one: type to search');
 
 // — Money is never altered by Xero's 4dp unit prices. —
 assert.deepEqual(invoiceLine('Bracket', 10, 11.327, '200', 'OUTPUT2'), { Description: 'Bracket', Quantity: 10, UnitAmount: 11.327, AccountCode: '200', TaxType: 'OUTPUT2' });

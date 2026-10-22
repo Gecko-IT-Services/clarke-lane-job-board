@@ -20,7 +20,51 @@ export function matchContact(customer, contacts, saved) {
   const key = normName(customer);
   if (saved.has(key)) return { ...saved.get(key), how: 'saved' };
   const hits = contacts.filter(c => normName(c.name) === key);
-  return hits.length === 1 ? { id: hits[0].id, name: hits[0].name, how: 'auto' } : null;
+  if (hits.length === 1) return { id: hits[0].id, name: hits[0].name, how: 'auto' };
+  if (hits.length > 1) return null;
+  // Clarke Lane's Xero contacts end in an account code, "Haig Engineering Ltd (HAI1)" (22 Oct): match without it.
+  const base = normName(withoutCode(customer));
+  const near = base ? contacts.filter(c => normName(withoutCode(c.name)) === base) : [];
+  return near.length === 1 ? { id: near[0].id, name: near[0].name, how: 'auto' } : null;
+}
+
+/**
+ * A name without the account code Clarke Lane's Xero contacts end in: "Sample (Hampshire) Ltd (SAM1)" →
+ * "Sample (Hampshire) Ltd". Only a last bracket of 2–10 letters and digits with a digit in it, so
+ * "(Hampshire)" or "(UK)" stay.
+ */
+export const withoutCode = s => String(s || '').replace(/\s*\((?=[A-Za-z0-9]{2,10}\))(?=[^)]*\d)[A-Za-z0-9]+\)\s*$/, '').trim();
+
+// Words that say nothing about which company it is.
+const GENERIC = new Set(['and', 'the', 'of', 'ltd', 'limited', 'plc', 'llp', 'uk', 'co', 'company', 'group', 'services', 'service',
+  'engineering', 'international', 'solutions', 'systems', 'technologies', 'products', 'industries', 'holdings', 'trading', 'enterprises']);
+/** The words that tell one company from another: "Haig Engineering Ltd" → ['haig']. */
+export const nameWords = s => [...new Set(withoutCode(s).toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/)
+  .filter(w => w.length >= 2 && !GENERIC.has(w)))];
+
+/**
+ * Could this Xero contact be this customer? The same name (ignoring Ltd, punctuation and the account code), or at
+ * least one telling word in common. "Haig Engineering Ltd" and "Ice Cool Servicing Ltd" share none: the board
+ * asks before linking them (Mandy, 22 Oct, sent a Haig delivery to Ice Cool).
+ */
+export function looksSame(customer, contactName) {
+  if (normName(withoutCode(customer)) && normName(withoutCode(customer)) === normName(withoutCode(contactName))) return true;
+  const theirs = new Set(nameWords(contactName));
+  return nameWords(customer).some(w => theirs.has(w));
+}
+
+/**
+ * Xero contacts to offer for a customer, likeliest first: with no search, those sharing a telling word with the
+ * customer's name; with a search, every contact whose name has all its words. [{ id, name, score }], at most n.
+ */
+export function rankContacts(customer, contacts, q = '', n = 8) {
+  const mine = new Set(nameWords(customer)), base = normName(withoutCode(customer));
+  const ws = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  // The same name (but for Ltd or the account code) first, then the most telling words in common.
+  const scored = (contacts || []).map(c => ({ id: c.id, name: c.name,
+    score: (base && normName(withoutCode(c.name)) === base ? 10 : 0) + nameWords(c.name).filter(w => mine.has(w)).length }));
+  const list = ws.length ? scored.filter(c => ws.every(w => c.name.toLowerCase().includes(w))) : scored.filter(c => c.score > 0);
+  return list.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, n);
 }
 
 const round2 = n => (n < 0 ? -1 : 1) * Math.round(Math.round(Math.abs(n) * 1e8) / 1e6) / 100;   // to the penny, half up, after flattening float noise (7 × 0.145 is 1.0149999…)
