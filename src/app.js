@@ -128,6 +128,7 @@ async function boot() {
   $('who').innerHTML = `${esc(S.me.name)} <button class="btn sm ghost" type="button" data-signout>${icon('signout')}Sign out</button>`;
   try { if (localStorage.getItem('clj.homeview') === 'out') S.homeView = 'out'; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.orderview'); if (['dispatched', 'held', 'cancelled'].includes(v)) S.orderView = v; } catch { /* none kept */ }
+  try { if (localStorage.getItem('clj.ordersort') === 'so') S.orderSort = 'so'; } catch { /* none kept */ }
   try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
   try { S.kiosk = localStorage.getItem('clj.kiosk') === '1'; } catch { /* none kept */ }
   fromHash();
@@ -437,7 +438,7 @@ function renderJobs() {
 }
 /** Sales orders: the office's own tab, as Sage's Sales Order Processing. New and Amend open here. */
 function renderOrders() {
-  $('v-orders').innerHTML = renderSalesOrders({ selected: S.sel || (S.sel = new Set()), jobs: S.jobs, md: md(), today: todayIso(), view: S.orderView, search: S.osearch, form: S.form ? orderForm() : '' },
+  $('v-orders').innerHTML = renderSalesOrders({ selected: S.sel || (S.sel = new Set()), jobs: S.jobs, md: md(), today: todayIso(), view: S.orderView, sort: S.orderSort, search: S.osearch, form: S.form ? orderForm() : '' },
     { esc, fmt, gbp, dueChip, match: orderMatch });
 }
 /* ---------- the sales order form (Sage: New / Amend), for quotes, Xero orders, phone orders and Sage carry-over ---------- */
@@ -3058,6 +3059,7 @@ function onClick(e) {
   }
   if (d.dispview) { S.dispView = d.dispview; S.dispChosen = true; if (S.tab !== 'dispatch') { S.tab = 'dispatch'; window.scrollTo(0, 0); } return render(); }
   if (d.orderview) { S.orderView = d.orderview; try { localStorage.setItem('clj.orderview', d.orderview); } catch { /* not kept */ } return render(); }
+  if (d.ordersort) { S.orderSort = d.ordersort; try { localStorage.setItem('clj.ordersort', d.ordersort); } catch { /* not kept */ } return render(); }
   if (d.wondrill) return wonDrill(d.wondrill, d.key);
   if (d.wonlines) { S.wonOpen = S.wonOpen === d.wonlines ? null : d.wonlines; return render(); }
   if (d.wonview) { S.wonView = d.wonview; try { localStorage.setItem('clj.wonview', d.wonview); } catch { /* not kept */ } return render(); }
