@@ -74,7 +74,7 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
   return `<section class="month${set ? ' has-gauge' : ''}${compact ? ' compact' : ''}" aria-label="${esc(name)}: invoiced, work in progress and the gap to target">
     <div class="mhead"><h3>${esc(name)}</h3>${set ? `<span class="g-state g-${st.tone}">${esc(st.word)}</span>` : ''}</div>
     <div class="mbody">
-      ${set ? `<figure class="gwrap" role="img" aria-label="${esc(`${name}: ${gbp(mp.dispatched)} invoiced, ${gbp(wip)} work in progress${gap ? `, gap ${gbp(gap)}` : ''}. ${st.word}.`)}">${monthGauge(mp, breakeven, target, st, gbp)}</figure>` : ''}
+      ${set ? `<figure class="gwrap" role="img" aria-label="${esc(`${name}: ${gbp(mp.dispatched)} invoiced, ${gbp(wip)} work in progress${gap ? `, gap ${gbp(gap)}` : ''}. ${st.word}.`)}">${monthGauge(mp, breakeven, target, st, gbp)}<figcaption class="gtotal" title="Invoiced plus work in progress: what ${esc(name)} should invoice if it all goes out">${gbp(mp.dispatched + wip)}</figcaption></figure>` : ''}
       <div class="mside">${figs}
         <div class="minfo">${lines ? `<p>${lines}</p>` : ''}${later}${warn}${from ? `<p class="note">${esc(from)}</p>` : ''}${link}</div></div></div></section>`;
 }
