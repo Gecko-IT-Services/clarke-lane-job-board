@@ -62,8 +62,9 @@ assert.deepEqual(suggestProcesses([{ process: 'Laser', folds: 2, weld: 0, insert
   ['Laser', 'Fold', 'Insert', 'P/Coat Paint']);
 assert.deepEqual(suggestProcesses([{ process: 'Saw', folds: 0, weld: 120, holes: 3, plating: 5 }]),
   ['Cut & Drill', 'Weld', 'Plating / Anodising']);
-assert.equal(PROCESSES.length, 9);
-assert.equal(PROCESSES.at(-1), 'Rolling', 'Rolling is last (Levi)');
+assert.equal(PROCESSES.length, 10);
+assert.equal(PROCESSES[8], 'Rolling', 'Rolling is last of Levi\'s nine');
+assert.equal(PROCESSES.at(-1), 'Subcontracted', 'Subcontracted after them (Mandy, 22 Oct)');
 
 assert.equal(describeLine({ desc: 'Bracket', thickness: 3, material: 'S275' }), 'Bracket — 3mm S275');
 assert.equal(describeLine({ desc: '' }), 'Part');
@@ -293,8 +294,8 @@ console.log('jobs: ok');
   assert.deepEqual(ids(floorQueue(all, 'Laser')), [2], 'only jobs still needing Laser');
   assert.deepEqual(ids(floorQueue(all, 'Weld')), [1, 2]);
   const st = floorStations(all, '2026-10-15'), t = Object.fromEntries(st.map(s => [s.p, s]));
-  assert.equal(st.length, 9);
-  assert.deepEqual(st.map(s => s.p), PROCESSES);
+  assert.equal(st.length, 9, 'nine tiles: Subcontracted has no station');
+  assert.deepEqual(st.map(s => s.p), PROCESSES.filter(p => p !== 'Subcontracted'));
   assert.deepEqual([t['Laser'].waiting, t['Laser'].late, t['Weld'].waiting, t['Weld'].late, t['Fold'].waiting, t['Tap & C/Sink'].waiting], [1, 0, 2, 1, 1, 0]);
   console.log('jobs shop floor: ok');
 }

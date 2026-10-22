@@ -31,7 +31,7 @@ export function tvRows(jobs, outwork, today, notes = []) {
 }
 
 /** Processes worth a column: all nine, so the TV reads like the whiteboard (Rolling only when a job needs it). */
-export const tvColumns = rows => PROCESSES.filter(p => p !== 'Rolling' || rows.some(r => r.cells[p].state !== 'none'));
+export const tvColumns = rows => PROCESSES.filter(p => !['Rolling', 'Subcontracted'].includes(p) || rows.some(r => r.cells[p].state !== 'none'));
 
 /** Rows on page n (0-based) of `per`, and how many pages; n wraps round. */
 export function tvPage(rows, per, n) {
