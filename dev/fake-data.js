@@ -125,7 +125,7 @@ export const xero = async (route, body) => {
     quotes: [{ id: 'q1', number: 'SO-9776', status: 'ACCEPTED', customer: 'Example Customer Ltd', reference: 'P31614', date: '2026-10-01', expiry: '2026-11-07', subTotal: 113.27,
       lines: [{ description: 'Bracket 2mm', qty: 10, unit: 11.327, amount: 113.27 }] }],
     invoices: [] };
-  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering', postcode: 'PO1 2NH' }, { id: '00000000-0000-0000-0000-0000000000a1', name: 'Example Powder Coaters Ltd', postcode: 'SO15 1AA', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a2', name: 'Example Steel Supplies', postcode: 'SO16 2BB', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a3', name: 'Example Metals Ltd', postcode: 'SO17 3CC', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a4', name: 'Sample Alloys Ltd', postcode: 'SO18 4DD', supplier: true }],
+  if (route === 'contacts') return { contacts: [{ id: 'c1', name: 'Example Customer Limited', postcode: 'SO14 3TJ' }, { id: 'c2', name: 'Second Example Ltd', postcode: 'SO50 6FR' }, { id: 'c3', name: 'Third Example Engineering (THI1)', postcode: 'PO1 2NH' }, { id: 'c5', name: 'Frost Cooling Servicing Ltd', postcode: 'SO19 5EE' }, { id: '00000000-0000-0000-0000-0000000000a1', name: 'Example Powder Coaters Ltd', postcode: 'SO15 1AA', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a2', name: 'Example Steel Supplies', postcode: 'SO16 2BB', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a3', name: 'Example Metals Ltd', postcode: 'SO17 3CC', supplier: true }, { id: '00000000-0000-0000-0000-0000000000a4', name: 'Sample Alloys Ltd', postcode: 'SO18 4DD', supplier: true }],
     defaults: { accountCode: '200', taxType: 'OUTPUT2', from: 'your last 100 invoices' } };
   if (route === 'contact' && /a\d$/.test(body.id)) return { id: body.id, name: 'Supplier', email: 'sales' + body.id.slice(-1) + '@example.com', person: '', address: '' };
   if (route === 'history') return salesHistory();
@@ -145,6 +145,7 @@ export const xero = async (route, body) => {
 let cmap = new Map();
 export const loadContactMap = async () => new Map(cmap);
 export const saveContact = async (k, c) => { cmap.set(k, c); };
+export const removeContact = async k => { cmap.delete(k); };
 export const markDespatch = async (id, what, receivedBy = '', signature = '', note = '') => {
   if (signature && (signature.length > 80000 || !signature.startsWith('data:image/png;base64,'))) throw new Error('Not saved: Not a signature.');
   for (const j of jobs) for (const d of j.despatches) if (d.id === id) {

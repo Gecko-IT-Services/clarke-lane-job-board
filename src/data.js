@@ -981,6 +981,12 @@ export async function loadContactMap() {
   if (error) fail('Could not load the Xero contact choices', error);
   return new Map(data.map(r => [r.customer_key, { id: r.xero_contact_id, name: r.xero_contact_name }]));
 }
+/** Forget a customer's Xero contact: the board matches them by name again, or asks (Xero tab, 22 Oct). */
+export async function removeContact(customerKey) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('customer_contacts').delete().eq('customer_key', customerKey);
+  if (error) fail('The link was not removed', error);
+}
 export async function saveContact(customerKey, contact) {
   const sb = await getSupabase();
   const { error } = await sb.from('customer_contacts').upsert({ customer_key: customerKey, xero_contact_id: contact.id, xero_contact_name: contact.name });

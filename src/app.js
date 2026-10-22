@@ -5,7 +5,7 @@
 import * as auth from './auth.js';
 import * as realData from './data.js';
 import { previewJobs } from './core/preview.js';
-import { normName, matchContact, dispatchPo } from './core/xero.js';
+import { normName, matchContact, dispatchPo, looksSame, rankContacts } from './core/xero.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
 import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partsOnJob, lineNumbers } from './core/parts.js';
@@ -1056,7 +1056,27 @@ function renderXero() {
       <span class="right"><span class="chip ${x ? 'ok' : ''}">${x ? icon('link') + 'Connected' : 'Not connected'}</span></span></div>
     ${S.xeroErr ? `<div class="err">${esc(S.xeroErr)}</div>` : ''}
     <div class="panel"><h3>Connection</h3>${head}</div>
-    ${importPanel}${fixPanel}${x ? productsCheck() : ''}`;
+    ${importPanel}${fixPanel}${x ? contactLinks() : ''}${x ? productsCheck() : ''}`;
+}
+/** Xero tab: which Xero contact each customer's invoices go to, as chosen on Waiting for Xero (22 Oct). A link
+ *  whose names share no telling word is flagged; Remove makes the board match by name again, or ask. */
+function contactLinks() {
+  const names = new Map(S.jobs.map(j => [normName(j.customer), j.customer]));
+  const rows = [...S.xcMap.entries()].map(([key, c]) => ({ key, customer: names.get(key) || key, c }))
+    .sort((a, b) => (looksSame(a.customer, a.c.name) - looksSame(b.customer, b.c.name)) || a.customer.localeCompare(b.customer));
+  const odd = rows.filter(r => !looksSame(r.customer, r.c.name)).length;
+  return `<div class="panel"><h3>Customers and their Xero contacts</h3>
+    <p class="note">Chosen on Waiting for Xero, and used for every invoice after that.${!rows.length ? '' : odd ? ` <b>${odd} ${odd === 1 ? 'looks' : 'look'} wrong</b> (the names have no word in common): check ${odd === 1 ? 'it' : 'them'} first.` : ' Each one looks like the same company.'} Remove one and the board matches that customer by name again, or asks on their next delivery.</p>
+    ${rows.length ? `<div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Customer on the board</th><th style="text-align:left">Xero contact</th><th></th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td style="text-align:left">${esc(r.customer)}</td><td style="text-align:left">${esc(r.c.name)}${looksSame(r.customer, r.c.name) ? '' : ' <span class="chip late">Check: a different name</span>'}</td>
+        <td><button class="btn sm" type="button" data-xcunlink="${esc(r.key)}" data-xccust="${esc(r.customer)}">Remove</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="note">None chosen yet: every customer so far has matched by name.</p>'}</div>`;
+}
+async function unlinkContact(key, customer) {
+  const was = S.xcMap.get(key); if (!was) return;
+  S.xcMap.delete(key); render();
+  try { await data.removeContact(key); toast(`${customer} is no longer linked to ${was.name}. Their next delivery will be matched by name, or Mandy will be asked.`); }
+  catch (e) { S.xcMap.set(key, was); render(); toast(e.message, null, true); }
 }
 /** Xero tab: what Xero's Products and services give the board, and a look-up by code (Mandy, 20 Oct). */
 function productsCheck() {
@@ -2094,9 +2114,8 @@ function waitingForXero(pend) {
     const m = contactFor(x.customer);
     const picked = S.sendPick[d.id] ?? !!m;
     const contactCell = !connected ? '' : !S.xc ? '<span class="note">…</span>'
-      : m ? `${esc(m.name)} <span class="note">${m.how === 'auto' ? '(matched)' : ''}</span> <button class="btn link sm" type="button" data-xcchange="${esc(normName(x.customer))}">change</button>`
-      : `<select class="f" data-xcpick="${esc(normName(x.customer))}" aria-label="Xero contact for ${esc(x.customer)}"><option value="">Choose the Xero contact…</option>
-          ${S.xc.contacts.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>`;
+      : m ? `${esc(m.name)} <span class="note">${m.how === 'auto' ? '(matched)' : ''}</span>${looksSame(x.customer, m.name) ? '' : ' <span class="chip late" title="The names have no word in common: check it is the right company before sending">Check: a different name</span>'} <button class="btn link sm" type="button" data-xcchange="${esc(normName(x.customer))}">change</button>`
+      : contactPicker(x.customer);
     return `<tr${S.sendErr[d.id] ? ' class="rowerr"' : ''}>${connected ? `<td><input type="checkbox" data-sendpick="${d.id}" ${picked && m ? 'checked' : ''} ${m ? '' : 'disabled'} aria-label="Send ${esc(d.dn)}"></td>` : ''}
       <td><button class="btn link mono" type="button" data-dn="${d.id}" data-job="${x.id}">${esc(d.dn)}</button></td>
       <td>${esc(x.customer)}${S.sendErr[d.id] ? `<div class="note bad">${esc(S.sendErr[d.id])}</div>` : ''}</td>
@@ -2116,6 +2135,15 @@ function waitingForXero(pend) {
     send: connected && S.xc ? `<div class="hbtns"><button class="btn xero" type="button" data-sendxero ${ready.length && !S.busy ? '' : 'disabled'}>${S.busy ? 'Sending…' : `Create ${ready.length} draft invoice${ready.length === 1 ? '' : 's'} in ${XERO}`}</button>${ready.length ? `<span class="note">${gbp(total, 2)} net</span>` : ''}</div>` : '',
   };
 }
+/** Choosing the Xero contact (22 Oct): a search box, with the likeliest contacts as buttons underneath (the same
+ *  name first), instead of one long list where a neighbouring name is one slip away. */
+function contactPicker(customer) {
+  const key = normName(customer), q = (S.xcq || {})[key] || '';
+  const opts = rankContacts(customer, S.xc.contacts, q, 6);
+  return `<div class="xcpick"><input type="search" class="f" data-xcq="${esc(key)}" value="${esc(q)}" placeholder="Type part of their name in Xero" aria-label="Find the Xero contact for ${esc(customer)}" autocomplete="off">
+    <div class="xcopts">${opts.map((c, i) => `<button class="btn sm${i === 0 && c.score >= 10 ? ' pri' : ''}" type="button" data-xcpick="${esc(key)}" data-xcid="${esc(c.id)}" data-xccust="${esc(customer)}">${esc(c.name)}${i === 0 && c.score >= 10 ? ' · best match' : ''}</button>`).join('')
+      || `<span class="note">${q ? 'No Xero contact has those words.' : 'No likely match: type part of their name.'}</span>`}</div></div>`;
+}
 /** The Xero contact a customer's invoices go to, or null while Mandy has to choose. */
 function contactFor(customer) {
   if (!S.xc || S.forcePick.has(normName(customer))) return null;
@@ -2133,17 +2161,19 @@ async function loadXeroContacts(fresh) {
   xcLoading = false; render();
   if (S.poForm && !$('doc').hidden) { collectPo(); showPoForm(); }
 }
-async function pickContact(key, id) {
+async function pickContact(key, id, customer = '') {
   const c = S.xc.contacts.find(x => x.id === id); if (!c) return;
-  S.xcMap.set(key, c); S.forcePick.delete(key); render();
+  if (customer && !looksSame(customer, c.name) && !confirm(`${customer} → ${c.name}\n\nThese don't look like the same company. Link them anyway? Every invoice for ${customer} will then go to ${c.name} in Xero.`)) return;
+  S.xcMap.set(key, c); S.forcePick.delete(key); if (S.xcq) delete S.xcq[key]; render();
   try { await data.saveContact(key, c); toast(`Invoices for this customer will go to ${c.name} in Xero.`); }
   catch (e) { S.xcMap.delete(key); render(); toast(e.message, null, true); }
 }
 async function sendToXero() {
   const pend = []; S.jobs.forEach(x => x.despatches.forEach(d => { if (!d.xero && d.deliveredOn) pend.push([x, d]); }));
-  const items = pend.map(([x, d]) => ({ x, d, m: contactFor(x.customer) }))
-    .filter(({ d, m }) => m && (S.sendPick[d.id] ?? true))
-    .map(({ d, m }) => ({ despatchId: d.id, contactId: m.id }));
+  const chosen = pend.map(([x, d]) => ({ x, d, m: contactFor(x.customer) })).filter(({ d, m }) => m && (S.sendPick[d.id] ?? true));
+  const odd = [...new Map(chosen.filter(({ x, m }) => !looksSame(x.customer, m.name)).map(({ x, m }) => [normName(x.customer), `${x.customer} → ${m.name}`])).values()];
+  if (odd.length && !confirm(`These don't look like the same company:\n\n${odd.join('\n')}\n\nSend anyway? Press Cancel, then "change" next to the contact to put it right.`)) return;
+  const items = chosen.map(({ d, m }) => ({ despatchId: d.id, contactId: m.id }));
   if (!items.length) return;
   S.busy = true; S.sendErr = {}; render();
   try {
@@ -3063,6 +3093,9 @@ function onClick(e) {
   const d = t.dataset;
   if ('goback' in d) return history.back();
   if ('preview' in d) return enterPreview();
+  if (d.xcchange) { S.forcePick.add(d.xcchange); return render(); }
+  if (d.xcpick !== undefined && d.xcid) return pickContact(d.xcpick, d.xcid, d.xccust || '');
+  if (d.xcunlink) return unlinkContact(d.xcunlink, d.xccust || d.xcunlink);
   if (d.cust) { S.cust = d.cust; S.custName = null; S.bookEdit = null; S.ctab = S.ctab || 'overview'; return render(); }
   if ('addperson' in d) { S.bookEdit = { kind: 'person', role: 'orders', main: false }; keepInputs = false; return render(); }
   if ('addsite' in d) { S.bookEdit = { kind: 'site', main: false }; keepInputs = false; return render(); }
@@ -3273,7 +3306,7 @@ function onClick(e) {
   if (d.fromxero) return makeJobFromXero(d.fromxero);
   if ('sendxero' in d) return sendToXero();
   if ('xcreload' in d) return loadXeroContacts(true).then(() => (S.xcErr || S.xc) && toast(S.xcErr || `Read ${S.xc.contacts.length} customers from Xero.`, null, !!S.xcErr));
-  if (d.xcchange) { S.forcePick.add(d.xcchange); return render(); }
+
 }
 $('scrim').addEventListener('click', () => closeOpen());
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
@@ -3291,6 +3324,8 @@ document.addEventListener('input', e => {
     document.querySelector('#doc .paper').innerHTML = docHtml('job', S.sheet.jobId);
     return;
   }
+  if (e.target.dataset.xcq !== undefined) { const k = e.target.dataset.xcq, pos = e.target.selectionStart; S.xcq = { ...(S.xcq || {}), [k]: e.target.value }; render();
+    const el = document.querySelector(`[data-xcq="${CSS.escape(k)}"]`); el?.focus(); el?.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'pcheck-q') { S.pcheck = { q: e.target.value }; const pos = e.target.selectionStart; render(); const el = $('pcheck-q'); el?.focus(); el?.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'msearch') { S.msearch = e.target.value; const pos = e.target.selectionStart; if (S.rfqForm) collectRfq(); renderMetalView(); const el = $('msearch'); el.focus(); el.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'spq' && S.spView) { S.spView.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $('spq'); el?.focus(); el?.setSelectionRange(pos, pos); return; }
@@ -3342,7 +3377,6 @@ document.addEventListener('change', e => {
     if (on) $('dl-note')?.focus();
     return;
   }
-  if (e.target.dataset.xcpick !== undefined) { pickContact(e.target.dataset.xcpick, e.target.value); return; }
   if (e.target.id === 'po-copy' && S.poForm && e.target.value) { collectPo(); copyPo(+e.target.value); return; }
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
