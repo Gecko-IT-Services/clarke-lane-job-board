@@ -104,7 +104,8 @@ nav.tabs a > svg.xw{width:auto;height:12px}
 .chip svg{width:13px;height:13px;vertical-align:-2px;margin-right:4px}
 .sec-h .xhead{line-height:0;align-self:center;color:var(--xero-ink)}
 .sec-h .xhead svg{height:28px;width:auto}
-input[type=text],input[type=search],input[type=date],input[type=number],select.f{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+input[type=text],input[type=search],input[type=date],input[type=number],input[type=email],select,textarea{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+textarea{resize:vertical;max-width:100%;line-height:1.4}
 
 .seg{display:inline-flex;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
 .seg button{border:0;background:none;border-radius:7px;padding:7px 14px;font-weight:700;display:flex;gap:8px;align-items:center;color:var(--muted)}
@@ -162,7 +163,7 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .month .minfo{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .month p{font-size:14.5px} .month p.note{font-size:13.5px} .month .ok{color:var(--ok)} .month p.bad{color:var(--bad);font-weight:600;font-size:14px}
 .month a{font-weight:600;color:var(--info);text-decoration:none;font-size:14px}
-.month .gwrap{margin:0}
+.month .gwrap{margin:0;display:flex;flex-direction:column;align-items:flex-start} .month .gtotal{width:58px;text-align:center;white-space:nowrap;margin-top:6px;font:600 17px var(--display);letter-spacing:-.02em;color:var(--ink)}
 #v-jobs .mline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;padding:10px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px} #v-jobs .mline .wip{color:var(--info)} #v-jobs .mline .gap{color:var(--warn)} #v-jobs .mline .ok{color:var(--ok)} #v-jobs .mline a{margin-left:auto;font-weight:600;color:var(--info);text-decoration:none} #v-jobs .mline .g-state{font-size:12.5px;font-weight:600;border-radius:999px;padding:2px 10px;background:var(--warn-soft);color:var(--warn)} #v-jobs .mline .g-state.g-ok,#v-jobs .mline .g-state.g-top{background:var(--ok-soft);color:var(--ok)}
 .month .g-state{font-size:13px;font-weight:600;border-radius:999px;padding:3px 12px;background:var(--warn-soft);color:var(--warn)}
 .month .g-state.g-ok,.month .g-state.g-top{background:var(--ok-soft);color:var(--ok)}
@@ -415,7 +416,7 @@ body.tv-touch .tvleave{opacity:1;pointer-events:auto}
 .jnotes .jnl{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:8px}
 .jn{max-width:85%;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface)} .jn.office{align-self:flex-start} .jn.floor{align-self:flex-end;background:var(--info-soft);border-color:transparent}
 .jn.new{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn-soft)} .jnb{white-space:pre-wrap;font-size:15px} .jnm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:4px} .jns{color:var(--ok);font-weight:600}
-.jnf textarea{width:100%;font:inherit} .jnf .jnname{max-width:240px} .kiosk-mode .jnotes .jnb{font-size:18px} .kiosk-mode .jnotes .btn{min-height:48px}
+.jnf{display:flex;flex-direction:column;gap:10px} .jnf textarea{width:100%} .jnf .jnname{max-width:240px} .jnf .actions{align-items:center} .kiosk-mode .jnotes .jnb{font-size:18px} .kiosk-mode .jnotes .btn{min-height:48px}
 .kiosk .fnote{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:18px;padding:8px 12px;border-radius:12px;background:var(--surface-2,rgba(127,127,127,.08))} .kiosk .fnote.new{background:var(--warn-soft)}
 .kiosk .fnote .tag{margin:0} .kiosk .fnote .fnb{flex:1;min-width:200px} .kiosk .fnote small{color:var(--muted);font-size:14px;margin-left:6px} .kiosk .fnote .btn{min-height:52px;font-size:17px;padding:0 18px;border-radius:12px}
 .kiosk .fnotebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%;text-align:left;font:inherit;font-size:18px;padding:14px 18px;margin:0 0 14px;border-radius:14px;border:2px solid var(--warn);background:var(--warn-soft);color:var(--ink);cursor:pointer} .kiosk .fnotebar span{margin-left:auto;font-weight:600;color:var(--warn)}
@@ -941,7 +942,7 @@ details.splitter>summary::-webkit-details-marker{display:none}
 details.splitter[open]{flex-basis:100%;background:var(--field);border-radius:10px;padding:10px}
 .njlines input[type=text]{width:100%}
 .njlines input[type=date]{width:150px}
-.newjob textarea{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:inherit;resize:vertical}
+
 tr.muted td{color:var(--muted)}
 .bad{color:var(--bad)}
 @media (max-width:560px){.row3{grid-template-columns:minmax(0,1fr)}}
