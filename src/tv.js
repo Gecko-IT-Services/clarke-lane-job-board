@@ -11,7 +11,7 @@ import { moodIcon, moodLine, cheerHtml } from './mood.js';
 
 const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5L19.5 6.5"/></svg>';
 const STAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/></svg>';
-const HEAD = { 'Cut & Drill': 'Cut / Roll<br>Drill', 'Tap & C/Sink': 'Tap<br>C/Sink', 'P/Coat Paint': 'P/Coat<br>Paint', 'Plating / Anodising': 'Plating<br>Anodising' };
+const HEAD = { 'Cut & Drill': 'Cut / Roll<br>Drill', 'Tap & C/Sink': 'Tap<br>C/Sink', 'P/Coat Paint': 'P/Coat<br>Paint', 'Plating / Anodising': 'Plating<br>Anodising', 'Subcontracted': 'Sub-<br>contracted' };
 export const TV_ROWS = 14;
 
 export function renderTv({ jobs, outwork, notes = [], today, now, page, cheer = null }, h) {

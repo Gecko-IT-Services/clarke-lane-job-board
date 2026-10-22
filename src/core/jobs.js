@@ -51,12 +51,14 @@ export function xeroLineFields(l) {
 }
 
 // Levi's nine, in the order of his Jobs List.
+// Subcontracted (Mandy, 22 Oct): the whole job made by another company, so an order can be saved without a
+// station ticked; it goes through Sent out like powder coat and plating. Last, after Levi's nine.
 export const PROCESSES = ['Laser', 'Fold', 'Cut & Drill', 'Tap & C/Sink', 'Insert', 'Weld',
-  'P/Coat Paint', 'Plating / Anodising', 'Rolling'];
+  'P/Coat Paint', 'Plating / Anodising', 'Rolling', 'Subcontracted'];
 
 export const SHORT = { 'Laser': 'Laser', 'Fold': 'Fold', 'Cut & Drill': 'Cut & drill', 'Tap & C/Sink': 'Tap & C/Sink',
   'Insert': 'Insert', 'Weld': 'Weld', 'P/Coat Paint': 'P/Coat',
-  'Plating / Anodising': 'Plating', 'Rolling': 'Rolling' };
+  'Plating / Anodising': 'Plating', 'Rolling': 'Rolling', 'Subcontracted': 'Sub-con' };
 
 export const sent = (job, line) => job.despatches.reduce((a, d) => a + (d.lines[line.id] || 0), 0);
 export const left = (job, line) => Math.max(0, line.qty - sent(job, line));
@@ -365,8 +367,9 @@ export const moveInStation = (list, station, id, to) =>
   moveInOrder(list.map(j => ({ id: j.id, priority: j.procs[station]?.place ?? null })), id, to);
 
 /** Shop floor tiles: per station, how many jobs wait for it and how many of those are late. */
+/** The station tiles: Levi's nine. Subcontracted has no station; those jobs show under Sent out. */
 export function floorStations(jobs, today) {
-  return PROCESSES.map(p => {
+  return PROCESSES.filter(p => p !== 'Subcontracted').map(p => {
     const q = floorQueue(jobs, p);
     return { p, waiting: q.length, late: q.filter(j => nextDue(j) && nextDue(j) < today).length };
   });

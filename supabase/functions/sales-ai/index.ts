@@ -58,7 +58,7 @@ The aim: a warm, personal email that makes it easy for the customer to send thei
 Style: British English, plain and friendly, not salesy, no exclamation marks, no buzzwords, no em dashes. 3 to 5 short paragraphs, under 150 words in total. The greeting uses contactFirstName ("Hi Sam,") or "Hello," if there is none. Do not add a sign-off or name: it is added afterwards. The subject is short and specific, not clickbait.`;
 
 // Levi's nine processes, exactly as on the board (PROCESSES in src/core/jobs.js): the quote pack may only use these.
-const PROCESSES = ['Laser', 'Fold', 'Cut & Drill', 'Tap & C/Sink', 'Insert', 'Weld', 'P/Coat Paint', 'Plating / Anodising', 'Rolling'];
+const PROCESSES = ['Laser', 'Fold', 'Cut & Drill', 'Tap & C/Sink', 'Insert', 'Weld', 'P/Coat Paint', 'Plating / Anodising', 'Rolling', 'Subcontracted'];
 // Documents the quote pack may send (the board picks them; this checks again): 4 files, 12 MB in all.
 const DOC_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
 const DOC_MAX_FILES = 4, DOC_MAX_BYTES = 12 * 1024 * 1024;

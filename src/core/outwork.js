@@ -1,12 +1,12 @@
 /**
- * Work sent out (Philip, 20 Oct): powder coating, and plating, are done by another company. This replaces
+ * Work sent out (Philip, 20 Oct): powder coating, plating, and whole subcontracted jobs are done by another company. This replaces
  * the whiteboard: what is out, where, since when and when it is due back; what is ready to go; what came
  * back lately. Pure: no window. Tested in tests/outwork.mjs.
  * row: { id, jobId, process, supplier, items, finish, sentOn, dueBack, backOn, note, sentBy, backBy }
  */
 import { floorQueue, partsLeft, nextStep, dayNo } from './jobs.js';
 
-export const OUT_PROCESSES = ['P/Coat Paint', 'Plating / Anodising'];
+export const OUT_PROCESSES = ['P/Coat Paint', 'Plating / Anodising', 'Subcontracted'];
 
 /** Due back by default: five working days after it went (weekends skipped). */
 export function defaultDueBack(sentOn, workingDays = 5) {

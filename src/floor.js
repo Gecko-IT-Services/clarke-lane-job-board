@@ -27,7 +27,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
     const ob = outBoard(outwork, jobs, today);
     const outTile = `<button type="button" class="tile${ob.late.length ? ' hot' : ''}${ob.out.length || ob.ready.length ? '' : ' idle'}" data-station="out">
       <span class="nm">Sent out</span><span><span class="ct"><b>${ob.out.length}</b>at other companies</span>
-      ${ob.late.length ? `<span class="tag late">${ob.late.length} overdue back</span>` : ''}${ob.ready.length ? `<span class="tag soon">${ob.ready.length} ready to go</span>` : !ob.late.length ? '<span class="tag">Powder coat, plating</span>' : ''}</span></button>`;
+      ${ob.late.length ? `<span class="tag late">${ob.late.length} overdue back</span>` : ''}${ob.ready.length ? `<span class="tag soon">${ob.ready.length} ready to go</span>` : !ob.late.length ? '<span class="tag">Powder coat, plating, subcontract</span>' : ''}</span></button>`;
     const tiles = floorStations(jobs, today).map(s => `<button type="button" class="tile${s.late ? ' hot' : ''}${s.waiting ? '' : ' idle'}" data-station="${esc(s.p)}">
       <span class="nm">${esc(s.p)}</span><span><span class="ct"><b>${s.waiting}</b>${s.waiting === 1 ? 'job' : 'jobs'} waiting</span>
       ${s.late ? `<span class="tag late">${s.late} late</span>` : s.waiting ? '<span class="tag ok">On time</span>' : '<span class="tag">Nothing waiting</span>'}</span></button>`).join('');
@@ -76,7 +76,7 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
         <p class="fthen">${after.length ? `Then: ${esc(after.map(p => SHORT[p]).join(' → '))}` : 'Last step: back to the office'}</p>`;
     };
     const steps = isAll ? `<div class="route">${needed(j).map(step).join('<span class="arrow" aria-hidden="true">→</span>')}</div>` : route();
-    // Powder coat and plating go to another company: send it, or show where it is and take it back in.
+    // Powder coat, plating and subcontracted jobs go to another company: send it, or show where it is and take it back in.
     const outs = OUT_PROCESSES.filter(p => j.procs[p] && !j.procs[p].done).map(p => {
       const o = outNow(outwork, j.id, p);
       if (o) return `<div class="outline"><span class="tag${o.dueBack && o.dueBack < today ? ' late' : ' soon'}">${esc(SHORT[p])} out at ${esc(o.supplier)}</span>
@@ -118,7 +118,7 @@ function outView(jobs, outwork, today, bar, h) {
   const back = b.back.length ? `<section class="ogroup"><h3>Back in the last 2 weeks</h3><table class="lines oback"><thead><tr><th>Order</th><th>Company</th><th>What</th><th>Went</th><th>Back</th></tr></thead><tbody>
       ${b.back.map(r => `<tr><td><b>${esc(r.job.so)}</b> ${esc(r.job.customer)}</td><td>${esc(r.supplier)}</td><td>${esc(SHORT[r.process])}${r.finish ? ' · ' + esc(r.finish) : ''}</td><td>${esc(fmt(r.sentOn))}</td><td>${esc(fmt(r.backOn))}${r.backBy ? ' · ' + esc(r.backBy) : ''}</td></tr>`).join('')}</tbody></table></section>` : '';
   const sub = b.out.length ? `${count(b.out.length, 'job')} at ${count(b.suppliers.length, 'company', 'companies')}${b.late.length ? ` · <b>${b.late.length} overdue back</b>` : ''}` : 'Nothing out at the moment';
-  return `<div class="kiosk">${bar(`<button type="button" class="back" data-stations="1">← Stations</button><div><h2>Sent out</h2><p class="sub">${sub} · powder coat and plating done by other companies</p></div>`)}
+  return `<div class="kiosk">${bar(`<button type="button" class="back" data-stations="1">← Stations</button><div><h2>Sent out</h2><p class="sub">${sub} · powder coat, plating and subcontracted jobs done by other companies</p></div>`)}
     ${groups || '<p class="allclear ok">Nothing is out at another company.</p>'}${ready}${back}</div>`;
 }
 

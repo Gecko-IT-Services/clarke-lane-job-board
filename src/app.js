@@ -638,7 +638,7 @@ async function submitOrder() {
   const under = lines.find(l => l.sent && Number(l.qty) < l.sent);
   if (under) return msg(`"${lineLabel(under)}" has ${under.sent} dispatched already, so its quantity cannot go below that.`);
   n.procs = unionProcs(lines);   // the order's processes: every process a line being saved needs
-  if (!n.procs.length && !n.b2b) return msg('Tick at least one process so the shop floor knows what the order needs (or tick Back-to-back if it is bought in and sent on).');
+  if (!n.procs.length && !n.b2b) return msg('Tick at least one process so the shop floor knows what the order needs: Subcontracted if another company makes it, or Back-to-back if it is bought in and sent on.');
   if (n.mode === 'new' && n.so.trim() && !/^(SO|SAGE)-\d+$/i.test(n.so.trim())) return msg('An order number must look like SO-9726 or SAGE-9701, or be left blank.');
   const payloadLines = lines.map(l => ({ ...(l.id ? { id: l.id } : {}), part_no: (l.partNo || '').trim(), part: l.part.trim(), qty: Number(l.qty), unit_price: Number(l.price), due_date: l.due, customer_po: (l.po || '').trim(),
     processes: PROCESSES.filter(p => (l.procs || []).includes(p)) }));
