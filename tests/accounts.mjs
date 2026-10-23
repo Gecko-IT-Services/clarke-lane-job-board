@@ -1,6 +1,6 @@
 // Keith's Accounts page: drafts with their evidence, the cut-off, purchase orders against bills, money in.
 import assert from 'node:assert/strict';
-const { draftsToApprove, cutOff, moneyIn, matchPurchases, outworkWithoutBill, poNo, differs } = await import('../src/core/accounts.js');
+const { draftsToApprove, cutOff, moneyIn, matchPurchases, outworkWithoutBill, poNo, differs, doubtful } = await import('../src/core/accounts.js');
 
 const today = '2026-10-23';
 const line = (id, qty, price, due) => ({ id, lineNo: id, partNo: '', part: 'Part ' + id, qty, price, due });
@@ -38,6 +38,17 @@ assert.deepEqual([m.overdue, m.week, m.month, m.later], [300, 50, 70, 10]);
 assert.deepEqual(m.late.map(x => [x.number, x.days, x.chased?.by]), [['INV-9', 23, 'Mandy']], 'overdue, with the last chase');
 assert.equal(m.toInvoice, 30, 'due in the next 4 weeks: SO-1 line 12 (6 left × £5) is due 12 Nov');
 
+// Customers in administration are doubtful, apart from what can be chased; the overdue list is by customer.
+const debts2 = [...debts, { number: 'INV-13', customer: 'Example Lighting Ltd - IN ADMINISTRATION', due: '2026-08-31', owed: 400 },
+  { number: 'INV-14', customer: 'Example Lighting Ltd - IN ADMINISTRATION', due: '2026-09-15', owed: 100 },
+  { number: 'INV-15', customer: 'Example Customer Ltd', due: '2026-10-01', owed: 50 }];
+const m2 = moneyIn(debts2, jobs, [], today);
+assert.deepEqual([m2.overdue, m2.doubtful], [350, 500], 'the £500 in administration is in neither overdue nor any other figure');
+assert.deepEqual(m2.customers.map(g => [g.customer, g.invoices.length, g.owed, g.oldest, g.days]), [['Example Customer Ltd', 2, 350, '2026-09-30', 23]]);
+assert.deepEqual(m2.doubtfulCustomers.map(g => [g.invoices.length, g.owed, g.oldest]), [[2, 500, '2026-08-31']]);
+for (const n of ['Example Ltd (In Liquidation)', 'Example Ltd - in administration', 'Example Ltd (Administrators appointed)', 'Example Ltd DISSOLVED']) assert.ok(doubtful(n), n);
+for (const n of ['Example Business Administration Ltd', 'Liquid Example Ltd', 'Example Customer Ltd']) assert.ok(!doubtful(n), n);
+
 // — Purchase orders against bills. —
 assert.equal(poNo('PO-04338'), '4338');
 assert.ok(differs(103, 100) && !differs(100.5, 100) && !differs(1000.5, 995), '£1 and 1% both have to be passed');
@@ -74,3 +85,19 @@ const out = [{ supplier: 'Sample Coaters Ltd', sentOn: '2026-10-01', jobId: 1 },
 const ow = outworkWithoutBill(out, bills, today);
 assert.deepEqual(ow.map(g => [g.supplier, g.sends.length, g.since]), [['Sample Coaters Ltd', 2, '2026-09-25']], 'Example Metals has billed since; New Platers is too recent');
 console.log('accounts: ok');
+
+// — Keith's chase emails (24 Oct): the AI writes the words, the board the table and links. —
+{
+  const { chaseFacts, chaseHtml } = await import('../src/core/accounts.js');
+  const g = { customer: 'Example Customer Ltd', owed: 350, days: 23, invoices: [
+    { id: 'i1', number: 'INV-9', date: '2026-08-31', due: '2026-09-30', owed: 300, days: 23 }, { id: 'i2', number: 'INV-15', date: '2026-09-01', due: '2026-10-01', owed: 50, days: 22 }] };
+  const f = chaseFacts(g, { person: 'Sam Buyer', chases: [{ customer: 'EXAMPLE CUSTOMER LTD', at: '2026-10-16T09:00:00Z' }, { customer: 'Other', at: '2026-10-20T09:00:00Z' }], today: '2026-10-24' });
+  assert.deepEqual([f.contactFirstName, f.totalOwed, f.oldestDaysOverdue, f.chasedBefore, f.chasedInLast30Days], ['Sam', 350, 23, ['2026-10-16'], true]);
+  assert.deepEqual(f.invoices.map(x => x.number), ['INV-9', 'INV-15']);
+  const html = chaseHtml({ greeting: 'Dear Sam,', before: ['Two invoices <are> overdue.'], after: ['Thank you.'] }, g, { links: { i1: 'https://in.xero.com/x' } });
+  assert.ok(html.includes('Two invoices &lt;are&gt; overdue.'), "the AI's words are escaped");
+  assert.ok(html.includes('£350.00') && html.includes('INV-15') && html.includes('href="https://in.xero.com/x"'), 'the table and the link come from Xero, not the AI');
+  assert.equal((html.match(/View and pay online/g) || []).length, 1, 'a link only where Xero gave one');
+  assert.match(html, /Kind regards,<br>Keith<br>Accounts, Clarke Lane Engineering Ltd/);
+  console.log('accounts chase: ok');
+}

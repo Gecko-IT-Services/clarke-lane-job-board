@@ -9,6 +9,7 @@ import { normName, matchContact, dispatchPo, looksSame, rankContacts } from './c
 import { cocRows, cocNeeded, COC_STATEMENT, DEFAULT_ORIGIN } from './core/coc.js';
 import { renderAccounts, renderMonthPack, packPaper } from './accounts.js';
 import { packFacts as monthPackFacts, lastMonths } from './core/pack.js';
+import { moneyIn, chaseFacts, chaseHtml } from './core/accounts.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
 import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partsOnJob, lineNumbers } from './core/parts.js';
@@ -49,7 +50,7 @@ import { deliveryRuns, deliveryProblem, signatureOk, vanStatus, worthSending } f
 import { drawMap, focusStop, fitAll, showVans, focusVan, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
 import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps } from './core/jobs.js';
-import { PROCESSES, SHORT, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
+import { PROCESSES, SHORT, dayNo, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
   byRunningOrder, partsLeft, moveInOrder, nextStep, floorQueue, moveInStation, lineProcs } from './core/jobs.js';
@@ -3017,7 +3018,31 @@ function renderAccountsView() {
     return;
   }
   $('v-accounts').innerHTML = renderAccounts({ jobs: S.jobs, today: todayIso(), me: S.me, inv: a.inv, invErr: a.invErr, debts: a.debts, debtErr: a.debtErr,
-    purchases: a.purchases, purErr: a.purErr, outwork: S.outwork || [], chases: S.chases || [], view: S.accView || 'look', loading: a.loading, switcher }, { esc, fmt, gbp });
+    purchases: a.purchases, purErr: a.purErr, outwork: S.outwork || [], chases: S.chases || [], view: S.accView || 'look', loading: a.loading, switcher, chasing: S.accChasing || null }, { esc, fmt, gbp });
+}
+/** Keith's chase (24 Oct): the customer's email and pay-online links from Xero, the AI's words around the board's own
+ *  table of invoices, an Outlook draft in his mailbox (never sent by the board), and a chase note so nobody chases twice. */
+async function chaseFromAccounts(key) {
+  if (!accounts() || S.accChasing) return;
+  const today = todayIso(), m = S.acc?.debts ? moneyIn(S.acc.debts, S.jobs, S.chases || [], today) : null;
+  const g = m?.customers.find(x => normName(x.customer) === key); if (!g) return;
+  const recent = g.chased && dayNo(today) - dayNo(g.chased.at.slice(0, 10)) < 7;
+  if (recent && !confirm(`${g.customer} was chased on ${fmtLong(g.chased.at.slice(0, 10))} by ${g.chased.by}. Write another chase email anyway?`)) return;
+  S.accChasing = key; render(); toast(`Writing the chase email for ${g.customer}…`);
+  try {
+    const contactId = g.invoices.find(x => x.contactId)?.contactId;
+    const c = contactId ? await data.xero('contact', { id: contactId }).catch(() => ({})) : {};
+    const links = (await data.xero('online', { ids: g.invoices.map(x => x.id).filter(Boolean).slice(0, 15) }).catch(() => ({ links: {} }))).links || {};
+    const ai = await data.salesAi(chaseFacts(g, { person: c.person, chases: S.chases, today }), 'chase');
+    const link = await data.draftEmail({ to: c.email || '', subject: ai.subject, html: chaseHtml(ai, g, { links, from: S.me.name || 'Keith' }) });
+    await data.addChase({ customer: g.customer, contactId: contactId || '', invoices: g.invoices.map(x => ({ number: x.number, owed: x.owed })), owed: g.owed, by: S.me.name }).catch(() => {});
+    S.chases = await data.loadChases().catch(() => S.chases);
+    toast(`Chase email for ${g.customer} is in your Outlook Drafts${c.email ? ` to ${c.email}` : ' (Xero has no email address for them: add one in Outlook)'}. Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (e) {
+    toast(/Mail\.ReadWrite|consent|AADSTS65001/i.test(e.message) ? 'Emailing needs a one-off permission in Microsoft 365 (Mail.ReadWrite). Ask Gecko IT to grant it.' : e.message, null, true);
+  }
+  S.accChasing = null; render();
 }
 /** One month's pack: Xero's reports (kept 6 hours for everyone), the month's sales invoices (top customers), the board,
  *  and the analysis already written for that month, if any. */
@@ -3463,6 +3488,7 @@ function onClick(e) {
   if (d.coc) return openCoc(+d.job, +d.coc);
   if (d.accview) { S.accView = d.accview; return render(); }
   if (d.acctab) { S.accTab = d.acctab; return render(); }
+  if (d.accchase) return chaseFromAccounts(d.accchase);
   if ('packread' in d) { const mm = S.packMonth || lastMonths(todayIso(), 1)[0]; return loadPack(mm, true); }
   if ('packai' in d) return writePackAnalysis();
   if ('packprint' in d) return showPack();

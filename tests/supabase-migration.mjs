@@ -48,7 +48,8 @@ assert.match(sql, /create policy jobs_office_delete on public\.jobs\s+for delete
 assert.match(last('is_staff'), /in \('md', 'office', 'floor'\)/, 'is_staff() leaves accounts out');
 for (const t of ['jobs', 'job_lines', 'job_line_prices', 'despatches', 'despatch_lines', 'outwork', 'debt_chases'])
   assert.ok(sql.includes(`create policy ${t}_accounts_read on public.${t} for select to authenticated using (public.is_accounts())`), `${t}: accounts may read`);
-assert.ok(![...sql.matchAll(/create policy \w+ on public\.\w+ for (insert|update|delete|all)[^;]*is_accounts/g)].length, 'accounts writes nothing');
+assert.deepEqual([...sql.matchAll(/create policy (\w+) on public\.\w+ for (insert|update|delete|all)[^;]*is_accounts/g)].map(m => m[1]), ['debt_chases_accounts_add'],
+  'accounts writes nothing but a chase note (24 Oct)');
 
 // — Levi's nine processes, exactly. —
 const procs = sql.match(/process\s+text not null check \(process in \(([^)]*)\)\)/)[1]

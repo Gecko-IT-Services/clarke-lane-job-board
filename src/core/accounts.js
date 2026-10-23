@@ -60,24 +60,37 @@ export function cutOff(jobs, today) {
     transit, transitTotal: sum(transit), book: { ...book, total: round2(book.late + book.thisMonth + book.nextMonth + book.later) } };
 }
 
+/** A customer Xero names as in administration, liquidation and the like (Philip, 24 Oct: "INDO Lighting Ltd - IN
+ *  ADMINISTRATION"): money unlikely to come in, kept apart from what can still be chased. */
+export const doubtful = name => /\bin (administration|liquidation|receivership)\b|\b(administrators?|liquidators?|receivership|dissolved|insolven(t|cy)|ceased trading)\b/i.test(String(name || ''));
+
 /**
  * Money coming in: unpaid approved invoices (debts route) by when they are due (overdue, the next 7 days, 8–30
- * days, later), the overdue ones oldest first with the last chase, and what the order book should invoice in the
- * next 4 weeks. chases: [{ customer, at, by }].
+ * days, later), and what the order book should invoice in the next 4 weeks. Customers in administration or
+ * liquidation are counted apart as doubtful, in none of the other figures. The overdue invoices come oldest first
+ * (late) and grouped by customer, most owed first, each with its oldest invoice and the last chase from the board
+ * (customers). chases: [{ customer, at, by }].
  */
 export function moneyIn(debts, jobs, chases, today) {
-  const b = { overdue: 0, week: 0, month: 0, later: 0 };
-  const late = [];
+  const b = { overdue: 0, week: 0, month: 0, later: 0, doubtful: 0 };
+  const late = [], doubt = [];
+  const lastChase = name => (chases || []).filter(c => normName(c.customer) === normName(name)).sort((p, q) => String(q.at).localeCompare(String(p.at)))[0] || null;
   for (const x of debts || []) {
+    const days = x.due ? dayNo(today) - dayNo(x.due) : null;
+    if (doubtful(x.customer)) { b.doubtful = round2(b.doubtful + (x.owed || 0)); doubt.push({ ...x, days }); continue; }
     const k = !x.due || x.due < today ? 'overdue' : dayNo(x.due) - dayNo(today) <= 7 ? 'week' : dayNo(x.due) - dayNo(today) <= 30 ? 'month' : 'later';
     b[k] = round2(b[k] + (x.owed || 0));
-    if (k === 'overdue') late.push({ ...x, days: x.due ? dayNo(today) - dayNo(x.due) : null,
-      chased: (chases || []).filter(c => normName(c.customer) === normName(x.customer)).sort((p, q) => String(q.at).localeCompare(String(p.at)))[0] || null });
+    if (k === 'overdue') late.push({ ...x, days, chased: lastChase(x.customer) });
   }
+  late.sort((p, q) => String(p.due).localeCompare(String(q.due)));
+  const group = list => { const by = new Map();
+    for (const x of list) { const k = normName(x.customer), g = by.get(k) || { customer: x.customer, invoices: [], owed: 0, oldest: x.due, days: x.days, chased: x.chased ?? null };
+      g.invoices.push(x); g.owed = round2(g.owed + (x.owed || 0)); if (x.due && (!g.oldest || x.due < g.oldest)) { g.oldest = x.due; g.days = x.days; } by.set(k, g); }
+    return [...by.values()].sort((p, q) => q.owed - p.owed); };
   const to = plus(today, 28);
   const toInvoice = round2((jobs || []).filter(j => j.status !== 'cancelled' && !j.preview)
     .reduce((a, j) => a + j.lines.filter(l => l.due <= to).reduce((s, l) => s + left(j, l) * (l.price || 0), 0), 0));
-  return { ...b, late: late.sort((p, q) => String(p.due).localeCompare(String(q.due))), toInvoice };
+  return { ...b, late, customers: group(late), doubtfulCustomers: group(doubt), toInvoice };
 }
 
 /** "PO-4338", "4338" or "PO 04338" → "4338"; '' when there is no number. */
@@ -143,4 +156,36 @@ export function outworkWithoutBill(outwork, bills, today) {
     g.sends.push(o); if (o.sentOn < g.since) g.since = o.sentOn; by.set(k, g);
   }
   return [...by.values()].sort((a, b) => a.since.localeCompare(b.since));
+}
+
+/* ---------- Keith's chase emails (Philip, 24 Oct) ---------- */
+const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const money = n => '£' + Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const long = s => (s ? new Date(s.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+
+/**
+ * What the AI is told for a chase: the customer, the contact's first name, each invoice (number, dates, owed, days
+ * overdue), the total, the oldest, and when they were chased before. g: a group from moneyIn().customers.
+ */
+export function chaseFacts(g, { person = '', chases = [], today }) {
+  const before = (chases || []).filter(c => normName(c.customer) === normName(g.customer)).map(c => String(c.at).slice(0, 10)).sort().reverse();
+  return { customer: g.customer, contactFirstName: String(person || '').trim().split(/\s+/)[0] || '',
+    invoices: g.invoices.map(x => ({ number: x.number, date: x.date || '', due: x.due || '', owed: x.owed, daysOverdue: x.days })),
+    totalOwed: g.owed, oldestDaysOverdue: g.days, chasedBefore: before.slice(0, 5),
+    chasedInLast30Days: before.some(d => dayNo(today) - dayNo(d) <= 30), from: 'Keith, Accounts' };
+}
+
+/**
+ * The email: the AI's greeting and paragraphs around a table the board builds itself from Xero (invoice, date, due,
+ * amount, pay-online link), and the sign-off. ai: { subject, greeting, before: [..], after: [..] }; links: { id: url }.
+ */
+export function chaseHtml(ai, g, { links = {}, from = 'Keith', company = 'Clarke Lane Engineering Ltd' } = {}) {
+  const td = 'padding:4px 12px 4px 0', p = xs => (xs || []).map(t => `<p>${escH(t)}</p>`).join('');
+  const rows = g.invoices.map(x => `<tr><td style="${td}">${escH(x.number)}${x.reference ? ` <span style="color:#666">(${escH(x.reference)})</span>` : ''}</td><td style="${td}">${escH(long(x.date))}</td>
+    <td style="${td}">${escH(long(x.due))}</td><td style="${td};text-align:right">${escH(money(x.owed))}</td><td style="padding:4px 0">${links[x.id] ? `<a href="${escH(links[x.id])}">View and pay online</a>` : ''}</td></tr>`).join('');
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5">
+<p>${escH(ai.greeting || 'Hello,')}</p>${p(ai.before)}
+<table style="border-collapse:collapse;font-size:14px"><thead><tr><th style="text-align:left;${td}">Invoice</th><th style="text-align:left;${td}">Date</th><th style="text-align:left;${td}">Due</th><th style="text-align:right;${td}">Amount due</th><th></th></tr></thead>
+<tbody>${rows}</tbody><tfoot><tr><td colspan="3" style="padding:6px 12px 0 0"><b>Total overdue</b></td><td style="padding:6px 12px 0 0;text-align:right"><b>${escH(money(g.owed))}</b></td><td></td></tr></tfoot></table>
+${p(ai.after)}<p>Kind regards,<br>${escH(from)}<br>Accounts, ${escH(company)}</p></div>`;
 }
