@@ -1,6 +1,6 @@
 /**
  * The workshop TV: the whiteboard, drawn by the board for a big screen nobody touches. Same columns as the
- * whiteboard (customer, job no., the processes, due date and notes), a blue tick when done, an orange star
+ * whiteboard (customer, job no., the processes, due date and notes), a solid blue box with a white tick when done, an orange star
  * when still to do (filled for the job's next step), the company's name when it is out for coating.
  * Pages through every 15 seconds when there are more jobs than fit. Rows come from tvRows() in core/tv.js.
  */
@@ -9,7 +9,7 @@ import { tvRows, tvColumns, tvPage } from './core/tv.js';
 import { jobMood, boardMood } from './core/mood.js';
 import { moodIcon, moodLine, cheerHtml } from './mood.js';
 
-const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5L19.5 6.5"/></svg>';
+const TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5L19.5 6.5"/></svg>';
 const STAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/></svg>';
 const HEAD = { 'Cut & Drill': 'Cut / Roll<br>Drill', 'Tap & C/Sink': 'Tap<br>C/Sink', 'P/Coat Paint': 'P/Coat<br>Paint', 'Plating / Anodising': 'Plating<br>Anodising', 'Subcontracted': 'Sub-<br>contracted' };
 export const TV_ROWS = 14;
