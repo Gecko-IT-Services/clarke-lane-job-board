@@ -138,9 +138,11 @@ function plTable(f, gbp, cls = 'lines home') {
   const F = f.figures, a = n => acct(gbp, n);
   const pair = [[F.month, F.sameMonthLastYear], [F.yearToDate, F.sameYearToDateLastYear]];
   const diff = (now, was) => now == null || was == null ? '–' : `${a(Math.round(now - was))}${was ? `<small>${sign(now - was)}${(Math.round(((now - was) / Math.abs(was)) * 1000) / 10).toFixed(1)}%</small>` : ''}`;
-  const pts = (now, was) => now == null || was == null ? '–' : `${sign(now - was)}${(now - was).toFixed(1)} pts`;
+  // Margins set out like the money (25 Oct): a negative margin, or a fall in points, in red brackets.
+  const pc = n => n == null ? '–' : n < 0 ? `<span class="neg">(${(-n).toFixed(1)}%)</span>` : n.toFixed(1) + '%';
+  const pts = (now, was) => { if (now == null || was == null) return '–'; const d = Math.round((now - was) * 10) / 10; return d < 0 ? `<span class="neg">(${(-d).toFixed(1)} pts)</span>` : `${sign(d)}${d.toFixed(1)} pts`; };
   const money = (k, strong) => pair.map(([n, w]) => `<td class="num">${strong ? '<b>' : ''}${n ? a(n[k]) : '–'}${strong ? '</b>' : ''}</td><td class="num">${w ? a(w[k]) : '–'}</td><td class="num chg">${diff(n?.[k], w?.[k])}</td>`).join('');
-  const per = k => pair.map(([n, w]) => `<td class="num">${n?.[k] != null ? n[k].toFixed(1) + '%' : '–'}</td><td class="num">${w?.[k] != null ? w[k].toFixed(1) + '%' : '–'}</td><td class="num chg">${pts(n?.[k], w?.[k])}</td>`).join('');
+  const per = k => pair.map(([n, w]) => `<td class="num">${pc(n?.[k])}</td><td class="num">${pc(w?.[k])}</td><td class="num chg">${pts(n?.[k], w?.[k])}</td>`).join('');
   const lossy = [F.month, F.yearToDate].some(x => x?.net < 0);
   return `<div class="tbl-wrap"><table class="${cls} pl"><thead>
       <tr><th></th><th class="num grp" colspan="3">${esc0(f.monthName)}${f.partial && f.to ? ` so far, to ${esc0(longDay(f.to))}` : ''}</th><th class="num grp" colspan="3">${f.financialYear?.isYearEnd ? `Full year to ${esc0(longDay(f.financialYear.yearEnd))}` : f.financialYear?.period === 1 ? 'Year to date: the first month' : `Year to date, from ${esc0(longDay(f.fyStart))}`}</th></tr>
