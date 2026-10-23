@@ -6,6 +6,7 @@ import * as auth from './auth.js';
 import * as realData from './data.js';
 import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo, looksSame, rankContacts } from './core/xero.js';
+import { cocRows, cocNeeded, COC_STATEMENT, DEFAULT_ORIGIN } from './core/coc.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
 import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partsOnJob, lineNumbers } from './core/parts.js';
@@ -167,6 +168,7 @@ async function reload() {
     if (office()) [S.tasks, S.enq, S.staff] = await Promise.all([data.loadTasks().catch(e => { S.tasksErr = e.message; return S.tasks || []; }),
       data.loadEnquiries().catch(e => { S.enqErr = e.message; return S.enq || []; }), S.staff ? S.staff : data.loadStaff().catch(() => [])]);
     if (office()) S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
+    if (office()) S.cocs = await data.loadCocs().catch(() => S.cocs || { issued: new Map(), customers: new Set() });   // certificates of conformity (23 Oct)
     if (office()) S.metal = await data.loadMetal().then(r => { S.metalErr = null; return r; }).catch(e => { S.metalErr = e.message; return S.metal || []; });
     if (office()) [S.chases, S.parts] = await Promise.all([data.loadChases().catch(() => S.chases || []), data.loadParts().catch(e => { S.partsErr = e.message; return S.parts || []; })]);
     S.error = null;
@@ -2217,7 +2219,7 @@ function renderDespatch() {
   const lists = dispatchLists(S.jobs, todayIso());
   if (S.desp && !lists.open.some(j => j.id === S.desp)) S.desp = null;
   const money = office();
-  $('v-dispatch').innerHTML = renderDispatch({ lists, office: money, md: md(), view: S.dispView, chosen: S.dispChosen, search: S.dsearch, desp: S.desp,
+  $('v-dispatch').innerHTML = renderDispatch({ lists, office: money, md: md(), view: S.dispView, chosen: S.dispChosen, search: S.dsearch, desp: S.desp, coc: money ? cocHelp : null,
     form: S.desp ? despatchForm(job(S.desp)) : '', cancelDn: S.cancelDn, xero: money && lists.toXero.length ? waitingForXero(lists.toXero) : null },
     { esc, fmt, fmtTime, gbp, dueChip, parts: dispatchParts });
 }
@@ -2789,6 +2791,23 @@ function docHtml(kind, jobId, despId) {
       ${j.lines.map(l => `<tr><td>${lineHtml(l, esc)}${l.po && l.po !== j.po ? ` <span style="color:var(--paper-mute)">(your PO ${esc(l.po)})</span>` : ''}</td><td>${fmtLong(l.due)}</td><td>${l.qty}</td><td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td></tr>`).join('')}</tbody></table>
       <div class="tot"><span>Net</span><span>${gbp(net, 2)}</span><span>VAT 20%</span><span>${gbp(vat, 2)}</span><span class="g">Total</span><span class="g">${gbp(net + vat, 2)}</span></div>
       <div class="foot">Clarke Lane Engineering Ltd. Please quote ${esc(j.so)} on any correspondence about this order.</div>`;
+  } else if (kind === 'coc') {
+    // Certificate of conformity (23 Oct): what is being typed in the form above it, else what was saved.
+    const d = j.despatches.find(x => x.id === despId), was = S.cocs?.issued?.get(despId), c = S.coc?.despId === despId ? S.coc : null;
+    const rows = cocRows(j, d, c ? c.lines : was?.lines || {}), po = dnPo(j, d);
+    const origin = (c ? c.origin : was?.origin) || DEFAULT_ORIGIN, by = (c ? c.signedBy : was?.signedBy) || '', pos = (c ? c.position : was?.position) || '';
+    const date = was?.issuedAt ? was.issuedAt.slice(0, 10) : todayIso();
+    body = head('Certificate of conformity', esc(d.dn)) + `
+      <div class="two"><div><div class="k">Customer</div><b>${esc(j.customer)}</b>${j.address ? `<div style="white-space:pre-line">${esc(j.address)}</div>` : ''}</div>
+        <div class="kv"><span class="k">Date</span><span>${fmtLong(date)}</span><span class="k">Your order</span><span>${esc(po) || '—'}</span>
+        <span class="k">Our order</span><span>${esc(j.so)}</span><span class="k">Delivery note</span><span>${esc(d.dn)}</span></div></div>
+      <table class="coc"><thead><tr><th>Part no.</th><th>Description</th><th>Qty</th><th>Material</th><th>Cert / batch no.</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="mono">${esc(r.partNo) || '—'}</td><td>${esc(r.desc)}</td><td>${r.qty}</td><td>${esc(r.material) || '—'}</td><td>${esc(r.batch) || '—'}</td></tr>`).join('')}</tbody></table>
+      <p>${esc(COC_STATEMENT)}</p>
+      <div class="kv"><span class="k">Country of origin</span><span><b>${esc(origin)}</b></span></div>
+      <p style="color:var(--paper-mute)">Clarke Lane Engineering Ltd is certified to BS EN ISO 9001:2015, certificate no. GB2005189.</p>
+      <div class="sign"><div>Signed for Clarke Lane Engineering Ltd</div><div>Name and position<b class="sv">${esc([by, pos].filter(Boolean).join(', '))}</b></div><div>Date<b class="sv">${fmtLong(date)}</b></div></div>
+      <div class="foot">Clarke Lane Engineering Ltd. Certificate of conformity for delivery note ${esc(d.dn)}, order ${esc(j.so)}.</div>`;
   } else {
     const di = j.despatches.findIndex(d => d.id === despId), d = j.despatches[di];
     const before = l => j.despatches.slice(0, di).reduce((a, x) => a + (x.lines[l.id] || 0), 0);
@@ -2854,16 +2873,17 @@ function showDoc(kind, jobId, despId) {
   const j = job(jobId); if (!j) return;
   const d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
   const p = kind === 'pf' ? (S.pfs || []).find(x => x.id === despId) : null;
-  const sentAt = kind === 'soa' ? j.ackEmailedAt : kind === 'pf' ? p?.emailedAt : d?.emailedAt;
+  const sentAt = kind === 'soa' ? j.ackEmailedAt : kind === 'pf' ? p?.emailedAt : kind === 'coc' ? S.cocs?.issued?.get(despId)?.emailedAt : d?.emailedAt;
   const canEmail = !['job', 'pfnew'].includes(kind) && (kind === 'dn' || office()) && !p?.cancelledAt;
+  const cocBtn = kind === 'dn' && office() && d && !d.cancelled ? `<button class="btn" type="button" data-coc="${despId}" data-job="${jobId}" title="A certificate of conformity for this delivery">${icon('doc')}C of C</button>` : '';
   const pfBtns = p && !p.cancelledAt ? `${p.paidOn ? `<button class="btn" type="button" data-pfmark="unpaid" data-pf="${p.id}">Not paid after all</button>`
       : `<button class="btn" type="button" data-pfmark="paid" data-pf="${p.id}">Mark paid</button><button class="btn" type="button" data-pfmark="cancel" data-pf="${p.id}">Cancel pro forma</button>`}` : '';
   $('doc').innerHTML = `<div class="docbar"><span>${kind === 'job' ? 'Print it for the job folder.' : kind === 'pfnew' ? 'Check it, then make the pro forma.' : sentAt ? `Emailed ${fmtTime(sentAt)}.` : 'Print it, or email it to the customer as a PDF.'}</span>${pfBtns}
-      ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">${icon('doc')}Front sheet</button>` : ''}
+      ${kind === 'soa' ? `<button class="btn" type="button" data-jobsheet="${jobId}">${icon('doc')}Front sheet</button>` : ''}${cocBtn}
       ${canEmail ? `<button class="btn pri" type="button" data-emaildoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}">${icon('mail')}${sentAt ? 'Email again' : 'Email to customer'}</button>` : ''}
-      ${['dn', 'soa', 'pf'].includes(kind) ? `<button class="btn" type="button" data-savedoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}" title="Save it as a PDF named ${esc(docName(kind, jobId, despId))}.pdf">${icon('doc')}Save PDF</button>` : ''}
+      ${['dn', 'soa', 'pf', 'coc'].includes(kind) ? `<button class="btn" type="button" data-savedoc="${kind}" data-job="${jobId}" data-dnid="${despId || ''}" title="Save it as a PDF named ${esc(docName(kind, jobId, despId))}.pdf">${icon('doc')}Save PDF</button>` : ''}
       <button class="btn" type="button" data-print data-name="${esc(docName(kind, jobId, despId))}">${icon('print')}Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
-    ${kind === 'job' ? sheetEditor(j) : kind === 'pfnew' ? pfEditor(j) : ''}
+    ${kind === 'job' ? sheetEditor(j) : kind === 'pfnew' ? pfEditor(j) : kind === 'coc' && S.coc?.despId === despId ? cocEditor(j, j.despatches.find(x => x.id === despId)) : ''}
     <div class="paper">${docHtml(kind, jobId, despId)}</div>`;
   $('doc').hidden = false;
   document.body.classList.add('doc-open');
@@ -2876,8 +2896,8 @@ function showDoc(kind, jobId, despId) {
 /** The file name a document is saved under (Philip, 20 Oct: they keep despatch notes, so the customer's name is in it). */
 function docName(kind, jobId, despId) {
   const j = job(jobId); if (!j) return 'Document';
-  const no = kind === 'dn' ? j.despatches.find(x => x.id === despId)?.dn : kind === 'pf' ? (S.pfs || []).find(x => x.id === despId)?.pf : kind === 'job' ? 'Front sheet' : j.so;
-  const what = { dn: 'Delivery note', soa: 'Order acknowledgement', pf: 'Pro forma' }[kind];
+  const no = kind === 'dn' || kind === 'coc' ? j.despatches.find(x => x.id === despId)?.dn : kind === 'pf' ? (S.pfs || []).find(x => x.id === despId)?.pf : kind === 'job' ? 'Front sheet' : j.so;
+  const what = { dn: 'Delivery note', soa: 'Order acknowledgement', pf: 'Pro forma', coc: 'Certificate of conformity' }[kind];
   return [j.customer, what, no, kind === 'soa' ? '' : j.so].filter(Boolean).join(' - ').replace(/[\\/:*?"<>|#%]+/g, '-');
 }
 /** Downloads the document as a PDF with that name. */
@@ -2885,6 +2905,7 @@ async function saveDoc(kind, jobId, despId) {
   const btn = document.querySelector('[data-savedoc]'), was = btn?.innerHTML; if (btn) { btn.disabled = true; btn.textContent = 'Making the PDF…'; }
   try {
     if (kind === 'dn') await ensureSignature(job(jobId)?.despatches.find(x => x.id === despId));
+    if (kind === 'coc' && !(await saveCocNow(true))) return;   // what is printed is what is kept
     const b64 = await pdfBase64(docHtml(kind, jobId, despId));
     const a = document.createElement('a'); a.href = 'data:application/pdf;base64,' + b64; a.download = docName(kind, jobId, despId) + '.pdf';
     document.body.append(a); a.click(); a.remove();
@@ -2927,6 +2948,7 @@ async function pdfBase64(html) {
   } finally { el.remove(); }
 }
 async function emailDoc(kind, jobId, despId) {
+  if (kind === 'coc') return emailCoc(jobId, despId);
   const j = job(jobId), d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
   const btn = document.querySelector('[data-emaildoc]'); if (btn) { btn.disabled = true; btn.textContent = 'Making the PDF…'; }
   try {
@@ -2959,6 +2981,68 @@ async function emailDoc(kind, jobId, despId) {
     if (btn) { btn.disabled = false; btn.textContent = 'Email to customer'; }
   }
 }
+/* ---------- certificates of conformity (Philip, 23 Oct): one per dispatch note, office only ---------- */
+const cocHelp = { needed: (j, d) => cocNeeded(j, d, S.cocs?.customers, S.cocs?.issued), issued: d => !!S.cocs?.issued?.has(d.id) };
+/** Opens the certificate for a dispatch note: the one saved, else a new one with the materials read from the lines. */
+function openCoc(jobId, despId) {
+  const j = job(jobId), d = j?.despatches.find(x => x.id === despId); if (!d) return;
+  const was = S.cocs?.issued?.get(despId);
+  let pos = ''; try { pos = localStorage.getItem('clj.cocpos') || ''; } catch { /* none kept */ }
+  S.coc = { jobId, despId, lines: Object.fromEntries(cocRows(j, d, was?.lines || {}).map(r => [r.lineId, { material: r.material, batch: r.batch }])),
+    origin: was?.origin || DEFAULT_ORIGIN, signedBy: was?.signedBy || S.me.name, position: was?.position ?? pos,
+    every: !!S.cocs?.customers?.has(normName(j.customer)), saved: !!was };
+  showDoc('coc', jobId, despId);
+}
+function cocEditor(j, d) {
+  const c = S.coc, rows = cocRows(j, d, c.lines);
+  return `<div class="sheetedit panel"><h3>Certificate of conformity for ${esc(d.dn)}</h3>
+    <p class="note">Fill in each part's material and its certificate or batch number (from the front sheet or the mill certificate). ${c.saved ? 'Saved before: press Save to keep any changes.' : 'Save keeps it with the delivery note, so it prints the same next time. Save PDF, Print and Email save it too.'}</p>
+    <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Qty</th><th style="text-align:left">Material</th><th style="text-align:left">Cert / batch no.</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td style="text-align:left">${lineHtml({ partNo: r.partNo, part: r.desc }, esc)}</td><td>${r.qty}</td>
+      <td style="text-align:left"><input type="text" data-cocm="${r.lineId}" value="${esc(r.material)}" placeholder="e.g. S275" style="width:130px;text-align:left" aria-label="Material: ${esc(r.desc)}"></td>
+      <td style="text-align:left"><input type="text" data-cocb="${r.lineId}" value="${esc(r.batch)}" placeholder="e.g. H123456" style="width:170px;text-align:left" aria-label="Certificate or batch number: ${esc(r.desc)}"></td></tr>`).join('')}</tbody></table></div>
+    <div class="row3"><label class="fl">Country of origin<input type="text" id="coc-origin" value="${esc(c.origin)}"></label>
+      <label class="fl">Signed by<input type="text" id="coc-by" value="${esc(c.signedBy)}"></label>
+      <label class="fl">Position<input type="text" id="coc-pos" value="${esc(c.position)}" placeholder="e.g. Director"></label></div>
+    <label class="b2b"><input type="checkbox" id="coc-every" ${c.every ? 'checked' : ''}> <span><b>${esc(j.customer)}</b> wants one with every delivery: Dispatch will say <b>C of C needed</b> on their notes.</span></label>
+    <div class="actions"><button class="btn pri" type="button" data-cocsave>${c.saved ? 'Save changes' : 'Save the certificate'}</button></div></div>`;
+}
+/** Keeps the certificate being filled in (and whether the customer wants one every time). quiet: before a PDF or email. */
+async function saveCocNow(quiet = false) {
+  const c = S.coc; if (!c) return true;
+  const j = job(c.jobId), key = normName(j.customer), dn = j.despatches.find(x => x.id === c.despId)?.dn;
+  try {
+    await data.saveCoc(c.despId, { lines: c.lines, origin: c.origin.trim() || DEFAULT_ORIGIN, signedBy: c.signedBy.trim(), position: c.position.trim() });
+    if (c.every !== !!S.cocs?.customers?.has(key)) await data.setCustomerCoc(key, c.every);
+    try { localStorage.setItem('clj.cocpos', c.position.trim()); } catch { /* not kept */ }
+    S.cocs = await data.loadCocs().catch(() => S.cocs); c.saved = true;
+    render();
+    if (!quiet) { toast(`Certificate saved with ${dn}.`); showDoc('coc', c.jobId, c.despId); }
+    return true;
+  } catch (e) { toast(e.message, null, true); return false; }
+}
+/** An Outlook draft with the certificate and its delivery note attached, to the customer's orders contact. Never sent by the board. */
+async function emailCoc(jobId, despId) {
+  const j = job(jobId), d = j.despatches.find(x => x.id === despId);
+  const btn = document.querySelector('[data-emaildoc]'), was = btn?.innerHTML; if (btn) { btn.disabled = true; btn.textContent = 'Making the PDFs…'; }
+  try {
+    if (!(await saveCocNow(true))) return;
+    await ensureSignature(d);
+    const coc = await pdfBase64(docHtml('coc', jobId, despId)), dn = await pdfBase64(docHtml('dn', jobId, despId));
+    const who = mainPerson(j.customer, 'orders'), to = who?.email || j.contactEmail, name = who?.email ? who.name : j.contactName;
+    const po = dnPo(j, d), ref = po ? `, your order ${esc(po)}` : '';
+    const html = `<p>${name ? `Dear ${esc(name.split(' ')[0])},` : 'Hello,'}</p><p>Please find attached our certificate of conformity for delivery note ${esc(d.dn)} (order ${esc(j.so)}${ref}), with the delivery note.</p><p>Kind regards,<br>${esc(S.me.name)}<br>Clarke Lane Engineering Ltd</p>`;
+    const link = await data.draftEmail({ to, subject: `Certificate of conformity – ${d.dn} – order ${j.so}${po ? ' / ' + po : ''}`, html,
+      fileName: `C of C ${d.dn}.pdf`, pdfBase64: coc, extra: [{ fileName: `${d.dn}.pdf`, pdfBase64: dn }] });
+    await data.markCocEmailed(despId).catch(() => {});
+    S.cocs = await data.loadCocs().catch(() => S.cocs);
+    showDoc('coc', jobId, despId);
+    toast(`Draft ready in your Outlook Drafts${to ? ` to ${to}${who?.email ? ' (orders contact, from the contact book)' : ''}` : ' (no email address on the order: add one in Outlook)'}, with the certificate and delivery note ${d.dn} attached. Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (e) {
+    toast(/Mail\.ReadWrite|consent|AADSTS65001/i.test(e.message) ? 'Emailing needs a one-off permission in Microsoft 365 (Mail.ReadWrite). Ask Gecko IT to grant it.' : e.message, null, true);
+  } finally { if (btn && document.body.contains(btn)) { btn.disabled = false; btn.innerHTML = was; } }
+}
 /** On a dispatch note: what is still to come on the order after this delivery, per part. */
 function stillToCome(j, di) {
   const upto = j.despatches.slice(0, di + 1);
@@ -2970,7 +3054,7 @@ function stillToCome(j, di) {
   if (!by.size) return '<p>This completes the order.</p>';
   return `<div><div class="k">Still to come on this order</div>${[...by.values()].map(r => `${r.qty} × ${lineHtml(r.l, esc)} (next due ${fmtLong(r.next)})`).join('<br>')}</div>`;
 }
-function closeDoc() { S.poForm = null; $('doc').hidden = true; document.body.classList.remove('doc-open', 'viewing'); if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; } }
+function closeDoc() { S.poForm = null; S.coc = null; $('doc').hidden = true; document.body.classList.remove('doc-open', 'viewing'); if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; } }
 
 /* ---------- render + events ---------- */
 let keepInputs = true;
@@ -3286,10 +3370,13 @@ function onClick(e) {
   if ('despclose' in d) { S.desp = null; keepInputs = false; return render(); }
   if (d.desp) { S.desp = +d.desp; S.open = null; keepInputs = false; S.tab = 'dispatch'; render(); return showDespForm(); }
   if ('print' in d) {   // the browser's "Save as PDF" takes the page title as the file name
+    if (S.coc && !$('doc').hidden) saveCocNow(true);   // a certificate printed is a certificate kept
     const was = document.title; if (d.name) document.title = d.name;
     window.addEventListener('afterprint', () => { document.title = was; }, { once: true });
     return window.print();
   }
+  if (d.coc) return openCoc(+d.job, +d.coc);
+  if ('cocsave' in d) return saveCocNow();
   if (d.savedoc) return saveDoc(d.savedoc, +d.job, d.dnid ? +d.dnid : null);
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);
   if (d.undeliver) {   // a delivery marked on the phone: undoing it removes the signature, so ask first
@@ -3317,6 +3404,13 @@ document.addEventListener('input', e => {
     const j = job(S.pfDraft.jobId), l = j?.lines.find(x => x.id === +e.target.dataset.pq);
     S.pfDraft.qty[+e.target.dataset.pq] = Math.max(0, Math.min(l?.qty ?? 0, Math.floor(Number(e.target.value) || 0)));
     document.querySelector('#doc .paper').innerHTML = docHtml('pfnew', S.pfDraft.jobId);
+    return;
+  }
+  if (S.coc && (e.target.dataset.cocm || e.target.dataset.cocb || ['coc-origin', 'coc-by', 'coc-pos'].includes(e.target.id))) {
+    const t = e.target, c = S.coc, id = t.dataset.cocm || t.dataset.cocb;
+    if (id) c.lines[id] = { ...(c.lines[id] || {}), [t.dataset.cocm ? 'material' : 'batch']: t.value };
+    else c[{ 'coc-origin': 'origin', 'coc-by': 'signedBy', 'coc-pos': 'position' }[t.id]] = t.value;
+    document.querySelector('#doc .paper').innerHTML = docHtml('coc', c.jobId, c.despId);
     return;
   }
   if (e.target.dataset.sq && S.sheet) {   // front sheet quantities: redraw the sheet, keep the box being typed in
@@ -3379,6 +3473,7 @@ document.addEventListener('change', e => {
   }
   if (e.target.id === 'po-copy' && S.poForm && e.target.value) { collectPo(); copyPo(+e.target.value); return; }
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
+  if (e.target.id === 'coc-every' && S.coc) { S.coc.every = e.target.checked; return; }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.dataset.taskdone) return toggleTask(+e.target.dataset.taskdone, e.target.checked);

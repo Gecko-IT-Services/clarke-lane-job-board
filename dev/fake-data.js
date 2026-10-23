@@ -142,6 +142,13 @@ export const xero = async (route, body) => {
   if (route === 'invoices') return { invoices: body.ids.map(id => ({ id, number: 'INV-0001', status: 'DRAFT' })) };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
 };
+// Certificates of conformity: in memory. DN-0001 has one; Fourth Example wants one with every delivery.
+const cocs = new Map([[1, { lines: { 11: { material: 'S275', batch: 'H123456' } }, origin: 'United Kingdom', signedBy: 'Levi', position: 'Director', issuedAt: '2026-10-14T15:00:00Z', issuedBy: 'levi@clarke-lane.co.uk', emailedAt: null }]]);
+const cocCustomers = new Set(['fourthexample']);
+export const loadCocs = async () => ({ issued: new Map(cocs), customers: new Set(cocCustomers) });
+export const saveCoc = async (id, c) => { cocs.set(id, { ...c, issuedAt: new Date().toISOString(), issuedBy: 'you', emailedAt: cocs.get(id)?.emailedAt || null }); };
+export const markCocEmailed = async id => { const c = cocs.get(id); if (c) c.emailedAt = new Date().toISOString(); };
+export const setCustomerCoc = async (k, on) => { if (on) cocCustomers.add(k); else cocCustomers.delete(k); };
 let cmap = new Map();
 export const loadContactMap = async () => new Map(cmap);
 export const saveContact = async (k, c) => { cmap.set(k, c); };

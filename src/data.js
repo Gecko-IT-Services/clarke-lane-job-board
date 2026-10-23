@@ -194,15 +194,44 @@ export async function markAckEmailed(jobId) {
  * the person checks it in Outlook and presses Send. Returns Outlook's link to the draft.
  */
 /** to and cc: one address, or several separated by commas or semicolons. */
-export async function draftEmail({ to, cc, subject, html, fileName, pdfBase64 }) {
+/** extra: more PDFs to attach, [{ fileName, pdfBase64 }] (a certificate of conformity goes with its delivery note). */
+export async function draftEmail({ to, cc, subject, html, fileName, pdfBase64, extra = [] }) {
   const list = t => emailList(t).ok.map(address => ({ emailAddress: { address } }));
   const msg = await graph('/me/messages', { method: 'POST', scopes: CONFIG.MAIL_SCOPES, body: {
     subject, body: { contentType: 'HTML', content: html },
     toRecipients: list(to),
     ccRecipients: list(cc),
-    attachments: pdfBase64 ? [{ '@odata.type': '#microsoft.graph.fileAttachment', name: fileName, contentType: 'application/pdf', contentBytes: pdfBase64 }] : [],
+    attachments: [...(pdfBase64 ? [{ fileName, pdfBase64 }] : []), ...extra].map(a => ({ '@odata.type': '#microsoft.graph.fileAttachment', name: a.fileName, contentType: 'application/pdf', contentBytes: a.pdfBase64 })),
   } });
   return msg.webLink;
+}
+
+/* ---------- certificates of conformity (23 Oct): one per dispatch note, office only ---------- */
+/** { issued: Map(despatchId → { lines, origin, signedBy, position, issuedAt, issuedBy, emailedAt }), customers: Set(customer_key) }.
+ *  Before the migration the tables are missing: none issued, nobody marked. */
+export async function loadCocs() {
+  const sb = await getSupabase();
+  const [c, k] = await Promise.all([sb.from('despatch_cocs').select('*'), sb.from('customer_cocs').select('customer_key')]);
+  return { issued: new Map((c.error ? [] : c.data).map(r => [r.despatch_id, { lines: r.lines || {}, origin: r.origin, signedBy: r.signed_by,
+      position: r.position, issuedAt: r.issued_at, issuedBy: r.issued_by, emailedAt: r.emailed_at }])),
+    customers: new Set((k.error ? [] : k.data).map(r => r.customer_key)) };
+}
+export async function saveCoc(despatchId, { lines, origin, signedBy, position }) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('despatch_cocs').upsert({ despatch_id: despatchId, lines, origin, signed_by: signedBy, position, issued_at: new Date().toISOString() });
+  if (error) fail('The certificate was not saved', error);
+}
+export async function markCocEmailed(despatchId) {
+  const sb = await getSupabase();
+  const { error } = await sb.from('despatch_cocs').update({ emailed_at: new Date().toISOString() }).eq('despatch_id', despatchId);
+  if (error) fail('Not saved', error);
+}
+/** on: this customer wants a certificate with every delivery. */
+export async function setCustomerCoc(customerKey, on) {
+  const sb = await getSupabase();
+  const { error } = on ? await sb.from('customer_cocs').upsert({ customer_key: customerKey })
+    : await sb.from('customer_cocs').delete().eq('customer_key', customerKey);
+  if (error) fail('Not saved', error);
 }
 
 export async function markInvoiced(despatchId, invoiceNo) {

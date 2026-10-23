@@ -11,7 +11,7 @@ import { dispatchPo } from './core/xero.js';
 const notes = n => `${n} note${n === 1 ? '' : 's'}`;
 const noteMatch = ({ job: j, d }, q) => [d.dn, j.so, j.po, j.customer, ...j.lines.map(l => l.po)].some(v => (v || '').toLowerCase().includes(q));
 
-export function renderDispatch({ lists: s, office, md = false, view, chosen, search, desp, form, cancelDn, xero }, h) {
+export function renderDispatch({ lists: s, office, md = false, view, chosen, search, desp, form, cancelDn, xero, coc = null }, h) {
   const { esc, fmt, gbp, dueChip, parts, fmtTime } = h;
   const cards = [
     card('ok', 'ready', s.ready.length, 'Ready to dispatch', s.ready.length > 0),
@@ -37,6 +37,9 @@ export function renderDispatch({ lists: s, office, md = false, view, chosen, sea
   const who = (j, d) => { const po = d ? dispatchPo(j.po, j.lines.filter(l => (d.lines[l.id] || 0) > 0).map(l => l.po)) : j.po;
     return `<b>${esc(j.customer)}</b><span class="ref mono">${esc(j.so)} · ${po ? esc(po) : 'no PO'}</span>`; };
   const emailed = d => d.emailedAt ? chip(`Emailed ${fmt(d.emailedAt.slice(0, 10))}`, 'ok') : chip('Not emailed', 'soon');
+  // Certificates of conformity (office, 23 Oct): a button on every note, and a flag when the customer or the order wants one.
+  const cocBtn = (j, d) => !coc || d.cancelled ? '' : ` <button class="btn sm" type="button" data-coc="${d.id}" data-job="${j.id}" title="Certificate of conformity for ${esc(d.dn)}">${coc.issued(d) ? 'C of C ✓' : 'C of C'}</button>`;
+  const cocChip = (j, d) => coc?.needed(j, d) ? ' ' + chip('C of C needed', 'soon') : '';
   const viewBtn = (j, d, label = 'View', pri = false) => `<button class="btn sm${pri ? ' pri' : ''}" type="button" data-dn="${d.id}" data-job="${j.id}">${label}</button>`;
   const deliver = (d, pri) => `<form class="inv" data-deliver="${d.id}"><input type="text" id="rcv-${d.id}" placeholder="Signed by (optional)" aria-label="Who signed for ${esc(d.dn)}"><button class="btn sm${pri ? ' pri' : ''}" type="submit">Mark delivered</button></form>`;
   const progress = d => d.cancelled ? chip(`Cancelled ${fmt(d.cancelled.at.slice(0, 10))}${d.cancelled.by ? ' by ' + esc(d.cancelled.by) : ''}`)
@@ -55,12 +58,12 @@ export function renderDispatch({ lists: s, office, md = false, view, chosen, sea
   const ROW = {
     ready: j => `<tr><td>${who(j)}</td><td>${dueChip(nextDue(j))}${deliveryLabel(j) ? ` <span class="note">${deliveryLabel(j)}</span>` : ''}</td>
       <td>${parts(j)}</td><td class="act"><button class="btn sm pri" type="button" data-desp="${j.id}">Dispatch</button></td></tr>`,
-    out: ({ job: j, d }) => `<tr><td class="mono">${esc(d.dn)}</td><td>${who(j, d)}</td><td class="wide">${fmt(d.date)}</td><td class="wide">${emailed(d)}</td>
-      <td class="act"><div class="next">${d.emailedAt ? deliver(d, true) + viewBtn(j, d) : viewBtn(j, d, 'Email note…', true) + deliver(d, false)}</div></td></tr>`,
+    out: ({ job: j, d }) => `<tr><td class="mono">${esc(d.dn)}</td><td>${who(j, d)}</td><td class="wide">${fmt(d.date)}</td><td class="wide">${emailed(d)}${cocChip(j, d)}</td>
+      <td class="act"><div class="next">${d.emailedAt ? deliver(d, true) + viewBtn(j, d) : viewBtn(j, d, 'Email note…', true) + deliver(d, false)}${cocBtn(j, d)}</div></td></tr>`,
     all: ({ job: j, d }) => d.cancelled
       ? `<tr class="muted"><td class="mono"><s>${esc(d.dn)}</s></td><td>${who(j, d)}</td><td class="wide">${fmt(d.date)}</td><td>${progress(d)}</td><td class="act"></td></tr>`
-      : `<tr><td class="mono">${esc(d.dn)}</td><td>${who(j, d)}</td><td class="wide">${fmt(d.date)}</td><td>${progress(d)}</td>
-        <td class="act">${viewBtn(j, d)}${office && !d.xero ? ` <button class="btn link sm" type="button" data-cancdn="${d.id}">Cancel</button>` : ''}</td></tr>${cancelRow(j, d)}`,
+      : `<tr><td class="mono">${esc(d.dn)}</td><td>${who(j, d)}</td><td class="wide">${fmt(d.date)}</td><td>${progress(d)}${cocChip(j, d)}</td>
+        <td class="act">${viewBtn(j, d)}${cocBtn(j, d)}${office && !d.xero ? ` <button class="btn link sm" type="button" data-cancdn="${d.id}">Cancel</button>` : ''}</td></tr>${cancelRow(j, d)}`,
   };
   const table = !list.length ? `<div class="tbl-wrap"><p class="allclear${!q && V.ok ? ' ok' : ''}">${q ? 'No notes match that search.' : V.empty}</p></div>`
     : v === 'xero' ? `<div class="tbl-wrap">${xero.table}</div>${xero.how}`
