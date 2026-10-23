@@ -40,8 +40,19 @@ and the AI is told to mention it only when wages look odd.
   Xero tab once** so the connection gets them; until then the pack says so.
 - `src/core/pack.js` reads the reports without relying on exact headings (Trading Income or Turnover, Operating
   Expenses or Administrative Costs; Xero's own Gross and Net Profit rows when present). Tests: `tests/pack.mjs`.
-- AI: sales-ai kind `monthpack` (accounts only), logged with its cost like every other; the function keeps the
-  result in `month_packs` (read by accounts only; written only by the function).
+- AI: sales-ai kind `monthpack` (accounts only). The function keeps the result and its cost in `month_packs` (read
+  by accounts only; written only by the function). It is **not** written to the shared AI log (`sales_emails`),
+  so no other login can see even that a pack was written.
+
+## Keith only: every layer
+
+| Layer | Who |
+| --- | --- |
+| The Accounts page (Checks and Monthly pack) | accounts login only; anyone else typing `#accounts` lands on their own Home |
+| Xero `pack` and `purchases` routes | accounts only (403 for everyone else) |
+| AI kind `monthpack` | accounts only |
+| `month_packs` table (analysis, figures, cost) | read: accounts only; write: the AI function only |
+| `xero_cache` (where Xero's answers are kept) | no login can read it; only the Xero function |
 
 ## Check
 

@@ -244,7 +244,8 @@ Deno.serve(async req => {
     try { email = JSON.parse(out && out.type === 'text' ? out.text : ''); } catch { throw new HttpError(502, 'The AI\'s answer could not be read. Try again.'); }
     const inT = res.usage.input_tokens + (res.usage.cache_read_input_tokens || 0), outT = res.usage.output_tokens;
     const cost = Math.round((inT * PRICE_IN + outT * PRICE_OUT) / 1e6 * 10000) / 10000;
-    await admin.from('sales_emails').insert({ customer, kind: body?.news ? 'news' : kind, ai: true, model: res.model, input_tokens: inT, output_tokens: outT, cost_usd: cost, created_by: me.email });
+    // The monthly pack is Keith's alone (23 Oct): its cost is kept on his own record below, not in the shared AI log.
+    if (kind !== 'monthpack') await admin.from('sales_emails').insert({ customer, kind: body?.news ? 'news' : kind, ai: true, model: res.model, input_tokens: inT, output_tokens: outT, cost_usd: cost, created_by: me.email });
     // The monthly pack is kept, so it reads the same next time and is not paid for twice (only this function writes it).
     if (kind === 'monthpack' && /^\d{4}-\d{2}$/.test(String(facts.month || ''))) {
       const { error } = await admin.from('month_packs').upsert({ month: facts.month, facts, analysis: email, model: res.model, cost_usd: cost, made_at: new Date().toISOString(), made_by: me.email });
@@ -256,7 +257,7 @@ Deno.serve(async req => {
     const msg = e instanceof Anthropic.RateLimitError ? 'The AI is busy. Try again in a minute.'
       : e instanceof Anthropic.AuthenticationError ? 'The AI key in Supabase was not accepted. Ask Gecko IT to check ANTHROPIC_API_KEY.'
       : (e as Error).message;
-    if (me && customer && (KINDS[kind] || kind === 'research') && !(e instanceof HttpError && [400, 403, 413, 429, 503].includes(e.status))) await admin.from('sales_emails').insert({ customer, kind, ai: true, model: MODEL, ok: false, error: msg.slice(0, 500), created_by: me.email });
+    if (me && customer && kind !== 'monthpack' && (KINDS[kind] || kind === 'research') && !(e instanceof HttpError && [400, 403, 413, 429, 503].includes(e.status))) await admin.from('sales_emails').insert({ customer, kind, ai: true, model: MODEL, ok: false, error: msg.slice(0, 500), created_by: me.email });
     return cors(req, json({ error: msg }, status));
   }
 });
