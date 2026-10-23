@@ -39,7 +39,7 @@ import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob,
 import { CONFIG } from './config.js';
 import { searchAll } from './core/search.js';
 import { newDispatches } from './core/mood.js';
-import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
+import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf, quoteTurnaround } from './core/crm.js';
 import { linkEmail, emailActions, sortEmails, emailTaskTitle, needTopic, cleanTopic, ASKED } from './core/inbox.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue, priceReview, spendChanges, PRICE_REVIEWED } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
@@ -1253,7 +1253,7 @@ function enquiriesHtml() {
     const x = { ...e, jobSo: e.jobId != null ? S.jobs.find(j => j.id === e.jobId)?.so || '' : '', quoteNo: e.quoteSpId != null ? (S.salesQ || []).find(q => q.spId === e.quoteSpId)?.quoteNo || '' : '' };
     return { ...x, actions: emailActions(x, { md: md() }) };
   });
-  return renderEnquiries({ list: [...list.filter(e => e.kind !== 'customer'), ...sortEmails(list.filter(e => e.kind === 'customer'))], funnel: enquiryFunnel(S.enq || [], todayIso()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
+  return renderEnquiries({ list: [...list.filter(e => e.kind !== 'customer'), ...sortEmails(list.filter(e => e.kind === 'customer'))], funnel: enquiryFunnel(S.enq || [], todayIso()), turnaround: quoteTurnaround(S.enq || [], S.salesQ || [], new Date().toISOString()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
     open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply, checkedAt: S.enqCheckedAt, settings: S.enqSettings, packBusy: S.packBusy }, { esc, fmt, fmtTime });
 }
 /** The AI reply to an enquiry; questions (from the quote pack's Ask these questions) are what the reply must ask. */
@@ -1309,7 +1309,7 @@ let digestWait = null;
 const digestHidden = day => { if (S.digestHidden === day) return true; try { return localStorage.getItem('clj.digest.' + day) === 'hidden'; } catch { return false; } };
 function digestPicksNow() {
   const today = todayIso(), m = S.salesQ && S.salesF ? salesModel() : null, rm = reorderModel();
-  return digestPicks({ role: md() ? 'md' : 'office', enquiries: S.enq || [], soOf: id => S.jobs.find(j => j.id === id)?.so || '', chase: m ? m.chase : [], reorders: rm ? rm.round.filter(r => r.state === 'due') : [],
+  return digestPicks({ role: md() ? 'md' : 'office', enquiries: S.enq || [], noQuote: quoteTurnaround(S.enq || [], S.salesQ || [], new Date().toISOString()).waiting, soOf: id => S.jobs.find(j => j.id === id)?.so || '', chase: m ? m.chase : [], reorders: rm ? rm.round.filter(r => r.state === 'due') : [],
     late: dashboard(S.jobs.filter(j => !j.preview), today).late, tasks: (S.tasks || []).filter(t => t.assignedTo === S.me.email), today, now: new Date().toISOString(),
     jobValue: md() ? j => value(j, { remaining: true }) : null });   // money for Levi only
 }

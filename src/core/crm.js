@@ -167,3 +167,36 @@ export function morning({ enquiries = [], tasks, chase = [], reorders = [], quie
   return { enquiries: enquiries.filter(e => e.kind === 'enquiry' && e.status === 'new').length, overdueTasks: tasks.overdue.length, todayTasks: tasks.today.length,
     chase: chase.length, reorders: reorders.length, quiet: quiet.length, won, noDrawing: noDrawing.length, noContact: noContact.length };
 }
+
+/**
+ * Quote turnaround (25 Oct): how long from an enquiry landing to the quote going out. In jobbing work the first
+ * decent quote back usually wins, so this is worth watching. The quote is the one the enquiry is linked to, else the
+ * moment it was marked Quoted, else the first quote in the calculator for that customer in the 60 days after it
+ * (a date only, so taken as 5pm that day). Over the last `days`: how many were quoted, the middle time, how many
+ * within a day, within two days and over a week; and the enquiries still without a quote after 48 hours (answered
+ * or not), longest waiting first, for the nudge on Home.
+ */
+export function quoteTurnaround(enquiries, quotes, now, { days = 90 } = {}) {
+  const t = Date.parse(now), from = t - days * 864e5, fivePm = d => Date.parse(String(d).slice(0, 10) + 'T17:00:00Z');
+  const byId = new Map((quotes || []).map(q => [q.spId, q])), byCust = new Map();
+  for (const q of quotes || []) { if (!q.quoteDate) continue; const k = normName(q.customer), l = byCust.get(k) || []; l.push(q); byCust.set(k, l); }
+  const quotedAt = e => {
+    const r = Date.parse(e.receivedAt), linked = e.quoteSpId != null ? byId.get(e.quoteSpId) : null;
+    if (linked?.quoteDate && fivePm(linked.quoteDate) >= r - 864e5) return { at: Math.max(r, fivePm(linked.quoteDate)), how: 'linked', quoteNo: linked.quoteNo || '' };
+    if (e.status === 'quoted' && e.handledAt) return { at: Date.parse(e.handledAt), how: 'marked', quoteNo: '' };
+    const own = e.customerKey ? (byCust.get(e.customerKey) || []).filter(q => fivePm(q.quoteDate) >= r - 864e5 && fivePm(q.quoteDate) <= r + 60 * 864e5).sort((a, b) => a.quoteDate.localeCompare(b.quoteDate))[0] : null;
+    return own ? { at: Math.max(r, fivePm(own.quoteDate)), how: 'matched', quoteNo: own.quoteNo || '' } : null;
+  };
+  const quoted = [], waiting = [];
+  for (const e of (enquiries || []).filter(e => e.kind === 'enquiry' && e.status !== 'ignored' && Date.parse(e.receivedAt) >= from)) {
+    const who = e.company || e.fromName || e.fromEmail || 'someone', q = quotedAt(e);
+    if (q) quoted.push({ id: e.id, who, hours: Math.round((q.at - Date.parse(e.receivedAt)) / 36e5), how: q.how, quoteNo: q.quoteNo });
+    else if (e.status === 'new' || e.status === 'replied') {
+      const h = Math.round((t - Date.parse(e.receivedAt)) / 36e5);
+      if (h > 48) waiting.push({ id: e.id, who, hours: h, replied: e.status === 'replied', wants: e.wants || e.subject || '' });
+    }
+  }
+  waiting.sort((a, b) => b.hours - a.hours);
+  const hs = quoted.map(q => q.hours);
+  return { days, quoted: quoted.length, medianHours: median(hs), within24: hs.filter(h => h <= 24).length, within48: hs.filter(h => h <= 48).length, overWeek: hs.filter(h => h > 168).length, waiting, list: quoted };
+}
