@@ -84,3 +84,25 @@ assert.equal(emailCustomer(idx2, 'jo@sampleworks.example', '', names), 'samplewo
 assert.equal(emailCustomer(idx2, 'kim@gmail.com', 'Example Racers Limited', names), 'exampleracers', 'by the company name the AI read');
 assert.equal(emailCustomer(idx2, 'kim@gmail.com', 'Nobody Ltd', names), '');
 console.log('crm sorting: ok');
+
+// Quote turnaround (25 Oct): enquiry in to quote out.
+{
+  const { quoteTurnaround } = await import('../src/core/crm.js');
+  const at = '2026-10-21T12:00:00Z', h = n => new Date(Date.parse(at) - n * 36e5).toISOString();
+  const quotes = [{ spId: 1, quoteNo: 'Q-1', customer: 'Alpha Ltd', quoteDate: '2026-10-20' }, { spId: 2, quoteNo: 'Q-2', customer: 'Beta Ltd', quoteDate: '2026-10-15' }, { spId: 3, quoteNo: 'Q-3', customer: 'Beta Ltd', quoteDate: '2026-09-01' }];
+  const enq = [
+    { id: 1, kind: 'enquiry', status: 'won', receivedAt: h(40), company: 'Alpha Ltd', quoteSpId: 1 },                                   // linked: received 19 Oct 20:00, quote dated 20 Oct (5pm) → 21 hours
+    { id: 2, kind: 'enquiry', status: 'quoted', receivedAt: h(100), handledAt: h(70), company: 'Gamma Ltd' },                           // marked Quoted 30 hours later
+    { id: 3, kind: 'enquiry', status: 'replied', receivedAt: '2026-10-13T09:00:00Z', company: 'Beta Ltd', customerKey: 'beta' },        // matched to Q-2 (15 Oct 5pm, 56 hours), not the old Q-3
+    { id: 4, kind: 'enquiry', status: 'replied', receivedAt: h(80), company: 'Delta Ltd' },                                             // answered, no quote after 80 hours
+    { id: 5, kind: 'enquiry', status: 'new', receivedAt: h(50), company: 'Epsilon Ltd' },                                               // not even answered, 50 hours
+    { id: 6, kind: 'enquiry', status: 'new', receivedAt: h(10), company: 'Fresh Ltd' },                                                 // 10 hours: too soon to worry
+    { id: 7, kind: 'enquiry', status: 'ignored', receivedAt: h(300), company: 'Spam' }, { id: 8, kind: 'customer', status: 'new', receivedAt: h(300) },
+    { id: 9, kind: 'enquiry', status: 'quoted', receivedAt: h(24 * 100), handledAt: h(24 * 99), company: 'Old Ltd' }];                // over 90 days ago: out of the window
+  const tr = quoteTurnaround(enq, quotes, at);
+  assert.deepEqual(tr.list.map(q => [q.id, q.hours, q.how, q.quoteNo]), [[1, 21, 'linked', 'Q-1'], [2, 30, 'marked', ''], [3, 56, 'matched', 'Q-2']]);
+  assert.deepEqual([tr.quoted, tr.medianHours, tr.within24, tr.within48, tr.overWeek], [3, 30, 1, 2, 0]);
+  assert.deepEqual(tr.waiting.map(w => [w.id, w.hours, w.replied]), [[4, 80, true], [5, 50, false]], 'past 48 hours with no quote, longest first');
+  assert.equal(quoteTurnaround([], [], at).medianHours, null);
+  console.log('crm turnaround: ok');
+}

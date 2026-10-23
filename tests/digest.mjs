@@ -93,3 +93,14 @@ assert.equal(noMoney('a £2,400.50 order, 300 pounds, GBP 40, £2k, 12 brackets'
 assert.deepEqual(digestPicks({ ...all, role: 'office', enquiries: [...enquiries, emails[3], emails[4]] }).map(p => [p.kind, p.id]), office.map(p => [p.kind, p.id]));
 
 console.log('digest: ok');
+
+// No quote after 48 hours (25 Oct): a pick of its own, after the customers' emails and the unanswered enquiries.
+{
+  const noQuote = [{ id: 4, who: 'Done Example Ltd', hours: 90, replied: true, wants: 'a guard' }];
+  const p = digestPicks({ role: 'office', enquiries: [], noQuote, today, now });
+  assert.deepEqual(p.map(x => [x.kind, x.id, x.title]), [['noquote', '4', 'Quote for Done Example Ltd']]);
+  assert.equal(fallbackLine(p[0]), 'Asked 3 days ago and answered, but no quote has gone out yet: a guard.');
+  assert.ok(p[0].open.attrs.includes('data-goenqid="4"'));
+  assert.ok(KIND_ORDER.indexOf('noquote') > KIND_ORDER.indexOf('question') && KIND_ORDER.indexOf('noquote') < KIND_ORDER.indexOf('task'), 'after the customers\' emails, before overdue tasks');
+  console.log('digest no quote: ok');
+}

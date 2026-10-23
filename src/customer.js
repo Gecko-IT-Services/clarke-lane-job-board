@@ -65,7 +65,7 @@ export function taskForm(f, { staff, customers }, h) {
  * the last 90 days as four figures, the new enquiries first with how long they have waited, customers writing about
  * their orders as their own short list, and the mailbox setting tucked away.
  */
-export function renderEnquiries({ list, funnel, state, mailbox, open, busy, reply, checkedAt, settings, packBusy = null }, h) {
+export function renderEnquiries({ list, funnel, turnaround = null, state, mailbox, open, busy, reply, checkedAt, settings, packBusy = null }, h) {
   const { esc, fmt, fmtTime } = h;
   const st = { new: '<span class="chip late">Not answered</span>', replied: '<span class="chip soon">Replied</span>', quoted: '<span class="chip soon">Quoted</span>', won: '<span class="chip ok">Won</span>',
     lost: '<span class="chip">Lost</span>', ignored: '<span class="chip">Not an enquiry</span>' };   // 'ignored' is Done for a customer's email
@@ -105,6 +105,11 @@ export function renderEnquiries({ list, funnel, state, mailbox, open, busy, repl
         <label class="sinline">Mark as <select data-enqstatus="${e.id}"><option value="">…</option>${['replied', 'quoted', 'won', 'lost', 'ignored', 'new'].map(s => `<option value="${s}">${{ replied: 'Replied', quoted: 'Quoted', won: 'Won', lost: 'Lost', ignored: 'Not an enquiry', new: 'Not answered' }[s]}</option>`).join('')}</select></label></div></td></tr>` : ''}`;
   const f = funnel, stat = (n, label, cls = '') => `<div class="estat${cls}"><b>${n}</b><span>${label}</span></div>`;
   const stats = `<div class="estats">${stat(f.waiting, 'waiting for a reply', f.waiting ? ' hot' : '')}${stat(f.received, 'enquiries, last 90 days')}${stat(f.answered, 'answered')}${stat(f.quoted, 'quoted')}${stat(f.won, 'won', f.won ? ' good' : '')}</div>`;
+  // Quote turnaround (25 Oct): the first decent quote back usually wins, so how fast are we, and who is still waiting?
+  const hrs = n => n == null ? '—' : n < 48 ? `${Math.round(n)} hours` : `${Math.round((n / 24) * 10) / 10} days`;
+  const tr = turnaround, turnBox = !tr ? '' : `<div class="eturn"><p><b>Quote turnaround.</b> ${tr.quoted ? `Over the last ${tr.days} days, half the quotes went out within <b>${hrs(tr.medianHours)}</b> of the enquiry arriving: ${tr.within24} of ${tr.quoted} within a day, ${tr.within48} within two days${tr.overWeek ? `, and <b>${tr.overWeek}</b> took over a week` : ''}. The first decent quote back usually wins.`
+      : `Nothing to measure in the last ${tr.days} days yet. Mark an enquiry <b>Quoted</b> when its quote goes out (or link it to the quote) and the time from enquiry to quote shows here.`}</p>
+    ${tr.waiting.length ? `<p><span class="chip late">${tr.waiting.length} past 48 hours with no quote</span> ${tr.waiting.slice(0, 6).map(w => `<button class="btn sm link" type="button" data-tab="customers" data-goenq data-goenqid="${w.id}">${esc(w.who)}: ${hrs(w.hours)}${w.replied ? ', answered' : ', not answered'}</button>`).join(' ')}</p>` : ''}</div>`;
   const checked = state === 'reading' ? 'Checking the mailbox…' : checkedAt ? `Checked ${esc(fmtTime(checkedAt))}` : '';
   const enqBox = enq.length ? `<div class="tbl-wrap"><table class="lines elist"><thead><tr><th>Waiting</th><th>Who</th><th>What they want</th><th></th></tr></thead><tbody>${enq.slice(0, 40).map(row).join('')}</tbody></table></div>`
     : state === 'ok' ? `<div class="eempty">${icon('mail')}<div><b>No enquiries waiting</b><span>New emails asking for a price or a quote appear here, read and sorted by AI, with how long each has waited.</span></div></div>`
@@ -128,7 +133,7 @@ export function renderEnquiries({ list, funnel, state, mailbox, open, busy, repl
     <div class="ehead"><div><h3>${icon('mail')}Enquiries</h3><span class="note">from <b>${esc(mailbox)}</b>, read and sorted by AI${checked ? ' · ' + checked : ''}</span></div>
       <div class="eact"><button class="btn sm" type="button" data-enqsync>${icon('refresh')}Check now</button><button class="btn sm link" type="button" data-enqsettings aria-expanded="${!!settings}">Mailbox</button></div></div>
     ${settings ? `<div class="eset"><label class="fl">Mailbox to read<input type="email" id="enq-mailbox" value="${esc(mailbox)}"></label><button class="btn sm pri" type="button" data-enqmailbox>Save</button><span class="note">Read every 15 minutes while the board is open.</span></div>` : ''}
-    ${head}${state === 'ok' || f.received ? stats : ''}
+    ${head}${state === 'ok' || f.received ? stats + turnBox : ''}
     ${enqBox}${custBox}</section>`;
 }
 

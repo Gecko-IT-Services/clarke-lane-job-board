@@ -12,7 +12,7 @@ const dayNo = s => Math.round(Date.parse(String(s).slice(0, 10) + 'T12:00:00Z') 
 export const noMoney = s => String(s || '').replace(/(?:£|GBP\s?)\s?\d+(?:,\d{3})*(?:\.\d+)?(?:\s?k\b)?|\b\d+(?:,\d{3})*(?:\.\d+)?\s?(?:pounds|GBP)\b/gi, '[price]');
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 // Customers' emails (kind 'email', from core/inbox.js's topics) rank by topic, so each topic is its own place in the order.
-export const KIND_ORDER = ['complaint', 'po', 'enquiry', 'question', 'task', 'quote', 'late', 'reorder'];
+export const KIND_ORDER = ['complaint', 'po', 'enquiry', 'question', 'noquote', 'task', 'quote', 'late', 'reorder'];   // noquote (25 Oct): answered, but no quote after 48 hours
 
 /**
  * Up to three picks: [{ kind, id, title, facts, open: { attrs } }]. open.attrs is the data-attribute string that
@@ -21,13 +21,14 @@ export const KIND_ORDER = ['complaint', 'po', 'enquiry', 'question', 'task', 'qu
  *   enquiries: enquiry rows ({ id, kind, status, receivedAt, company, fromName, wants, subject, hasDrawings, customerKey }); a
  *              customer's email (kind 'customer', still new) with topic complaint, po or quote_question is a pick of kind 'email'
  *   soOf:      an order's SO from its id (for an email linked to an order), optional
+ *   noQuote:   quoteTurnaround().waiting: enquiries past 48 hours with no quote out ({ id, who, hours, replied, wants })
  *   chase:     chaseList() quotes (due follow-ups first, then by likely value)
  *   reorders:  the reorder round's rows still to ask (state 'due')
  *   late:      dashboard().late ({ job, days }, latest first)
  *   tasks:     my open tasks ({ id, title, customer, dueOn, doneAt })
  *   jobValue:  Levi only: an order's value still to send, for the late pick's facts
  */
-export function digestPicks({ role = 'office', enquiries = [], chase = [], reorders = [], late = [], tasks = [], today, now = null, jobValue = null, soOf = null }) {
+export function digestPicks({ role = 'office', enquiries = [], noQuote = [], chase = [], reorders = [], late = [], tasks = [], today, now = null, jobValue = null, soOf = null }) {
   const md = role === 'md', t = now ? Date.parse(now) : Date.parse(today + 'T12:00:00Z');
   const hours = e => Math.max(0, Math.round((t - Date.parse(e.receivedAt)) / 36e5));
   const email = topic => (enquiries || []).filter(e => e.kind === 'customer' && e.status === 'new' && e.topic === topic).sort((a, b) => String(a.receivedAt).localeCompare(String(b.receivedAt)))
@@ -42,6 +43,8 @@ export function digestPicks({ role = 'office', enquiries = [], chase = [], reord
       .map(e => { const who = e.company || e.fromName || e.fromEmail || 'someone', days = Math.floor(hours(e) / 24);
         return { kind: 'enquiry', id: String(e.id), title: `Reply to ${who}`, open: { attrs: `data-tab="customers" data-goenq data-goenqid="${e.id}"` },
           facts: { from: who, wants: e.wants || e.subject || '', waitingDays: days, hasDrawings: !!e.hasDrawings, newCustomer: !e.customerKey } }; }),
+    noquote: (noQuote || []).map(w => ({ kind: 'noquote', id: String(w.id), title: `Quote for ${w.who}`, open: { attrs: `data-tab="customers" data-goenq data-goenqid="${w.id}"` },
+      facts: { from: w.who, wants: w.wants || '', waitingDays: Math.floor(w.hours / 24), answered: !!w.replied } })),
     task: (tasks || []).filter(x => !x.doneAt && x.dueOn && x.dueOn < today).sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.id - b.id)
       .map(x => ({ kind: 'task', id: String(x.id), title: x.title, open: { attrs: 'data-gotasks' },
         facts: { task: x.title, customer: x.customer || '', dueOn: x.dueOn, daysOverdue: dayNo(today) - dayNo(x.dueOn) } })),
@@ -70,6 +73,7 @@ export function fallbackLine(p) {
   const f = p.facts || {};
   return {
     enquiry: `Waiting ${f.waitingDays >= 2 ? plural(f.waitingDays, 'day') : 'over a day'} for a reply${f.wants ? `: ${f.wants}` : ''}.`,
+    noquote: `Asked ${plural(f.waitingDays, 'day')} ago${f.answered ? ' and answered' : ''}, but no quote has gone out yet${f.wants ? `: ${f.wants}` : ''}.`,
     task: `Was due ${f.daysOverdue === 1 ? 'yesterday' : `${f.daysOverdue} days ago`}${f.customer ? ` (${f.customer})` : ''}.`,
     quote: f.followUpDue ? 'Its follow-up is due today.' : `The open quote most likely to turn into an order${f.chance ? ` (${f.chance} chance)` : ''}.`,
     late: `The order furthest behind${f.onHold ? ', and it is on hold' : ''}: worth a call to the customer before they ring.`,
