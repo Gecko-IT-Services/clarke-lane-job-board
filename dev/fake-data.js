@@ -115,7 +115,10 @@ export const xero = async (route, body) => {
     { id: 'd1', number: 'INV-30811', reference: 'PO 4471', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-07-14', due: '2026-08-31', total: 1840, owed: 1840 },
     { id: 'd2', number: 'INV-30902', reference: '', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-08-04', due: '2026-09-30', total: 655.2, owed: 655.2 },
     { id: 'd3', number: 'INV-30950', reference: 'P-77', contactId: 'cx2', customer: 'Fourth Example Ltd', date: '2026-08-12', due: '2026-09-30', total: 420, owed: 210 },
-    { id: 'd4', number: 'INV-31990', reference: '', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-10-02', due: '2026-11-30', total: 300, owed: 300 }] };
+    { id: 'd4', number: 'INV-31990', reference: '', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-10-02', due: '2026-11-30', total: 300, owed: 300 },
+    { id: 'd5', number: 'INV-30510', reference: '', contactId: 'cx9', customer: 'Example Lighting Ltd - IN ADMINISTRATION', date: '2026-07-01', due: '2026-08-15', total: 4310.4, owed: 4310.4 },
+    { id: 'd6', number: 'INV-30494', reference: '', contactId: 'cx9', customer: 'Example Lighting Ltd - IN ADMINISTRATION', date: '2026-06-20', due: '2026-07-31', total: 3290.86, owed: 3290.86 },
+    { id: 'd7', number: 'INV-31120', reference: '', contactId: 'cx2', customer: 'Fourth Example Ltd', date: '2026-09-01', due: '2026-10-01', total: 128455.3, owed: 128455.3 }] };
   if (route === 'online') return { links: { d1: 'https://in.xero.com/example' } };
   if (route === 'pack') return fakePack(body.month);
   if (route === 'month') return { from: body.from, to: body.to, creditsRead: true, invoices: [   // made-up figures

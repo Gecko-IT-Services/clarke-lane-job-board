@@ -60,24 +60,37 @@ export function cutOff(jobs, today) {
     transit, transitTotal: sum(transit), book: { ...book, total: round2(book.late + book.thisMonth + book.nextMonth + book.later) } };
 }
 
+/** A customer Xero names as in administration, liquidation and the like (Philip, 24 Oct: "INDO Lighting Ltd - IN
+ *  ADMINISTRATION"): money unlikely to come in, kept apart from what can still be chased. */
+export const doubtful = name => /\bin (administration|liquidation|receivership)\b|\b(administrators?|liquidators?|receivership|dissolved|insolven(t|cy)|ceased trading)\b/i.test(String(name || ''));
+
 /**
  * Money coming in: unpaid approved invoices (debts route) by when they are due (overdue, the next 7 days, 8–30
- * days, later), the overdue ones oldest first with the last chase, and what the order book should invoice in the
- * next 4 weeks. chases: [{ customer, at, by }].
+ * days, later), and what the order book should invoice in the next 4 weeks. Customers in administration or
+ * liquidation are counted apart as doubtful, in none of the other figures. The overdue invoices come oldest first
+ * (late) and grouped by customer, most owed first, each with its oldest invoice and the last chase from the board
+ * (customers). chases: [{ customer, at, by }].
  */
 export function moneyIn(debts, jobs, chases, today) {
-  const b = { overdue: 0, week: 0, month: 0, later: 0 };
-  const late = [];
+  const b = { overdue: 0, week: 0, month: 0, later: 0, doubtful: 0 };
+  const late = [], doubt = [];
+  const lastChase = name => (chases || []).filter(c => normName(c.customer) === normName(name)).sort((p, q) => String(q.at).localeCompare(String(p.at)))[0] || null;
   for (const x of debts || []) {
+    const days = x.due ? dayNo(today) - dayNo(x.due) : null;
+    if (doubtful(x.customer)) { b.doubtful = round2(b.doubtful + (x.owed || 0)); doubt.push({ ...x, days }); continue; }
     const k = !x.due || x.due < today ? 'overdue' : dayNo(x.due) - dayNo(today) <= 7 ? 'week' : dayNo(x.due) - dayNo(today) <= 30 ? 'month' : 'later';
     b[k] = round2(b[k] + (x.owed || 0));
-    if (k === 'overdue') late.push({ ...x, days: x.due ? dayNo(today) - dayNo(x.due) : null,
-      chased: (chases || []).filter(c => normName(c.customer) === normName(x.customer)).sort((p, q) => String(q.at).localeCompare(String(p.at)))[0] || null });
+    if (k === 'overdue') late.push({ ...x, days, chased: lastChase(x.customer) });
   }
+  late.sort((p, q) => String(p.due).localeCompare(String(q.due)));
+  const group = list => { const by = new Map();
+    for (const x of list) { const k = normName(x.customer), g = by.get(k) || { customer: x.customer, invoices: [], owed: 0, oldest: x.due, days: x.days, chased: x.chased ?? null };
+      g.invoices.push(x); g.owed = round2(g.owed + (x.owed || 0)); if (x.due && (!g.oldest || x.due < g.oldest)) { g.oldest = x.due; g.days = x.days; } by.set(k, g); }
+    return [...by.values()].sort((p, q) => q.owed - p.owed); };
   const to = plus(today, 28);
   const toInvoice = round2((jobs || []).filter(j => j.status !== 'cancelled' && !j.preview)
     .reduce((a, j) => a + j.lines.filter(l => l.due <= to).reduce((s, l) => s + left(j, l) * (l.price || 0), 0), 0));
-  return { ...b, late: late.sort((p, q) => String(p.due).localeCompare(String(q.due))), toInvoice };
+  return { ...b, late, customers: group(late), doubtfulCustomers: group(doubt), toInvoice };
 }
 
 /** "PO-4338", "4338" or "PO 04338" → "4338"; '' when there is no number. */

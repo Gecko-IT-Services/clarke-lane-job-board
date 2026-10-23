@@ -66,22 +66,27 @@ export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, p
     ${p && p.extraBills.length ? `<details><summary class="btn sm">${p.extraBills.length} bill${p.extraBills.length === 1 ? '' : 's'} from these suppliers with no purchase order</summary><ul class="acc-list">${p.extraBills.slice(0, 30).map(b => `<li>${esc(b.supplier)} · ${esc(b.number || 'Bill')} · ${fmt(b.date)} · ${money(b.net)}${b.reference ? ` · ref ${esc(b.reference)}` : ''}</li>`).join('')}</ul></details>` : ''}
     ${ow.length ? `<div class="warn">Sent out for coating or plating, no bill from them since: ${ow.map(g => `<b>${esc(g.supplier)}</b> (${g.sends.length} job${g.sends.length === 1 ? '' : 's'} since ${fmt(g.since)})`).join(', ')}.</div>` : ''}</section>`;
 
-  // 4. Money coming in.
+  // 4. Money coming in: grouped by customer, most owed first; customers in administration kept apart (24 Oct).
   const m = debts ? moneyIn(debts, jobs, chases, today) : null;
+  const pounds = n => gbp(n, 0);
+  const chaseCell = x => x.chased ? `${fmt(x.chased.at.slice(0, 10))} by ${esc(x.chased.by)}` : '<span class="note">no chase email from the board</span>';
+  const custRows = (list, chase = true) => list.map(g => `<tr><td><b>${esc(g.customer)}</b><span class="ref mono">${g.invoices.map(x => esc(x.number)).join(', ')}</span></td>
+      <td>${g.oldest ? `${fmt(g.oldest)}${g.days != null ? ` <span class="note">${g.days} days</span>` : ''}` : ''}</td><td class="num">${money(g.owed)}</td>${chase ? `<td>${chaseCell(g)}</td>` : ''}</tr>`).join('');
   const inBox = `<section class="panel acc"><div class="ph"><h3>Money coming in</h3><span class="note">approved invoices not yet paid, by due date</span></div>
     ${!m ? wait(debtErr, 'Unpaid invoices') : `<div class="acc-kv">
-      <div class="${m.overdue ? 'bad' : ''}"><b>${money(m.overdue)}</b><span>Overdue</span></div><div><b>${money(m.week)}</b><span>Due in the next 7 days</span></div>
-      <div><b>${money(m.month)}</b><span>Due in 8 to 30 days</span></div><div><b>${money(m.later)}</b><span>Later</span></div>
-      <div><b>${money(m.toInvoice)}</b><span>To invoice in the next 4 weeks (order book due by then)</span></div></div>
-      ${m.late.length ? `<div class="tbl-wrap"><table class="lines home"><thead><tr><th>Invoice</th><th>Customer</th><th>Due</th><th class="num">Owed</th><th>Last chased</th></tr></thead><tbody>
-        ${m.late.slice(0, 25).map(x => `<tr><td class="mono">${esc(x.number)}</td><td>${esc(x.customer)}</td><td>${fmt(x.due)}${x.days != null ? ` <span class="note">${x.days} days</span>` : ''}</td><td class="num">${money(x.owed)}</td>
-          <td>${x.chased ? `${fmt(x.chased.at.slice(0, 10))} by ${esc(x.chased.by)}` : '<span class="note">not from the board</span>'}</td></tr>`).join('')}</tbody></table></div>` : ''}`}</section>`;
+      <div class="${m.overdue ? 'bad' : ''}"><b>${pounds(m.overdue)}</b><span>Overdue</span></div><div><b>${pounds(m.week)}</b><span>Due in the next 7 days</span></div>
+      <div><b>${pounds(m.month)}</b><span>Due in 8 to 30 days</span></div><div><b>${pounds(m.later)}</b><span>Later</span></div>
+      ${m.doubtful ? `<div><b>${pounds(m.doubtful)}</b><span>Doubtful: customers in administration or liquidation (in none of the figures above)</span></div>` : ''}
+      <div><b>${pounds(m.toInvoice)}</b><span>To invoice in the next 4 weeks (order book due by then)</span></div></div>
+      ${m.customers.length ? `<h4>Overdue, by customer</h4><p class="note">Every approved invoice past its due date and still unpaid, most owed first. <i>Last chased</i> shows chase emails drafted from the board only; a phone call or an email sent another way is not seen here.</p>
+        <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Customer and invoices</th><th>Oldest due</th><th class="num">Owed</th><th>Last chased</th></tr></thead><tbody>${custRows(m.customers)}</tbody></table></div>` : ''}
+      ${m.doubtfulCustomers.length ? `<h4>Doubtful: in administration or liquidation</h4><div class="tbl-wrap"><table class="lines home"><thead><tr><th>Customer and invoices</th><th>Oldest due</th><th class="num">Owed</th></tr></thead><tbody>${custRows(m.doubtfulCustomers, false)}</tbody></table></div>` : ''}`}</section>`;
 
   const cards = [
     card('warn', 'invoice', drafts ? drafts.length : '…', 'Drafts to approve', !!drafts?.some(r => r.flags.length)),
-    card('info', 'truck', money(c.deliveredTotal), 'Delivered, not invoiced', c.deliveredTotal > 0),
+    card('info', 'truck', gbp(c.deliveredTotal, 0), 'Delivered, not invoiced', c.deliveredTotal > 0),
     card('warn', 'doc', p ? look : '…', 'Purchase orders to check', look > 0),
-    card('warn', 'late', m ? money(m.overdue) : '…', 'Overdue', !!m?.overdue),
+    card('warn', 'late', m ? gbp(m.overdue, 0) : '…', m?.doubtful ? 'Overdue, not counting administration' : 'Overdue', !!m?.overdue),
   ].join('');
   return `<div class="home acc-page"><div class="hhead"><div><h2>Accounts</h2><p class="sub">For ${esc(me?.name || 'Keith')}. Read only: nothing here changes Xero or the board.</p></div>
       <div class="hbtns">${switcher}<button class="btn" type="button" data-accrefresh ${loading ? 'disabled' : ''}>${loading ? 'Reading Xero…' : 'Read Xero again'}</button></div></div>
