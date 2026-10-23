@@ -26,7 +26,7 @@ let jobs = [
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
 const whoEmail = () => role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : role === 'accounts' ? 'accounts@clarke-lane.example' : 'workshop@clarke-lane.example';
-export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : role === 'accounts' ? 'Keith' : 'Shop Floor', role });
+export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : role === 'accounts' ? 'Keith Morell' : 'Shop Floor', role });
 const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
 export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
 export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
@@ -318,7 +318,7 @@ export const salesAiCheckin = async facts => ({ subject: `Next batch of ${facts.
 export const practice = true;   // the board skips what would cost real AI calls here (the topic backfill, 21 Oct)
 const noRefs = { so: '', po: '', quote: '' };
 export const salesAi = async (facts, kind = 'checkin') => {
-  if (kind === 'chase') return { subject: `Overdue invoices: ${facts.customer}`, greeting: facts.contactFirstName ? `Dear ${facts.contactFirstName},` : 'Hello,',   // made up
+  if (kind === 'chase') return { subject: `Overdue invoices: ${facts.customer}`, greeting: facts.contactName ? `Dear ${facts.contactName},` : 'Dear Sir or Madam,',   // made up
     before: ['I hope you are well. Our records show the invoices below are now past their due date.', 'Could you let me know when we can expect payment?'],
     after: ['If you have already paid, thank you: please let me know the date so we can match it. If there is a problem with any invoice, just reply and we will sort it out.'], model: 'fake', costUsd: 0 };
   if (kind === 'monthpack') return { headline: `${facts.monthName}: sales up on last year, margin a little lower`,   // made up

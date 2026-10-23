@@ -92,12 +92,30 @@ console.log('accounts: ok');
   const g = { customer: 'Example Customer Ltd', owed: 350, days: 23, invoices: [
     { id: 'i1', number: 'INV-9', date: '2026-08-31', due: '2026-09-30', owed: 300, days: 23 }, { id: 'i2', number: 'INV-15', date: '2026-09-01', due: '2026-10-01', owed: 50, days: 22 }] };
   const f = chaseFacts(g, { person: 'Sam Buyer', chases: [{ customer: 'EXAMPLE CUSTOMER LTD', at: '2026-10-16T09:00:00Z' }, { customer: 'Other', at: '2026-10-20T09:00:00Z' }], today: '2026-10-24' });
-  assert.deepEqual([f.contactFirstName, f.totalOwed, f.oldestDaysOverdue, f.chasedBefore, f.chasedInLast30Days], ['Sam', 350, 23, ['2026-10-16'], true]);
+  assert.deepEqual([f.contactName, f.totalOwed, f.oldestDaysOverdue, f.chasedBefore, f.chasedInLast30Days], ['Sam Buyer', 350, 23, ['2026-10-16'], true]);
   assert.deepEqual(f.invoices.map(x => x.number), ['INV-9', 'INV-15']);
-  const html = chaseHtml({ greeting: 'Dear Sam,', before: ['Two invoices <are> overdue.'], after: ['Thank you.'] }, g, { links: { i1: 'https://in.xero.com/x' } });
+  const html = chaseHtml({ greeting: 'Dear Sam,', before: ['Two invoices <are> overdue.'], after: ['Thank you.'] }, g, { links: { i1: 'https://in.xero.com/x' }, person: 'Sam Buyer' });
   assert.ok(html.includes('Two invoices &lt;are&gt; overdue.'), "the AI's words are escaped");
   assert.ok(html.includes('£350.00') && html.includes('INV-15') && html.includes('href="https://in.xero.com/x"'), 'the table and the link come from Xero, not the AI');
   assert.equal((html.match(/View and pay online/g) || []).length, 1, 'a link only where Xero gave one');
-  assert.match(html, /Kind regards,<br>Keith<br>Accounts, Clarke Lane Engineering Ltd/);
+  assert.match(html, /Dear Sam Buyer,/, 'old school: the full name, no first-name familiarity (24 Oct)');
+  assert.match(html, /Yours sincerely,<br><br>Keith Morell<br>Accounts, Clarke Lane Engineering Ltd/, 'named: Yours sincerely, and his full name');
+  const { letterForm } = await import('../src/core/accounts.js');
+  assert.deepEqual(letterForm(''), { greeting: 'Dear Sir or Madam,', close: 'Yours faithfully,' }, 'nobody named: Sir or Madam, Yours faithfully');
+  assert.deepEqual(letterForm('  Roz   Robinson '), { greeting: 'Dear Roz Robinson,', close: 'Yours sincerely,' });
+  // From Philip's phone (24 Oct): the AI signed it too, and the reference repeated the number.
+  const { withoutSignOff, withoutGreeting } = await import('../src/core/accounts.js');
+  assert.deepEqual(withoutSignOff(['If you have paid, thank you.\nKind regards,\nKeith, Accounts']), ['If you have paid, thank you.']);
+  assert.deepEqual(withoutSignOff(['First.', 'Kind regards,', 'Keith Morell']), ['First.']);
+  assert.deepEqual(withoutSignOff(['Many thanks for your help with this.']), ['Many thanks for your help with this.'], 'a closing sentence stays');
+  assert.deepEqual(withoutSignOff(['Thank you.', 'Many thanks,']), ['Thank you.'], 'a short thank-you sign-off goes');
+  assert.deepEqual(withoutSignOff(['Please let me know the date. Thanks in advance for sorting it.']), ['Please let me know the date. Thanks in advance for sorting it.'], 'a sentence that merely contains thanks stays');
+  assert.deepEqual(withoutGreeting(['Hello Roz, I hope you are well.'], 'Hello Roz,'), ['I hope you are well.']);
+  const twice = chaseHtml({ greeting: 'Hello Roz,', before: ['Hello Roz, I hope you are well.'], after: ['Thank you.\nKind regards,\nKeith, Accounts'] },
+    { customer: 'X', owed: 10, invoices: [{ id: 'a', number: '31921', reference: '31921', date: '2026-09-16', due: '2026-10-16', owed: 10 }] }, { person: 'Roz Robinson' });
+  assert.equal((twice.match(/Kind regards|Yours sincerely/g) || []).length, 1, 'signed once');
+  assert.ok(!twice.includes('Hello Roz'), "the AI's own greeting is not repeated");
+  assert.ok(!twice.includes('(31921)'), 'the reference is not repeated when it is the number');
+  assert.ok(twice.includes('<p style="margin:0 0 12px">Dear Roz Robinson,</p>'), 'a gap after the greeting, even in Outlook on a phone');
   console.log('accounts chase: ok');
 }

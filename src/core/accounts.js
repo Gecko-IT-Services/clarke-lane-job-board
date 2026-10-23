@@ -169,23 +169,55 @@ const long = s => (s ? new Date(s.slice(0, 10) + 'T12:00:00Z').toLocaleDateStrin
  */
 export function chaseFacts(g, { person = '', chases = [], today }) {
   const before = (chases || []).filter(c => normName(c.customer) === normName(g.customer)).map(c => String(c.at).slice(0, 10)).sort().reverse();
-  return { customer: g.customer, contactFirstName: String(person || '').trim().split(/\s+/)[0] || '',
+  return { customer: g.customer, contactName: String(person || '').trim(),
     invoices: g.invoices.map(x => ({ number: x.number, date: x.date || '', due: x.due || '', owed: x.owed, daysOverdue: x.days })),
     totalOwed: g.owed, oldestDaysOverdue: g.days, chasedBefore: before.slice(0, 5),
-    chasedInLast30Days: before.some(d => dayNo(today) - dayNo(d) <= 30), from: 'Keith, Accounts' };
+    chasedInLast30Days: before.some(d => dayNo(today) - dayNo(d) <= 30), from: 'Keith Morell, Accounts', company: 'Clarke Lane Engineering Ltd' };
+}
+
+/** The AI's last paragraphs without any sign-off it added anyway ("Kind regards, Keith, Accounts"): the board signs. */
+const SIGN_OFF = /^\s*((kind|best|warm|many)\s+(regards|thanks|wishes)|regards|thanks again|yours\s+(sincerely|faithfully|truly)|keith\b|accounts\b)/i;
+export function withoutSignOff(paras) {
+  const out = [];
+  for (const t of paras || []) {
+    // A sign-off line is short and not a sentence: "Kind regards,", "Keith, Accounts"; "Many thanks for your help." stays.
+    const lines = String(t).split(/\n/), cut = lines.findIndex(l => SIGN_OFF.test(l) && l.trim().length <= 40 && !/[.?!]$/.test(l.trim()));
+    const kept = (cut < 0 ? lines : lines.slice(0, cut)).join('\n').trim();
+    if (kept) out.push(kept);
+    if (cut >= 0) break;   // everything after a sign-off is the sign-off
+  }
+  return out;
+}
+/** The AI's first paragraph without the greeting again at its start. */
+export function withoutGreeting(paras, greeting) {
+  const g = String(greeting || '').replace(/[,\s]+$/, '');
+  return (paras || []).map((t, i) => (i === 0 && g && String(t).trim().toLowerCase().startsWith(g.toLowerCase()) ? String(t).trim().slice(g.length).replace(/^[,\s]+/, '') : t)).filter(t => String(t).trim());
 }
 
 /**
  * The email: the AI's greeting and paragraphs around a table the board builds itself from Xero (invoice, date, due,
  * amount, pay-online link), and the sign-off. ai: { subject, greeting, before: [..], after: [..] }; links: { id: url }.
  */
-export function chaseHtml(ai, g, { links = {}, from = 'Keith', company = 'Clarke Lane Engineering Ltd' } = {}) {
-  const td = 'padding:4px 12px 4px 0', p = xs => (xs || []).map(t => `<p>${escH(t)}</p>`).join('');
-  const rows = g.invoices.map(x => `<tr><td style="${td}">${escH(x.number)}${x.reference ? ` <span style="color:#666">(${escH(x.reference)})</span>` : ''}</td><td style="${td}">${escH(long(x.date))}</td>
+/**
+ * The old-school opening and close (Philip, 24 Oct: Keith "is a bit old school"): "Dear <full name>" and "Yours
+ * sincerely" when Xero names the contact, "Dear Sir or Madam" and "Yours faithfully" when it does not. Full name, not
+ * Mr or Ms: Xero holds no titles, and a title is never guessed from a first name.
+ */
+export function letterForm(person) {
+  const name = String(person || '').trim().replace(/\s+/g, ' ');
+  return name ? { greeting: `Dear ${name},`, close: 'Yours sincerely,' } : { greeting: 'Dear Sir or Madam,', close: 'Yours faithfully,' };
+}
+export function chaseHtml(ai, g, { links = {}, from = 'Keith Morell', company = 'Clarke Lane Engineering Ltd', person = '' } = {}) {
+  // Explicit spacing: Outlook on a phone drops the default gap between paragraphs (Philip, 24 Oct).
+  const td = 'padding:4px 12px 4px 0', p = xs => (xs || []).map(t => `<p style="margin:0 0 12px">${escH(t)}</p>`).join('');
+  const { greeting, close } = letterForm(person);
+  // The customer's reference only when it says something the invoice number does not ("31921 (31921)", 24 Oct).
+  const ref = x => { const r = String(x.reference || '').trim(); return r && r.replace(/\W/g, '').toUpperCase() !== String(x.number).replace(/\W/g, '').toUpperCase() ? r : ''; };
+  const rows = g.invoices.map(x => `<tr><td style="${td}">${escH(x.number)}${ref(x) ? ` <span style="color:#666">(${escH(ref(x))})</span>` : ''}</td><td style="${td}">${escH(long(x.date))}</td>
     <td style="${td}">${escH(long(x.due))}</td><td style="${td};text-align:right">${escH(money(x.owed))}</td><td style="padding:4px 0">${links[x.id] ? `<a href="${escH(links[x.id])}">View and pay online</a>` : ''}</td></tr>`).join('');
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5">
-<p>${escH(ai.greeting || 'Hello,')}</p>${p(ai.before)}
+<p style="margin:0 0 12px">${escH(greeting)}</p>${p(withoutGreeting(withoutGreeting(ai.before, ai.greeting), greeting))}
 <table style="border-collapse:collapse;font-size:14px"><thead><tr><th style="text-align:left;${td}">Invoice</th><th style="text-align:left;${td}">Date</th><th style="text-align:left;${td}">Due</th><th style="text-align:right;${td}">Amount due</th><th></th></tr></thead>
 <tbody>${rows}</tbody><tfoot><tr><td colspan="3" style="padding:6px 12px 0 0"><b>Total overdue</b></td><td style="padding:6px 12px 0 0;text-align:right"><b>${escH(money(g.owed))}</b></td><td></td></tr></tfoot></table>
-${p(ai.after)}<p>Kind regards,<br>${escH(from)}<br>Accounts, ${escH(company)}</p></div>`;
+${p(withoutSignOff(ai.after))}<p style="margin:0">${escH(close)}<br><br>${escH(from)}<br>Accounts, ${escH(company)}</p></div>`;
 }
