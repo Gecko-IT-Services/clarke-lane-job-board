@@ -46,6 +46,8 @@ assert.deepEqual(bankFigures(bank), { opening: 25000, received: 100000, spent: 9
 // — Months. —
 assert.deepEqual(lastMonths('2026-01-10', 3), ['2025-12', '2025-11', '2025-10']);
 assert.equal(monthName('2026-09'), 'September 2026');
+const { shiftMonth, shortMonth } = await import('../src/core/pack.js');
+assert.deepEqual([shiftMonth('2026-01', -2), shiftMonth('2025-11', 3), shortMonth('2026-09')], ['2025-11', '2026-02', 'Sep 2026'], 'months by name, not by Xero\'s "30 Sep 26" (24 Oct)');
 
 // — The facts: Xero's figures plus the board's. —
 const one = (cols, ...s) => report(cols, ...s);

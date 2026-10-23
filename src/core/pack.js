@@ -78,6 +78,11 @@ export function bankFigures(rep) {
   return { opening: v(at(/opening/i)), received: v(at(/received/i)), spent: v(at(/spent/i)), closing: v(at(/closing/i)) };
 }
 
+/** '2026-09' moved by k months: shift('2026-01', -2) = '2025-11'. */
+export const shiftMonth = (ym, k) => { let [y, m] = ym.split('-').map(Number); m += k; while (m < 1) { m += 12; y -= 1; } while (m > 12) { m -= 12; y += 1; } return `${y}-${pad(m)}`; };
+/** '2026-09' → 'Sep 2026', the same in every browser (some write "Sept"). */
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const shortMonth = ym => `${MON[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
 /** The complete months before today, newest first: '2026-09', '2026-08', … */
 export function lastMonths(today, n = 12) {
   let [y, m] = today.slice(0, 7).split('-').map(Number);
@@ -114,7 +119,9 @@ export function packFacts({ pack, jobs = [], invoices = [], today }) {
   return {
     company: 'Clarke Lane Engineering Ltd', month: ym, monthName: monthName(ym), fyStart: pack.fyStart,
     figures: { month: keep(month), sameMonthLastYear: keep(lastYear), yearToDate: keep(ytd), sameYearToDateLastYear: keep(lastYtd) },
-    trend: trend.cols.slice().reverse().map(c => ({ month: c.column, sales: c.sales, gross: c.gross, gm: c.gm, net: c.net })),   // oldest first
+    // Named by the board, oldest first: Xero heads each column with the month's last day ("30 Sep 26"), not its name (24 Oct).
+    trend: trend.cols.map((c, i) => ({ month: shortMonth(shiftMonth(ym, -i)),
+      sales: c.sales, gross: c.gross, gm: c.gm, net: c.net })).reverse(),
     biggestCosts: { costOfSales: top(trend.cosLines, 6), overheads: top(trend.overheadLines, 8) },
     balance: { cash: b.cash, debtors: b.debtors, creditors: b.creditors, vat: b.vat, netAssets: b.netAssets,
       currentRatio: b.currentLiabilities ? Math.round((b.currentAssets / b.currentLiabilities) * 100) / 100 : null,

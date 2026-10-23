@@ -118,23 +118,39 @@ function trendChart(trend, gbp) {
   const bars = trend.map((t, i) => {
     const h = Math.max(0, (t.sales / top) * (H - 34)), x = pad + i * bw + 2, w = Math.max(2, bw - 4), y = H - 18 - h;
     return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" class="bar${i === trend.length - 1 ? ' now' : ''}"><title>${t.month}: sales ${gbp(t.sales)}, gross margin ${t.gm ?? '–'}%</title></rect>
-      <text x="${x + w / 2}" y="${H - 4}" text-anchor="middle" class="ax">${String(t.month).split(' ')[0].slice(0, 3)}</text></g>`;
+      <text x="${x + w / 2}" y="${H - 4}" text-anchor="middle" class="ax">${String(t.month).split(' ')[0].slice(0, 3)}</text></g>`;   // "Sep" (24 Oct: was the day, "30")
   }).join('');
   const last = trend[trend.length - 1], lx = pad + (trend.length - 1) * bw + bw / 2, ly = H - 18 - (last.sales / top) * (H - 34) - 6;
   return `<svg class="ptrend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sales for the last ${trend.length} months">
     <line x1="${pad}" x2="${W - pad}" y1="${H - 18}" y2="${H - 18}" class="base"/>${bars}<text x="${lx}" y="${Math.max(10, ly)}" text-anchor="middle" class="lbl">${gbp(last.sales)}</text></svg>`;
 }
 
-/** The profit and loss table: the month, the same month last year, the year to date and the same period last year. */
+/** Accountant's style (24 Oct): a loss or an overdraft in brackets and red, "(£14,682)", not "£-14,682". */
+const acct = (gbp, n) => (n == null ? '–' : n < 0 ? `<span class="neg">(${gbp(-n, 0)})</span>` : gbp(n, 0));
+const longDay = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/**
+ * The profit and loss as an accountant sets it out (24 Oct): the month beside the same month last year and the change,
+ * then the year to date beside the same period last year and the change. Money changes in £ with the % under them;
+ * margin changes in percentage points.
+ */
 function plTable(f, gbp, cls = 'lines home') {
-  const c = [f.figures.month, f.figures.sameMonthLastYear, f.figures.yearToDate, f.figures.sameYearToDateLastYear];
-  const money = k => c.map(x => `<td class="num">${x ? gbp(x[k]) : '–'}</td>`).join('');
-  const per = k => c.map(x => `<td class="num">${x && x[k] != null ? x[k].toFixed(1) + '%' : '–'}</td>`).join('');
-  return `<div class="tbl-wrap"><table class="${cls}"><thead><tr><th></th><th class="num">${f.monthName}</th><th class="num">Same month last year</th><th class="num">Year to date</th><th class="num">Same period last year</th></tr></thead><tbody>
-    <tr><td>Sales</td>${money('sales')}</tr><tr><td>Cost of sales</td>${money('cos')}</tr><tr class="sub"><td><b>Gross profit</b></td>${money('gross')}</tr><tr><td>Gross margin</td>${per('gm')}</tr>
-    <tr><td>Overheads</td>${money('overheads')}</tr>${c.some(x => x?.other) ? `<tr><td>Other income</td>${money('other')}</tr>` : ''}
-    <tr class="sub"><td><b>Net profit</b></td>${money('net')}</tr><tr><td>Net margin</td>${per('nm')}</tr></tbody></table></div>`;
+  const F = f.figures, a = n => acct(gbp, n);
+  const pair = [[F.month, F.sameMonthLastYear], [F.yearToDate, F.sameYearToDateLastYear]];
+  const diff = (now, was) => now == null || was == null ? '–' : `${a(Math.round(now - was))}${was ? `<small>${sign(now - was)}${(Math.round(((now - was) / Math.abs(was)) * 1000) / 10).toFixed(1)}%</small>` : ''}`;
+  const pts = (now, was) => now == null || was == null ? '–' : `${sign(now - was)}${(now - was).toFixed(1)} pts`;
+  const money = (k, strong) => pair.map(([n, w]) => `<td class="num">${strong ? '<b>' : ''}${n ? a(n[k]) : '–'}${strong ? '</b>' : ''}</td><td class="num">${w ? a(w[k]) : '–'}</td><td class="num chg">${diff(n?.[k], w?.[k])}</td>`).join('');
+  const per = k => pair.map(([n, w]) => `<td class="num">${n?.[k] != null ? n[k].toFixed(1) + '%' : '–'}</td><td class="num">${w?.[k] != null ? w[k].toFixed(1) + '%' : '–'}</td><td class="num chg">${pts(n?.[k], w?.[k])}</td>`).join('');
+  const lossy = [F.month, F.yearToDate].some(x => x?.net < 0);
+  return `<div class="tbl-wrap"><table class="${cls} pl"><thead>
+      <tr><th></th><th class="num grp" colspan="3">${esc0(f.monthName)}</th><th class="num grp" colspan="3">Year to date, from ${esc0(longDay(f.fyStart))}</th></tr>
+      <tr><th></th><th class="num">This year</th><th class="num">Last year</th><th class="num">Change</th><th class="num">This year</th><th class="num">Last year</th><th class="num">Change</th></tr></thead><tbody>
+    <tr><td>Sales</td>${money('sales')}</tr><tr><td>Cost of sales</td>${money('cos')}</tr><tr class="sub"><td><b>Gross profit</b></td>${money('gross', true)}</tr><tr class="pct"><td>Gross margin</td>${per('gm')}</tr>
+    <tr><td>Overheads</td>${money('overheads')}</tr>${[F.month, F.yearToDate].some(x => x?.other) ? `<tr><td>Other income</td>${money('other')}</tr>` : ''}
+    <tr class="sub"><td><b>Net profit${lossy ? ' / (loss)' : ''}</b></td>${money('net', true)}</tr><tr class="pct"><td>Net margin</td>${per('nm')}</tr></tbody></table></div>
+    <p class="note">Losses in brackets. A change in brackets is a fall on last year: for costs and overheads a fall is good news.</p>`;
 }
+const esc0 = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 /** The AI's commentary, as kept. */
 function analysisHtml(a, esc) {
@@ -156,22 +172,23 @@ export function renderMonthPack({ months, month, facts, packErr, loading, saved,
   const cards = [
     card('info', 'invoice', g(m.sales), `Sales in ${esc(facts.monthName.split(' ')[0])}${ly?.sales ? ` · ${change(m.sales, ly.sales)} on last year` : ''}`, true),
     card(m.gm != null && ly?.gm != null && m.gm < ly.gm ? 'warn' : 'ok', 'ready', m.gm != null ? m.gm.toFixed(1) + '%' : '–', `Gross margin${ly?.gm != null ? ` (last year ${ly.gm.toFixed(1)}%)` : ''}`, true),
-    card(m.net < 0 ? 'warn' : 'ok', 'book', g(m.net), 'Net profit for the month', true),
-    card('info', 'home', g(facts.bank.closing || facts.balance.cash), `Cash at the month end${facts.bank.opening ? ` · ${sign(facts.bank.closing - facts.bank.opening)}${g(facts.bank.closing - facts.bank.opening)} in the month` : ''}`, true),
+    card(m.net < 0 ? 'warn' : 'ok', 'book', m.net < 0 ? `(${g(-m.net)})` : g(m.net), `${m.net < 0 ? 'Net loss' : 'Net profit'} for the month${ly?.net != null ? ` (last year ${ly.net < 0 ? 'a loss of ' + g(-ly.net) : g(ly.net)})` : ''}`, true),
+    (() => { const cash = facts.bank.closing || facts.balance.cash, moved = facts.bank.opening ? cash - facts.bank.opening : null;
+      return card(cash < 0 ? 'warn' : 'info', 'home', g(Math.abs(cash)), `${cash < 0 ? 'Overdrawn' : 'In the bank'} at the month end${moved ? ` · ${moved < 0 ? 'down' : 'up'} ${g(Math.abs(moved))} in the month` : ''}`, true); })(),
   ].join('');
   const b = facts.balance, k = facts.kpis, bd = facts.board, prev = b.monthBefore;
   const vs = (now, was) => was != null ? ` <span class="note">(${sign(now - was)}${g(now - was)} on the month before)</span>` : '';
   const costs = (t, xs) => `<div><h4>${t}</h4>${xs.length ? `<table class="lines home"><tbody>${xs.map(x => `<tr><td>${esc(x.label)}</td><td class="num">${g(x.month)}</td></tr>`).join('')}</tbody></table>` : '<p class="note">None this month.</p>'}</div>`;
   return `<div class="home acc-page">${head}<div class="hcards">${cards}</div>
-    <section class="panel acc"><div class="ph"><h3>Profit and loss</h3><span class="note">net of VAT · year from ${esc(facts.fyStart)}</span></div>${plTable(facts, g)}
+    <section class="panel acc"><div class="ph"><h3>Profit and loss</h3><span class="note">net of VAT</span></div>${plTable(facts, gbp)}
       ${ytd && lytd?.sales ? `<p class="note">Year to date sales are ${change(ytd.sales, lytd.sales)} on the same period last year.</p>` : ''}</section>
     <section class="panel acc"><div class="ph"><h3>Sales, last 12 months</h3></div>${trendChart(facts.trend, g)}
-      <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Month</th>${facts.trend.map(t => `<th class="num">${esc(String(t.month).split(' ')[0].slice(0, 3))}</th>`).join('')}</tr></thead><tbody>
+      <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Month</th>${facts.trend.map(t => `<th class="num">${esc(String(t.month).replace(/ \d\d(\d\d)$/, ' $1'))}</th>`).join('')}</tr></thead><tbody>
         <tr><td>Sales</td>${facts.trend.map(t => `<td class="num">${g(t.sales)}</td>`).join('')}</tr><tr><td>Gross margin</td>${facts.trend.map(t => `<td class="num">${t.gm != null ? t.gm.toFixed(0) + '%' : '–'}</td>`).join('')}</tr>
-        <tr><td>Net profit</td>${facts.trend.map(t => `<td class="num">${g(t.net)}</td>`).join('')}</tr></tbody></table></div></section>
+        <tr><td>Net profit</td>${facts.trend.map(t => `<td class="num">${acct(gbp, t.net)}</td>`).join('')}</tr></tbody></table></div></section>
     <section class="panel acc"><div class="ph"><h3>Biggest costs this month</h3></div><div class="pcols">${costs('Cost of sales', facts.biggestCosts.costOfSales)}${costs('Overheads', facts.biggestCosts.overheads)}</div></section>
     <section class="panel acc"><div class="ph"><h3>Cash and the balance sheet</h3><span class="note">at the month end</span></div>
-      <div class="acc-kv"><div><b>${g(facts.bank.closing)}</b><span>In the bank: ${g(facts.bank.opening)} at the start, ${g(facts.bank.received)} in, ${g(facts.bank.spent)} out</span></div>
+      <div class="acc-kv"><div><b>${acct(gbp, facts.bank.closing)}</b><span>${facts.bank.closing < 0 ? 'Overdrawn' : 'In the bank'}: ${acct(gbp, facts.bank.opening)} at the start, ${g(facts.bank.received)} in, ${g(facts.bank.spent)} out</span></div>
         <div><b>${g(b.debtors)}</b><span>Owed by customers${k.debtorDays != null ? ` · ${k.debtorDays} days of sales` : ''}${vs(b.debtors, prev?.debtors)}</span></div>
         <div><b>${g(b.creditors)}</b><span>Owed to suppliers${k.creditorDays != null ? ` · ${k.creditorDays} days of costs` : ''}${vs(b.creditors, prev?.creditors)}</span></div>
         <div><b>${g(b.vat)}</b><span>VAT owed</span></div><div><b>${b.currentRatio ?? '–'}</b><span>Current ratio (what is owed to us and in the bank, for each £1 owed out)</span></div>
@@ -194,13 +211,13 @@ export function packPaper(facts, saved, h) {
     ${plTable(facts, g, 'ppl')}
     <div><div class="k">Sales, last 12 months</div>${trendChart(facts.trend, g)}</div>
     <div class="two"><div><div class="k">Cash and the balance sheet</div><div class="kv">
-        <span class="k">Bank at the month end</span><span>${g(facts.bank.closing)}</span><span class="k">In / out in the month</span><span>${g(facts.bank.received)} / ${g(facts.bank.spent)}</span>
+        <span class="k">Bank at the month end</span><span>${acct(gbp, facts.bank.closing)}${facts.bank.closing < 0 ? ' overdrawn' : ''}</span><span class="k">In / out in the month</span><span>${g(facts.bank.received)} / ${g(facts.bank.spent)}</span>
         <span class="k">Owed by customers</span><span>${g(b.debtors)}${k.debtorDays != null ? ` (${k.debtorDays} days)` : ''}</span><span class="k">Owed to suppliers</span><span>${g(b.creditors)}${k.creditorDays != null ? ` (${k.creditorDays} days)` : ''}</span>
-        <span class="k">VAT owed</span><span>${g(b.vat)}</span><span class="k">Net assets</span><span>${g(b.netAssets)}</span></div></div>
+        <span class="k">VAT owed</span><span>${g(b.vat)}</span><span class="k">Net assets</span><span>${acct(gbp, b.netAssets)}</span></div></div>
       <div><div class="k">Orders and deliveries</div><div class="kv">
         <span class="k">Booked in the month</span><span>${g(bd.ordersBooked.value)} (${bd.ordersBooked.count})</span><span class="k">Order book now</span><span>${g(bd.orderBookNow)}${k.orderBookMonths >= 0.1 ? ` (${k.orderBookMonths} months)` : ''}</span>
         <span class="k">On time</span><span>${bd.deliveriesInMonth ? `${bd.onTimePct}% of ${bd.deliveriesInMonth} deliveries` : 'no deliveries'}</span>
         ${bd.topCustomers.slice(0, 3).map((c, i) => `<span class="k">${i ? '' : 'Biggest customers'}</span><span>${esc(c.customer)} ${g(c.net)}${c.share != null ? ` (${c.share}%)` : ''}</span>`).join('')}</div></div></div>
     ${saved ? `<div><div class="k">Commentary</div>${analysisHtml(saved.analysis, esc)}</div>` : ''}
-    <div class="foot">Clarke Lane Engineering Ltd. Management accounts for ${esc(facts.monthName)}, prepared from Xero and the job board on ${esc(facts.asAt)}. Unaudited.</div>`;
+    <div class="foot">Clarke Lane Engineering Ltd. Management accounts for ${esc(facts.monthName)}, prepared from Xero and the job board on ${esc(longDay(facts.asAt))}. Unaudited.</div>`;
 }
