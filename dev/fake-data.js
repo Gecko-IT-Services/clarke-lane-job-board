@@ -173,12 +173,12 @@ function fakePack(month) {
   const pl = (cs, sl, mt, sb, rent, wages) => rep(cs, ['Trading Income', r('Sales', ...sl)], ['Cost of Sales', r('Materials', ...mt), r('Subcontract and coating', ...sb)],
     ['Operating Expenses', r('Wages and Salaries', ...wages), r('Rent and rates', ...rent), r('Electricity', ...cs.map(() => 2100)), r('Motor and van', ...cs.map(() => 900))]);
   return { month, fyStart: `${m >= 4 ? y : y - 1}-04-01`, yearEndMonth: 3, organisation: 'Clarke Lane Engineering Ltd', reports: {
-    trend: pl(cols, sales, mats, sub, cols.map(() => 4000), cols.map((_, i) => (i === 3 ? 0 : 21000))),
+    trend: pl(cols, sales, mats, sub, cols.map(() => 4000), cols.map((_, i) => (i === 3 ? 0 : i === 0 ? 48000 : 21000))),   // the month a loss, to show the brackets
     ytd: pl(['YTD'], [451000], [186000], [27000], [24000], [126000]), lastYtd: pl(['Last YTD'], [418000], [165000], [24000], [24000], [120000]),
     lastYearMonth: pl(['Last year'], [79000], [31000], [4500], [4000], [20000]),
     balance: rep(['End', 'Before'], ['Bank', r('Business Current Account', 41000, 38500), t('Total Bank', 41000, 38500)], ['Current Assets', r('Accounts Receivable', 118000, 112000), t('Total Current Assets', 118000, 112000)],
       ['Current Liabilities', r('Accounts Payable', 46000, 43000), r('VAT', 17500, 15000), t('Total Current Liabilities', 63500, 58000)], ['', r('Net Assets', 162000, 158000)]),
-    bank: rep(['Opening Balance', 'Cash Received', 'Cash Spent', 'Closing Balance'], ['', r('Business Current Account', 38500, 96000, 93500, 41000), t('Total', 38500, 96000, 93500, 41000)]) } };
+    bank: rep(['Opening Balance', 'Cash Received', 'Cash Spent', 'Closing Balance'], ['', r('Business Current Account', -22491, 96000, 103783, -30274), t('Total', -22491, 96000, 103783, -30274)]) } };   // overdrawn, to show it
 }
 const packsKept = new Map();
 export const loadPeopleForAccounts = async () => [{ key: 'fourthexample', customer: 'Fourth Example Ltd', role: 'accounts', name: 'Pat Payable', email: 'accounts@fourth.example', phone: '01234 567890', main: true }];   // made up
