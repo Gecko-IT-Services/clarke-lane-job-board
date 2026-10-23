@@ -132,10 +132,12 @@ export function packFacts({ pack, jobs = [], invoices = [], today }) {
     company: 'Clarke Lane Engineering Ltd', month: ym, monthName: monthName(ym), fyStart: pack.fyStart,
     // Which month of the financial year this is (period 1 = the first), and whether it closes the year.
     financialYear: finYear(ym, pack.fyStart),
+    // The month in progress (24 Oct): its figures run to this day, and last year's to the same day.
+    partial: !!pack.partial, to: pack.to || null,
     figures: { month: keep(month), sameMonthLastYear: keep(lastYear), yearToDate: keep(ytd), sameYearToDateLastYear: keep(lastYtd) },
     // Named by the board, oldest first: Xero heads each column with the month's last day ("30 Sep 26"), not its name (24 Oct).
     trend: trend.cols.map((c, i) => ({ month: shortMonth(shiftMonth(ym, -i)),
-      sales: c.sales, gross: c.gross, gm: c.gm, net: c.net })).reverse(),
+      sales: c.sales, gross: c.gross, gm: c.gm, net: c.net, ...(i === 0 && pack.partial ? { soFar: true } : {}) })).reverse(),
     biggestCosts: { costOfSales: top(trend.cosLines, 6), overheads: top(trend.overheadLines, 8) },
     balance: { cash: b.cash, debtors: b.debtors, creditors: b.creditors, vat: b.vat, netAssets: b.netAssets,
       currentRatio: b.currentLiabilities ? Math.round((b.currentAssets / b.currentLiabilities) * 100) / 100 : null,

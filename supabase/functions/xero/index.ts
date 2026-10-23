@@ -379,15 +379,19 @@ async function monthPack(month: string) {
   const fyStart = `${startY}-${pad(startM)}-01`;
   const slim = (r: any) => { const x = r?.Reports?.[0] || {}; return { titles: x.ReportTitles || [], rows: x.Rows || [] }; };
   const pl = (from: string, to: string, extra = '') => xero(s, `Reports/ProfitAndLoss?fromDate=${from}&toDate=${to}${extra}`).then(slim);
+  // The month in progress (24 Oct): figures to today, the bank and balance sheet as at today, and last year to the same
+  // day, so a part-month is never set against a whole one. The 12-month trend stays whole months.
+  const today = new Date().toISOString().slice(0, 10), end = last(y, m) < today ? last(y, m) : today, partial = end < last(y, m);
+  const day = Number(end.slice(8, 10)), lastYearEnd = partial ? `${y - 1}-${pad(m)}-${pad(Math.min(day, new Date(Date.UTC(y - 1, m, 0)).getUTCDate()))}` : last(y - 1, m);
   const reports = {
     trend: await pl(`${month}-01`, last(y, m), '&periods=11&timeframe=MONTH'),
-    ytd: await pl(fyStart, last(y, m)),
-    lastYtd: await pl(`${startY - 1}-${pad(startM)}-01`, last(y - 1, m)),
-    lastYearMonth: await pl(`${y - 1}-${pad(m)}-01`, last(y - 1, m)),
-    balance: slim(await xero(s, `Reports/BalanceSheet?date=${last(y, m)}&periods=1&timeframe=MONTH`)),
-    bank: slim(await xero(s, `Reports/BankSummary?fromDate=${month}-01&toDate=${last(y, m)}`)),
+    ytd: await pl(fyStart, end),
+    lastYtd: await pl(`${startY - 1}-${pad(startM)}-01`, lastYearEnd),
+    lastYearMonth: await pl(`${y - 1}-${pad(m)}-01`, lastYearEnd),
+    balance: slim(await xero(s, `Reports/BalanceSheet?date=${end}&periods=1&timeframe=MONTH`)),
+    bank: slim(await xero(s, `Reports/BankSummary?fromDate=${month}-01&toDate=${end}`)),
   };
-  return { month, fyStart, yearEndMonth: endM, organisation: org.Name || s.tenant_name, reports };
+  return { month, fyStart, yearEndMonth: endM, organisation: org.Name || s.tenant_name, partial, to: end, reports };
 }
 
 /** A DRAFT purchase order in Xero for a sales order (office). Recorded on the board once Xero has it. */
@@ -526,7 +530,9 @@ Deno.serve(async req => {
     if (me.role === 'accounts' && !['invoices', 'debts', 'purchases', 'pack', 'month', 'contact', 'online'].includes(route || '')) throw new HttpError(403, 'The accounts login reads invoices, debts, purchases and the monthly pack only.');
     if (route === 'pack') {
       if (me.role !== 'accounts') throw new HttpError(403, 'The monthly pack is on the accounts login only.');
-      return reply(await cached(`pack:${b?.month}`, 6 * HOUR, fresh, () => monthPack(String(b?.month || ''))));
+      // The month in progress changes daily: kept 30 minutes and keyed by the day; a finished month, 6 hours.
+      const current = String(b?.month || '') === new Date().toISOString().slice(0, 7);
+      return reply(await cached(current ? `pack:${b?.month}:${new Date().toISOString().slice(0, 10)}` : `pack:${b?.month}`, current ? 30 * MIN : 6 * HOUR, fresh, () => monthPack(String(b?.month || ''))));
     }
     if (route === 'purchases') {
       if (me.role !== 'accounts') throw new HttpError(403, 'Purchases against bills are on the accounts login only.');

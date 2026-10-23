@@ -122,7 +122,7 @@ function trendChart(trend, gbp) {
   }).join('');
   const last = trend[trend.length - 1], lx = pad + (trend.length - 1) * bw + bw / 2, ly = H - 18 - (last.sales / top) * (H - 34) - 6;
   return `<svg class="ptrend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sales for the last ${trend.length} months">
-    <line x1="${pad}" x2="${W - pad}" y1="${H - 18}" y2="${H - 18}" class="base"/>${bars}<text x="${lx}" y="${Math.max(10, ly)}" text-anchor="middle" class="lbl">${gbp(last.sales)}</text></svg>`;
+    <line x1="${pad}" x2="${W - pad}" y1="${H - 18}" y2="${H - 18}" class="base"/>${bars}<text x="${lx}" y="${Math.max(10, ly)}" text-anchor="middle" class="lbl">${gbp(last.sales)}${last.soFar ? ' so far' : ''}</text></svg>`;
 }
 
 /** Accountant's style (24 Oct): a loss or an overdraft in brackets and red, "(£14,682)", not "£-14,682". */
@@ -143,8 +143,8 @@ function plTable(f, gbp, cls = 'lines home') {
   const per = k => pair.map(([n, w]) => `<td class="num">${n?.[k] != null ? n[k].toFixed(1) + '%' : '–'}</td><td class="num">${w?.[k] != null ? w[k].toFixed(1) + '%' : '–'}</td><td class="num chg">${pts(n?.[k], w?.[k])}</td>`).join('');
   const lossy = [F.month, F.yearToDate].some(x => x?.net < 0);
   return `<div class="tbl-wrap"><table class="${cls} pl"><thead>
-      <tr><th></th><th class="num grp" colspan="3">${esc0(f.monthName)}</th><th class="num grp" colspan="3">${f.financialYear?.isYearEnd ? `Full year to ${esc0(longDay(f.financialYear.yearEnd))}` : f.financialYear?.period === 1 ? 'Year to date: the first month' : `Year to date, from ${esc0(longDay(f.fyStart))}`}</th></tr>
-      <tr><th></th><th class="num">This year</th><th class="num">Last year</th><th class="num">Change</th><th class="num">This year</th><th class="num">Last year</th><th class="num">Change</th></tr></thead><tbody>
+      <tr><th></th><th class="num grp" colspan="3">${esc0(f.monthName)}${f.partial && f.to ? ` so far, to ${esc0(longDay(f.to))}` : ''}</th><th class="num grp" colspan="3">${f.financialYear?.isYearEnd ? `Full year to ${esc0(longDay(f.financialYear.yearEnd))}` : f.financialYear?.period === 1 ? 'Year to date: the first month' : `Year to date, from ${esc0(longDay(f.fyStart))}`}</th></tr>
+      <tr><th></th><th class="num">This year</th><th class="num">${f.partial ? 'Same days last year' : 'Last year'}</th><th class="num">Change</th><th class="num">This year</th><th class="num">${f.partial ? 'Same days last year' : 'Last year'}</th><th class="num">Change</th></tr></thead><tbody>
     <tr><td>Sales</td>${money('sales')}</tr><tr><td>Cost of sales</td>${money('cos')}</tr><tr class="sub"><td><b>Gross profit</b></td>${money('gross', true)}</tr><tr class="pct"><td>Gross margin</td>${per('gm')}</tr>
     <tr><td>Overheads</td>${money('overheads')}</tr>${[F.month, F.yearToDate].some(x => x?.other) ? `<tr><td>Other income</td>${money('other')}</tr>` : ''}
     <tr class="sub"><td><b>Net profit${lossy ? ' / (loss)' : ''}</b></td>${money('net', true)}</tr><tr class="pct"><td>Net margin</td>${per('nm')}</tr></tbody></table></div>
@@ -163,18 +163,18 @@ function analysisHtml(a, esc) {
 export function renderMonthPack({ months, month, facts, packErr, loading, saved, aiBusy, aiErr, switcher = '' }, h) {
   const { esc, gbp } = h;
   const g = n => gbp(n, 0);
-  const head = `<div class="hhead"><div><h2>Monthly pack</h2><p class="sub">Management accounts for ${esc(facts?.monthName || month)}${facts?.financialYear ? `, period ${facts.financialYear.period} of the ${esc(facts.financialYear.label)}${facts.financialYear.isYearEnd ? ' (the year end)' : ''}` : ''}, from Xero and the board.</p></div>
-    <div class="hbtns">${switcher}<select class="f" data-packmonth aria-label="Which month">${months.map(m => `<option value="${m}"${m === month ? ' selected' : ''}>${new Date(m + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</option>`).join('')}</select>
+  const head = `<div class="hhead"><div><h2>Monthly pack</h2><p class="sub">Management accounts for ${esc(facts?.monthName || month)}${facts?.financialYear ? `, period ${facts.financialYear.period} of the ${esc(facts.financialYear.label)}${facts.financialYear.isYearEnd ? ' (the year end)' : ''}` : ''}${facts?.partial && facts.to ? `. <b>The month is not finished:</b> figures to ${esc(longDay(facts.to))}, compared with the same days last year` : ''}, from Xero and the board.</p></div>
+    <div class="hbtns">${switcher}<select class="f" data-packmonth aria-label="Which month">${months.map((m, i) => `<option value="${m}"${m === month ? ' selected' : ''}>${new Date(m + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}${i === 0 ? ' (so far)' : ''}</option>`).join('')}</select>
       <button class="btn" type="button" data-packread ${loading ? 'disabled' : ''}>${loading ? 'Reading Xero…' : 'Read Xero again'}</button>
       ${facts ? '<button class="btn pri" type="button" data-packprint>Print or save PDF</button>' : ''}</div></div>`;
   if (!facts) return `<div class="home acc-page">${head}${packErr ? `<div class="err">${esc(packErr)}${/permission|scope|401|403|Reconnect/i.test(packErr) ? '<br>Xero needs one more permission for its reports: ask Levi to press <b>Reconnect</b> on the Xero tab once.' : ''}</div>` : `<p class="note">${loading ? 'Reading the month\'s reports from Xero…' : 'Choose a month.'}</p>`}</div>`;
   const m = facts.figures.month || {}, ly = facts.figures.sameMonthLastYear, ytd = facts.figures.yearToDate, lytd = facts.figures.sameYearToDateLastYear;
   const cards = [
-    card('info', 'invoice', g(m.sales), `Sales in ${esc(facts.monthName.split(' ')[0])}${ly?.sales ? ` · ${change(m.sales, ly.sales)} on last year` : ''}`, true),
+    card('info', 'invoice', g(m.sales), `Sales in ${esc(facts.monthName.split(' ')[0])}${facts.partial ? ' so far' : ''}${ly?.sales ? ` · ${change(m.sales, ly.sales)} on ${facts.partial ? 'the same days ' : ''}last year` : ''}`, true),
     card(m.gm != null && ly?.gm != null && m.gm < ly.gm ? 'warn' : 'ok', 'ready', m.gm != null ? m.gm.toFixed(1) + '%' : '–', `Gross margin${ly?.gm != null ? ` (last year ${ly.gm.toFixed(1)}%)` : ''}`, true),
-    card(m.net < 0 ? 'warn' : 'ok', 'book', m.net < 0 ? `(${g(-m.net)})` : g(m.net), `${m.net < 0 ? 'Net loss' : 'Net profit'} for the month${ly?.net != null ? ` (last year ${ly.net < 0 ? 'a loss of ' + g(-ly.net) : g(ly.net)})` : ''}`, true),
+    card(m.net < 0 ? 'warn' : 'ok', 'book', m.net < 0 ? `(${g(-m.net)})` : g(m.net), `${m.net < 0 ? 'Net loss' : 'Net profit'} ${facts.partial ? 'so far this month' : 'for the month'}${ly?.net != null ? ` (last year ${ly.net < 0 ? 'a loss of ' + g(-ly.net) : g(ly.net)})` : ''}`, true),
     (() => { const cash = facts.bank.closing || facts.balance.cash, moved = facts.bank.opening ? cash - facts.bank.opening : null;
-      return card(cash < 0 ? 'warn' : 'info', 'home', g(Math.abs(cash)), `${cash < 0 ? 'Overdrawn' : 'In the bank'} at the month end${moved ? ` · ${moved < 0 ? 'down' : 'up'} ${g(Math.abs(moved))} in the month` : ''}`, true); })(),
+      return card(cash < 0 ? 'warn' : 'info', 'home', g(Math.abs(cash)), `${cash < 0 ? 'Overdrawn' : 'In the bank'} ${facts.partial ? 'today' : 'at the month end'}${moved ? ` · ${moved < 0 ? 'down' : 'up'} ${g(Math.abs(moved))} ${facts.partial ? 'this month' : 'in the month'}` : ''}`, true); })(),
   ].join('');
   const b = facts.balance, k = facts.kpis, bd = facts.board, prev = b.monthBefore;
   const vs = (now, was) => was != null ? ` <span class="note">(${sign(now - was)}${g(now - was)} on the month before)</span>` : '';
