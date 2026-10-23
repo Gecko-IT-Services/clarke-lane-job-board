@@ -318,7 +318,7 @@ export const salesAiCheckin = async facts => ({ subject: `Next batch of ${facts.
 export const practice = true;   // the board skips what would cost real AI calls here (the topic backfill, 21 Oct)
 const noRefs = { so: '', po: '', quote: '' };
 export const salesAi = async (facts, kind = 'checkin') => {
-  if (kind === 'chase') return { subject: `Overdue invoices: ${facts.customer}`, greeting: facts.contactFirstName ? `Dear ${facts.contactFirstName},` : 'Hello,',   // made up
+  if (kind === 'chase') return { subject: `Overdue invoices: ${facts.customer}`, greeting: facts.contactName ? `Dear ${facts.contactName},` : 'Dear Sir or Madam,',   // made up
     before: ['I hope you are well. Our records show the invoices below are now past their due date.', 'Could you let me know when we can expect payment?'],
     after: ['If you have already paid, thank you: please let me know the date so we can match it. If there is a problem with any invoice, just reply and we will sort it out.'], model: 'fake', costUsd: 0 };
   if (kind === 'monthpack') return { headline: `${facts.monthName}: sales up on last year, margin a little lower`,   // made up

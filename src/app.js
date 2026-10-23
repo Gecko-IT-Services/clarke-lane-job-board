@@ -3034,7 +3034,7 @@ async function chaseFromAccounts(key) {
     const c = contactId ? await data.xero('contact', { id: contactId }).catch(() => ({})) : {};
     const links = (await data.xero('online', { ids: g.invoices.map(x => x.id).filter(Boolean).slice(0, 15) }).catch(() => ({ links: {} }))).links || {};
     const ai = await data.salesAi(chaseFacts(g, { person: c.person, chases: S.chases, today }), 'chase');
-    const link = await data.draftEmail({ to: c.email || '', subject: ai.subject, html: chaseHtml(ai, g, { links, from: S.me.name || 'Keith Morell' }) });
+    const link = await data.draftEmail({ to: c.email || '', subject: ai.subject, html: chaseHtml(ai, g, { links, from: S.me.name || 'Keith Morell', person: c.person || '' }) });
     await data.addChase({ customer: g.customer, contactId: contactId || '', invoices: g.invoices.map(x => ({ number: x.number, owed: x.owed })), owed: g.owed, by: S.me.name }).catch(() => {});
     S.chases = await data.loadChases().catch(() => S.chases);
     toast(`Chase email for ${g.customer} is in your Outlook Drafts${c.email ? ` to ${c.email}` : ' (Xero has no email address for them: add one in Outlook)'}. Check it and press Send.`);
