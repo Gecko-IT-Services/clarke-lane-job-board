@@ -3026,7 +3026,8 @@ function renderAccountsView() {
   const a = S.acc || {}, tab = S.accTab || 'checks';
   const switcher = `<div class="seg" role="group" aria-label="Which page"><button type="button" data-acctab="checks" aria-pressed="${tab === 'checks'}">Checks</button><button type="button" data-acctab="pack" aria-pressed="${tab === 'pack'}">Monthly pack</button></div>`;
   if (tab === 'pack') {
-    const months = lastMonths(todayIso(), 12), month = S.packMonth || months[0], p = (S.packs || {})[month];
+    // The month in progress first (24 Oct: "we are currently in October"), then the last 12 whole months; a whole month is still the default.
+    const months = [todayIso().slice(0, 7), ...lastMonths(todayIso(), 12)], month = S.packMonth || months[1], p = (S.packs || {})[month];
     if (!p && !S.packLoading && !S.packErr) loadPack(month);
     $('v-accounts').innerHTML = renderMonthPack({ months, month, facts: p?.facts, packErr: S.packErr, loading: S.packLoading, saved: p?.saved, aiBusy: S.packAi, aiErr: S.packAiErr, switcher }, { esc, fmt, gbp });
     return;
@@ -3064,7 +3065,7 @@ async function loadPack(month, fresh = false) {
   if (!accounts() || S.packLoading) return;
   S.packLoading = true; S.packErr = null; render();
   try {
-    const [y, m] = month.split('-').map(Number), last = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+    const [y, m] = month.split('-').map(Number), whole = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`, last = whole < todayIso() ? whole : todayIso();
     const [pack, inv, saved] = await Promise.all([data.xero('pack', { month, fresh }), data.xero('month', { from: `${month}-01`, to: last, fresh }).catch(() => ({ invoices: [] })),
       data.loadMonthPack(month).catch(() => null)]);
     const facts = monthPackFacts({ pack, jobs: S.jobs, invoices: inv.invoices || [], today: todayIso() });

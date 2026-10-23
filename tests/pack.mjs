@@ -90,3 +90,14 @@ console.log('pack: ok');
   assert.equal(pf({ pack: { ...pack, month: '2026-09', fyStart: '2025-10-01' }, today: '2026-10-24' }).financialYear.isYearEnd, true, 'the facts the AI gets say September closes the year');
   console.log('pack year: ok');
 }
+
+// The month in progress (24 Oct): marked, with the day it runs to, and the chart's last bar "so far".
+{
+  const { packFacts: pf } = await import('../src/core/pack.js');
+  const f = pf({ pack: { ...pack, month: '2026-10', fyStart: '2026-10-01', partial: true, to: '2026-10-24' }, today: '2026-10-24' });
+  assert.deepEqual([f.partial, f.to, f.financialYear.period], [true, '2026-10-24', 1]);
+  assert.equal(f.trend[f.trend.length - 1].soFar, true, 'the month in progress is the last bar, marked');
+  assert.equal(f.trend[0].soFar, undefined);
+  assert.equal(pf({ pack, today: '2026-10-24' }).partial, false, 'a whole month is not marked');
+  console.log('pack so far: ok');
+}
