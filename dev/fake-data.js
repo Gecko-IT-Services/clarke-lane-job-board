@@ -136,7 +136,7 @@ export const xero = async (route, body) => {
   if (route === 'bills') return { from: '2025-10-20', bills: [   // made-up suppliers and prices
     { number: 'B-1001', supplier: 'Example Steel Supplies', date: '2026-08-12', description: 'ALU SHEET 5083 H111 3.0MM 2500X1250', qty: 5, unit: 74.2, amount: 371 },
     { number: 'B-1044', supplier: 'Example Metals Ltd', date: '2026-09-03', description: 'Stainless 304 2B 1.5mm sheet 2500 x 1250', qty: 2, unit: 51.8, amount: 103.6 }] };
-  if (route === 'contact') return { id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
+  if (route === 'contact') return { phone: '023 8000 0000', mobile: '07700 900000', id: body.id, name: 'Example Customer Limited', email: 'buyer@example.com', person: 'Sam Buyer', address: 'Unit 4, Example Park\nSouthampton\nSO1 1AA' };
   if (route === 'send') return { results: body.items.map((it, i) => { for (const j of jobs) for (const d of j.despatches) if (d.id === it.despatchId) d.xero = { no: 'INV-3200' + i };
     return { despatchId: it.despatchId, ok: true, invoiceNo: 'INV-3200' + i }; }) };
   if (route === 'items') return { total: fakeItems.length + 1, items: [...fakeItems, ...(new URLSearchParams(location.search).has('many') ? [...Array(8000)].map((_, i) => ({ code: `EXA0${i}-11-${i}`, description: `Made-up part ${i}`, price: 1 + i % 50, sold: false })) : []), { code: 'EXA01-11-1234', name: 'Post', description: 'Post - Rear LH - Support (made up)', price: 42.5, sold: false }] };
@@ -181,6 +181,7 @@ function fakePack(month) {
     bank: rep(['Opening Balance', 'Cash Received', 'Cash Spent', 'Closing Balance'], ['', r('Business Current Account', 38500, 96000, 93500, 41000), t('Total', 38500, 96000, 93500, 41000)]) } };
 }
 const packsKept = new Map();
+export const loadPeopleForAccounts = async () => [{ key: 'fourthexample', customer: 'Fourth Example Ltd', role: 'accounts', name: 'Pat Payable', email: 'accounts@fourth.example', phone: '01234 567890', main: true }];   // made up
 export const loadMonthPack = async m => packsKept.get(m) || null;
 let cmap = new Map();
 export const loadContactMap = async () => new Map(cmap);

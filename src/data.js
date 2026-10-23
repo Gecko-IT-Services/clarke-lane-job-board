@@ -899,6 +899,13 @@ export async function dismissXeroOrder(xeroId, dismiss, by) {
 }
 
 /** The board's own contact book: people and delivery addresses per customer. Office only. */
+/** Keith's page (24 Oct): the people in the contact book, to show who to ring about an overdue account. Read only. */
+export async function loadPeopleForAccounts() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('customer_people').select('customer_key, customer_name, role, name, email, phone, main').order('id');
+  if (error) return [];   // before the 24 Oct migration: none
+  return data.map(r => ({ key: r.customer_key, customer: r.customer_name, role: r.role, name: r.name, email: r.email, phone: r.phone, main: r.main }));
+}
 export async function loadContactBook() {
   const sb = await getSupabase();
   const [p, s] = await Promise.all([sb.from('customer_people').select('*').order('id'), sb.from('customer_sites').select('*').order('id')]);

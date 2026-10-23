@@ -10,7 +10,7 @@ import { normName } from './core/xero.js';
 
 const STATUS = { DRAFT: 'Draft', SUBMITTED: 'Awaiting approval', AUTHORISED: 'Approved', BILLED: 'Billed' };
 
-export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, purchases, purErr, outwork, chases, view = 'look', loading, switcher = '', chasing = null }, h) {
+export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, purchases, purErr, outwork, chases, view = 'look', loading, switcher = '', chasing = null, contacts = {}, people = [] }, h) {
   const { esc, fmt, gbp } = h;
   const money = n => gbp(n, 2);
   const chip = (t, tone = '') => `<span class="chip${tone ? ' ' + tone : ''}">${t}</span>`;
@@ -73,7 +73,17 @@ export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, p
   // Chase (24 Oct): the AI writes the email, the board adds the invoices and pay-online links; it lands in Keith's Outlook Drafts.
   const chaseCell = x => `${x.chased ? `${fmt(x.chased.at.slice(0, 10))} by ${esc(x.chased.by)}` : '<span class="note">no chase email from the board</span>'}
     <div><button class="btn sm${x.chased ? '' : ' pri'}" type="button" data-accchase="${esc(normName(x.customer))}" ${chasing ? 'disabled' : ''}>${chasing === normName(x.customer) ? 'Writing…' : 'Chase'}</button></div>`;
-  const custRows = (list, chase = true) => list.map(g => `<tr><td><b>${esc(g.customer)}</b><span class="ref mono">${g.invoices.map(x => esc(x.number)).join(', ')}</span></td>
+  // Who to ring (24 Oct): the accounts person from the board's contact book first, then Xero's contact; tap to call or email.
+  const tel = n => `<a href="tel:${esc(String(n).replace(/[^\d+]/g, ''))}">${esc(n)}</a>`, mail = e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`;
+  const line = (label, name, phone, mobile, email) => [label ? `<i>${label}</i>` : '', esc(name || ''), phone ? tel(phone) : '', mobile ? tel(mobile) : '', email ? mail(email) : ''].filter(Boolean).join(' · ');
+  const whoToRing = g => {
+    const key = normName(g.customer), book = people.filter(p => p.key === key && (p.phone || p.email)).sort((a, b) => (b.role === 'accounts') - (a.role === 'accounts') || (b.main - a.main))[0];
+    const x = contacts[g.invoices.find(i => i.contactId)?.contactId] || null;
+    const lines = [book && line(book.role === 'accounts' ? 'Accounts' : book.role === 'orders' ? 'Orders' : '', book.name, book.phone, '', book.email),
+      x && (x.phone || x.mobile || x.email) && line('Xero', x.person, x.phone, x.mobile, x.email && x.email !== book?.email ? x.email : '')].filter(Boolean);
+    return lines.length ? `<div class="acc-who">${lines.map(l => `<div>${l}</div>`).join('')}</div>` : x ? '<div class="acc-who note">No phone or email in Xero or the contact book</div>' : '';
+  };
+  const custRows = (list, chase = true) => list.map(g => `<tr><td><b>${esc(g.customer)}</b><span class="ref mono">${g.invoices.map(x => esc(x.number)).join(', ')}</span>${chase ? whoToRing(g) : ''}</td>
       <td>${g.oldest ? `${fmt(g.oldest)}${g.days != null ? ` <span class="note">${g.days} days</span>` : ''}` : ''}</td><td class="num">${money(g.owed)}</td>${chase ? `<td>${chaseCell(g)}</td>` : ''}</tr>`).join('');
   const inBox = `<section class="panel acc"><div class="ph"><h3>Money coming in</h3><span class="note">approved invoices not yet paid, by due date</span></div>
     ${!m ? wait(debtErr, 'Unpaid invoices') : `<div class="acc-kv">
@@ -82,7 +92,7 @@ export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, p
       ${m.doubtful ? `<div><b>${pounds(m.doubtful)}</b><span>Doubtful: customers in administration or liquidation (in none of the figures above)</span></div>` : ''}
       <div><b>${pounds(m.toInvoice)}</b><span>To invoice in the next 4 weeks (order book due by then)</span></div></div>
       ${m.customers.length ? `<h4>Overdue, by customer</h4><p class="note">Every approved invoice past its due date and still unpaid, most owed first. <i>Last chased</i> shows chase emails drafted from the board only; a phone call or an email sent another way is not seen here. <b>Chase</b> writes the email for you (the invoices and pay-online links straight from Xero) and puts it in your Outlook Drafts to check and send.</p>
-        <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Customer and invoices</th><th>Oldest due</th><th class="num">Owed</th><th>Last chased</th></tr></thead><tbody>${custRows(m.customers)}</tbody></table></div>` : ''}
+        <div class="tbl-wrap"><table class="lines home owed"><thead><tr><th>Customer and invoices</th><th>Oldest due</th><th class="num">Owed</th><th>Last chased</th></tr></thead><tbody>${custRows(m.customers)}</tbody></table></div>` : ''}
       ${m.doubtfulCustomers.length ? `<h4>Doubtful: in administration or liquidation</h4><div class="tbl-wrap"><table class="lines home"><thead><tr><th>Customer and invoices</th><th>Oldest due</th><th class="num">Owed</th></tr></thead><tbody>${custRows(m.doubtfulCustomers, false)}</tbody></table></div>` : ''}`}</section>`;
 
   const cards = [

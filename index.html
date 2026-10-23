@@ -523,6 +523,11 @@ table.lprocs tr.allrow td{background:var(--field);border-bottom:2px solid var(--
 .acc-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:10px 0} .acc-kv>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .acc-kv b{display:block;font-size:20px} .acc-kv span{font-size:12.5px;color:var(--mute)} .acc-kv .bad b{color:var(--bad,#C42B1C)}
 .acc-units{font-size:12.5px;color:var(--mute);margin-top:4px} .acc-list{margin:8px 0 0;padding-left:18px;font-size:13px}
+#v-accounts .acc-who{margin-top:6px;font-size:13px;line-height:1.5} #v-accounts .acc-who i{color:var(--mute);font-style:normal} #v-accounts .acc-who a{white-space:nowrap}
+/* The overdue list on a phone (24 Oct): each customer a card, so Owed is on screen without scrolling sideways */
+@media (max-width:560px){ #v-accounts#v-accounts table.owed thead{display:none} #v-accounts#v-accounts table.owed tr{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 10px;border-bottom:1px solid var(--line)}
+  #v-accounts#v-accounts table.owed td{border:0;padding:0;text-align:left} #v-accounts#v-accounts table.owed td:first-child,#v-accounts#v-accounts table.owed td:nth-child(4){grid-column:1/-1}
+  #v-accounts#v-accounts table.owed td:nth-child(3){text-align:right;font-weight:700;font-size:16px} }
 /* Keith's page on a phone (24 Oct): big figures shrink to fit their box rather than run off it */
 #v-accounts#v-accounts .hcard>div{min-width:0} #v-accounts#v-accounts .hcard b{font-size:clamp(16px,4.4vw,26px);white-space:nowrap} #v-accounts#v-accounts .acc-kv b{font-size:clamp(16px,4.4vw,20px);white-space:nowrap}
 @media (max-width:480px){ #v-accounts#v-accounts .hcard .ic{display:none} #v-accounts#v-accounts .hcard{padding-left:14px} }   /* more room for the figure; Keith's tables keep every column (they scroll sideways) */
