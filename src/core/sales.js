@@ -239,3 +239,19 @@ export function spendChanges(base, today, earliest = '', { minPrev = 1000, minFa
     up: rows.filter(r => r.change > 0 && r.change / r.prevNet >= minFall).sort((a, b) => b.change - a.change),
     partial: !!earliest && t - dayNo(earliest) < 700 };
 }
+
+/**
+ * The facts an AI follow-up on one quote may use (25 Oct), and nothing else: the quote number and date, what was
+ * quoted in plain words (never the price), how many times it has been chased and when, the customer's question
+ * if they asked one, whether they are a regular, and Levi's own line. lines: the quote calculator's lines.
+ */
+export function quoteChaseFacts(q, { lines = [], actions = [], customer = null, question = '', angle = '', from, company = 'Clarke Lane Engineering', today = '' }) {
+  const mine = (actions || []).filter(a => a.spId === q.spId), when = k => mine.filter(a => a.kind === k).map(a => String(a.at).slice(0, 10)).sort();
+  const chases = when('email'), calls = when('call');
+  return { company, from, customer: q.customer, contactFirstName: String(q.contactName || '').split(' ')[0] || '',
+    quoteNo: q.quoteNo, quoteDate: q.quoteDate || '', daysSinceQuote: q.age ?? (q.quoteDate && today ? dayNo(today) - dayNo(q.quoteDate) : null),
+    whatWasQuoted: (lines || []).slice(0, 12).map(l => [l.qty ? `${l.qty} ×` : '', l.desc || '', l.material ? `${l.thickness ? `${l.thickness}mm ` : ''}${l.material}` : ''].filter(Boolean).join(' ').trim()).filter(Boolean),
+    followUpsSoFar: chases.length, lastFollowUp: chases.at(-1) || '', callsSoFar: calls.length, lastCall: calls.at(-1) || '',
+    customerAsked: String(question || '').slice(0, 400), regularCustomer: !!(customer && customer.orders >= 3), lastOrdered: customer?.last || '',
+    angleFromLevi: String(angle || '').slice(0, 600) };
+}
