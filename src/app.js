@@ -3531,6 +3531,8 @@ function onClick(e) {
 $('scrim').addEventListener('click', () => closeOpen());
 $('doc').addEventListener('click', e => { if (e.target.id === 'doc') closeDoc(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('doc').hidden) closeDoc(); else if (S.open) closeOpen(); } });
+// The mouse wheel scrolls the page, never the number in a box (Mandy, 25 Oct): let go of the box before the browser can change it.
+document.addEventListener('wheel', e => { if (e.target.matches?.('input[type=number]') && e.target === document.activeElement) e.target.blur(); }, { passive: true });
 document.addEventListener('input', e => {
   if (e.target.id === 'gq') return showSearch();
   if (e.target.dataset.pq && S.pfDraft) {   // pro forma quantities: redraw the preview, keep the box being typed in
