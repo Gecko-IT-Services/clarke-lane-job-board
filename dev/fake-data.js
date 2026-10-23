@@ -304,6 +304,7 @@ function salesHistory() {
   add('Tenth Example Ltd', 'cx7', 20, 30, 6, 'Shelf bracket 2mm Zintec', 380);                          // usually every 20 days: due a reorder
   add('Second Example Ltd', 'cx3', 28, 40, 5, 'Mounting plate 3mm aluminium 5083', 290);                // usually every 4 weeks: due a reorder
   add('Fifth Example Ltd', 'cx5', 35, 50, 4, 'Cable tray lid 1.5mm galvanised', 460);                    // usually every 5 weeks: due a reorder
+  add('Sixth Example Ltd', 'cx8', 30, 20, 12, 'Machine guard panel 2mm', 600); add('Sixth Example Ltd', 'cx8', 30, 380, 12, 'Machine guard panel 2mm', 1800);   // spending a third of what they did (25 Oct)
   return { invoices: inv, earliest: inv.reduce((m, x) => (!m || x.date < m ? x.date : m), '') };
 }
 const follow = {}; let actNo = 1;

@@ -10,7 +10,7 @@ import { customerQuestion } from './core/inbox.js';
 export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply', 'Job cancelled', 'Other'];
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
 
-export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histStale = '', histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false }, h) {
+export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histStale = '', histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false, prices = [], spend = null }, h) {
   const { esc, fmt, gbp } = h;
   if (err) return `<div class="hhead"><div><h2>CRM</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
   if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
@@ -99,6 +99,30 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
       <div class="tbl-wrap"><table class="lines"><thead><tr><th>Customer</th><th>Has from us</th><th>Worth asking about</th><th></th></tr></thead><tbody>${more.slice(0, 15).map(x => `<tr><td><b>${esc(x.customer)}</b></td>
         <td>${esc(x.has.join(', '))}</td><td>${esc(x.missing.join(', '))}</td><td>${writeBtn(x, `Mention that we also do ${x.missing.join(' and ')} in-house or through our partners, so they can send the whole job to one supplier. Do not assume they need it.`)}</td></tr>`).join('')}</tbody></table></div>
       <p class="note">From the processes on their orders and the words on their invoices: a prompt to ask, not a guess about their business.</p></section>` : '';
+  // Price review (25 Oct, towards £20k a month): repeat parts on the same price for over a year, biggest first. Levi and Mandy (prices).
+  const months = d => { const m = Math.round(d / 30.4); return m >= 24 ? `${Math.floor(m / 12)} years` : `${m} months`; };
+  const pv = prices.reduce((a, p) => a + p.yearValue, 0), pu = prices.reduce((a, p) => a + p.uplift, 0);
+  const priceBox = !base ? '' : `<section class="panel" id="sprices"><h3>Price review <small>repeat parts on the same price for over a year</small></h3>
+    ${prices.length ? `<p class="sline">${prices.length} part${prices.length === 1 ? '' : 's'} still being ordered at a price set over a year ago: <b>${gbp(pv)}</b> of orders in the last 12 months. Five per cent on these is <b>${gbp(pu)}</b> a year, for no more work in the factory.</p>
+      <div class="tbl-wrap"><table class="lines sprices"><thead><tr><th>Customer</th><th>Part</th><th class="num">Price now</th><th>Same since</th><th class="num">Last 12 months</th><th class="num">+5% is worth</th><th></th></tr></thead><tbody>
+      ${prices.slice(0, 40).map(p => `<tr><td><b>${esc(p.customer)}</b></td><td>${esc(p.item)}${p.code ? `<small class="mono">${esc(p.code)}</small>` : ''}</td><td class="num">${gbp(p.price)}<small>each</small></td><td>${esc(fmt(p.since))}<small>${months(p.days)}</small></td>
+        <td class="num">${gbp(p.yearValue)}<small>${p.yearQty} off · ${p.times} invoices in all</small></td><td class="num">${gbp(p.uplift)}<small>a year</small></td>
+        <td><button class="btn sm" type="button" data-priced="${esc(p.key)}" data-pitem="${esc(p.item)}">Reviewed</button> <button class="btn sm link" type="button" data-custpage="${esc(p.key)}">Page</button></td></tr>`).join('')}</tbody></table></div>
+      <p class="note">From Xero's invoice lines (the price is the line amount over the quantity). Put the new price on their next order and the board remembers it. <b>Reviewed</b> takes a part off this list for a year and notes it on the customer's page, whether or not the price changed.</p>`
+      : '<p class="allclear ok">Every repeat part has had its price looked at in the last year.</p>'}</section>`;
+  // Spending less than last year (25 Oct): still ordering, but down on the 12 months before. Levi only (customer spend).
+  const down = spend?.down || [], fell = down.reduce((a, r) => a + r.change, 0);
+  const spendAngle = 'Their orders with us are down on last year. Ask, in a friendly way and without mentioning any figures, whether anything has changed on their side and whether there is work coming up we could help with. Do not sound as if we are checking up on them.';
+  const spendBox = !md || !spend ? '' : `<section class="panel" id="sspend"><h3>Spending less than last year <small>still ordering, but down on the 12 months before</small></h3>
+    ${spend.partial && histEarliest ? `<p class="note">Xero's invoices only go back to ${esc(fmt(histEarliest))}, so "the 12 months before" is not a full year yet and the falls look smaller than they are.</p>` : ''}
+    ${down.length ? `<p class="sline">Together these ${down.length} customer${down.length === 1 ? '' : 's'} spent <b>${gbp(-fell)}</b> less than the year before. Winning half of that back is about <b>${gbp(-fell / 24)} a month</b>, from people who already know us.</p>
+      <div class="tbl-wrap"><table class="lines sspend"><thead><tr><th>Customer</th><th class="num">Last 12 months</th><th class="num">12 months before</th><th class="num">Change</th><th>Last order</th><th>They buy</th><th></th></tr></thead><tbody>
+      ${down.slice(0, 25).map(r => `<tr><td><b>${esc(r.customer)}</b></td><td class="num">${gbp(r.yearNet)}</td><td class="num">${gbp(r.prevNet)}</td><td class="num"><span class="neg">-${gbp(-r.change)}</span><small>${r.pct}%</small></td>
+        <td>${esc(fmt(r.last))}<small>${esc(days(r.since))} ago</small></td><td>${r.items.slice(0, 2).map(i => esc(i.item)).join('<br>') || '—'}</td>
+        <td>${writeBtn(r, spendAngle)} <button class="btn sm" type="button" data-ccall="${esc(r.key)}">Log a call</button> <button class="btn sm link" type="button" data-custpage="${esc(r.key)}">Page</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="allclear ok">No regular customer is down on last year.</p>'}
+    ${spend.up.length ? `<p class="note">Going the other way: ${spend.up.slice(0, 5).map(r => `<b>${esc(r.customer)}</b> up ${gbp(r.change)}`).join(', ')}.</p>` : ''}</section>`;
+
   // The monthly news email: one personal draft per ticked customer.
   const active = (base || []).filter(c => c.since != null && c.since <= 365 && c.yearNet > 0);
   const newsBox = !base ? '' : `<section class="panel" id="snews"><h3>Email your customers <small>a short personal note to each, e.g. once a month</small></h3>
@@ -109,5 +133,5 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
 
   return `<div class="hhead"><div><h2>CRM</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with.${md ? ' Only you see the month\'s figures and totals.' : ''}</p></div>
       <div class="hbtns"><button class="btn" type="button" data-salesreload>${icon('refresh')}Refresh</button></div></div>
-    ${md ? monthBox : ''}${enquiriesBox}${aiBox}${chaseBox}${listBox}${reorderBox}${moreBox}${custBox}${newsBox}${says}`;
+    ${md ? monthBox : ''}${enquiriesBox}${aiBox}${chaseBox}${listBox}${reorderBox}${priceBox}${spendBox}${moreBox}${custBox}${newsBox}${says}`;
 }

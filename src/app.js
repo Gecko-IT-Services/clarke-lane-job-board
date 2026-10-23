@@ -41,7 +41,7 @@ import { searchAll } from './core/search.js';
 import { newDispatches } from './core/mood.js';
 import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf } from './core/crm.js';
 import { linkEmail, emailActions, sortEmails, emailTaskTitle, needTopic, cleanTopic, ASKED } from './core/inbox.js';
-import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue } from './core/sales.js';
+import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue, priceReview, spendChanges, PRICE_REVIEWED } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
@@ -1676,6 +1676,16 @@ async function reorderAction(key, item, kind) {
   render();
 }
 
+/** Price review (25 Oct): a repeat part looked at; noted on the customer's page and off the list for a year. */
+async function priceReviewed(key, item) {
+  const c = S.hist ? customerBase(S.hist.invoices, todayIso()).find(x => x.key === key) : null; if (!c) return;
+  try {
+    await data.addSalesAction({ customer: c.customer, kind: 'note', note: PRICE_REVIEWED + item });
+    S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
+    toast(`${item} for ${c.customer}: noted as reviewed.`);
+  } catch (e) { toast(e.message, null, true); }
+  render();
+}
 /* ---------- CRM (Levi and Mandy; the month against the target Levi only): quotes to chase, customers gone quiet ---------- */
 async function loadSalesData(fresh) {
   if (S.salesLoading) return; S.salesLoading = true; S.salesErr = null;
@@ -1750,7 +1760,8 @@ function renderSalesView() {
   if (!S.salesQ) { $('v-sales').innerHTML = renderSales({ loading: !S.salesErr, err: S.salesErr }, { esc, fmt, gbp }); return; }
   const m = salesModel();
   $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histStale: S.histNote || '', histEarliest: S.hist?.earliest, ai: S.ai,
-    reorderBox: reordersHtml(false), more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md() }, { esc, fmt, gbp });
+    reorderBox: reordersHtml(false), more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md(),
+    prices: m.base ? priceReview(m.base, S.salesActs || S.salesF?.actions || [], m.today) : [], spend: m.base ? spendChanges(m.base, m.today, S.hist?.earliest) : null }, { esc, fmt, gbp });
 }
 function crmHead() {
   const n = (S.ideas || []).filter(i => i.status === 'new').length;
@@ -3401,6 +3412,7 @@ function onClick(e) {
   if (d.aiopen) return openAi(d.aiopen, d.angle || '', d.reitem || '');
   if (d.reasked) return reorderAction(d.reasked, d.reitem, 'reorder');
   if (d.resnooze) return reorderAction(d.resnooze, d.reitem, 'reorder_snooze');
+  if (d.priced) return priceReviewed(d.priced, d.pitem);
   if (d.aiwrite) return writeAi(d.aiwrite);
   if (d.aidraft) return draftAi(d.aidraft);
   if ('aiclose' in d) { S.ai = null; return render(); }
