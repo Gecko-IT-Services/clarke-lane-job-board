@@ -519,7 +519,8 @@ Deno.serve(async req => {
     const b = await req.json().catch(() => ({})) as any;
     const fresh = b?.fresh === true;
     // The accounts login (Keith) reads invoices, debts and purchases, and nothing else; purchases are his alone.
-    if (me.role === 'accounts' && !['invoices', 'debts', 'purchases', 'pack', 'month'].includes(route || '')) throw new HttpError(403, 'The accounts login reads invoices, debts, purchases and the monthly pack only.');
+    // contact and online (24 Oct): a customer's email and the pay-online links, for Keith's chase emails. All reads.
+    if (me.role === 'accounts' && !['invoices', 'debts', 'purchases', 'pack', 'month', 'contact', 'online'].includes(route || '')) throw new HttpError(403, 'The accounts login reads invoices, debts, purchases and the monthly pack only.');
     if (route === 'pack') {
       if (me.role !== 'accounts') throw new HttpError(403, 'The monthly pack is on the accounts login only.');
       return reply(await cached(`pack:${b?.month}`, 6 * HOUR, fresh, () => monthPack(String(b?.month || ''))));

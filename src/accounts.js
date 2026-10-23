@@ -6,10 +6,11 @@
  */
 import { card } from './home.js';
 import { draftsToApprove, cutOff, moneyIn, matchPurchases, outworkWithoutBill } from './core/accounts.js';
+import { normName } from './core/xero.js';
 
 const STATUS = { DRAFT: 'Draft', SUBMITTED: 'Awaiting approval', AUTHORISED: 'Approved', BILLED: 'Billed' };
 
-export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, purchases, purErr, outwork, chases, view = 'look', loading, switcher = '' }, h) {
+export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, purchases, purErr, outwork, chases, view = 'look', loading, switcher = '', chasing = null }, h) {
   const { esc, fmt, gbp } = h;
   const money = n => gbp(n, 2);
   const chip = (t, tone = '') => `<span class="chip${tone ? ' ' + tone : ''}">${t}</span>`;
@@ -69,7 +70,9 @@ export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, p
   // 4. Money coming in: grouped by customer, most owed first; customers in administration kept apart (24 Oct).
   const m = debts ? moneyIn(debts, jobs, chases, today) : null;
   const pounds = n => gbp(n, 0);
-  const chaseCell = x => x.chased ? `${fmt(x.chased.at.slice(0, 10))} by ${esc(x.chased.by)}` : '<span class="note">no chase email from the board</span>';
+  // Chase (24 Oct): the AI writes the email, the board adds the invoices and pay-online links; it lands in Keith's Outlook Drafts.
+  const chaseCell = x => `${x.chased ? `${fmt(x.chased.at.slice(0, 10))} by ${esc(x.chased.by)}` : '<span class="note">no chase email from the board</span>'}
+    <div><button class="btn sm${x.chased ? '' : ' pri'}" type="button" data-accchase="${esc(normName(x.customer))}" ${chasing ? 'disabled' : ''}>${chasing === normName(x.customer) ? 'Writing…' : 'Chase'}</button></div>`;
   const custRows = (list, chase = true) => list.map(g => `<tr><td><b>${esc(g.customer)}</b><span class="ref mono">${g.invoices.map(x => esc(x.number)).join(', ')}</span></td>
       <td>${g.oldest ? `${fmt(g.oldest)}${g.days != null ? ` <span class="note">${g.days} days</span>` : ''}` : ''}</td><td class="num">${money(g.owed)}</td>${chase ? `<td>${chaseCell(g)}</td>` : ''}</tr>`).join('');
   const inBox = `<section class="panel acc"><div class="ph"><h3>Money coming in</h3><span class="note">approved invoices not yet paid, by due date</span></div>
@@ -78,7 +81,7 @@ export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, p
       <div><b>${pounds(m.month)}</b><span>Due in 8 to 30 days</span></div><div><b>${pounds(m.later)}</b><span>Later</span></div>
       ${m.doubtful ? `<div><b>${pounds(m.doubtful)}</b><span>Doubtful: customers in administration or liquidation (in none of the figures above)</span></div>` : ''}
       <div><b>${pounds(m.toInvoice)}</b><span>To invoice in the next 4 weeks (order book due by then)</span></div></div>
-      ${m.customers.length ? `<h4>Overdue, by customer</h4><p class="note">Every approved invoice past its due date and still unpaid, most owed first. <i>Last chased</i> shows chase emails drafted from the board only; a phone call or an email sent another way is not seen here.</p>
+      ${m.customers.length ? `<h4>Overdue, by customer</h4><p class="note">Every approved invoice past its due date and still unpaid, most owed first. <i>Last chased</i> shows chase emails drafted from the board only; a phone call or an email sent another way is not seen here. <b>Chase</b> writes the email for you (the invoices and pay-online links straight from Xero) and puts it in your Outlook Drafts to check and send.</p>
         <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Customer and invoices</th><th>Oldest due</th><th class="num">Owed</th><th>Last chased</th></tr></thead><tbody>${custRows(m.customers)}</tbody></table></div>` : ''}
       ${m.doubtfulCustomers.length ? `<h4>Doubtful: in administration or liquidation</h4><div class="tbl-wrap"><table class="lines home"><thead><tr><th>Customer and invoices</th><th>Oldest due</th><th class="num">Owed</th></tr></thead><tbody>${custRows(m.doubtfulCustomers, false)}</tbody></table></div>` : ''}`}</section>`;
 

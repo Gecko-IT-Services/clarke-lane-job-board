@@ -85,3 +85,19 @@ const out = [{ supplier: 'Sample Coaters Ltd', sentOn: '2026-10-01', jobId: 1 },
 const ow = outworkWithoutBill(out, bills, today);
 assert.deepEqual(ow.map(g => [g.supplier, g.sends.length, g.since]), [['Sample Coaters Ltd', 2, '2026-09-25']], 'Example Metals has billed since; New Platers is too recent');
 console.log('accounts: ok');
+
+// — Keith's chase emails (24 Oct): the AI writes the words, the board the table and links. —
+{
+  const { chaseFacts, chaseHtml } = await import('../src/core/accounts.js');
+  const g = { customer: 'Example Customer Ltd', owed: 350, days: 23, invoices: [
+    { id: 'i1', number: 'INV-9', date: '2026-08-31', due: '2026-09-30', owed: 300, days: 23 }, { id: 'i2', number: 'INV-15', date: '2026-09-01', due: '2026-10-01', owed: 50, days: 22 }] };
+  const f = chaseFacts(g, { person: 'Sam Buyer', chases: [{ customer: 'EXAMPLE CUSTOMER LTD', at: '2026-10-16T09:00:00Z' }, { customer: 'Other', at: '2026-10-20T09:00:00Z' }], today: '2026-10-24' });
+  assert.deepEqual([f.contactFirstName, f.totalOwed, f.oldestDaysOverdue, f.chasedBefore, f.chasedInLast30Days], ['Sam', 350, 23, ['2026-10-16'], true]);
+  assert.deepEqual(f.invoices.map(x => x.number), ['INV-9', 'INV-15']);
+  const html = chaseHtml({ greeting: 'Dear Sam,', before: ['Two invoices <are> overdue.'], after: ['Thank you.'] }, g, { links: { i1: 'https://in.xero.com/x' } });
+  assert.ok(html.includes('Two invoices &lt;are&gt; overdue.'), "the AI's words are escaped");
+  assert.ok(html.includes('£350.00') && html.includes('INV-15') && html.includes('href="https://in.xero.com/x"'), 'the table and the link come from Xero, not the AI');
+  assert.equal((html.match(/View and pay online/g) || []).length, 1, 'a link only where Xero gave one');
+  assert.match(html, /Kind regards,<br>Keith<br>Accounts, Clarke Lane Engineering Ltd/);
+  console.log('accounts chase: ok');
+}
