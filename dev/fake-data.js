@@ -117,6 +117,7 @@ export const xero = async (route, body) => {
     { id: 'd3', number: 'INV-30950', reference: 'P-77', contactId: 'cx2', customer: 'Fourth Example Ltd', date: '2026-08-12', due: '2026-09-30', total: 420, owed: 210 },
     { id: 'd4', number: 'INV-31990', reference: '', contactId: 'cx1', customer: 'Example Customer Ltd', date: '2026-10-02', due: '2026-11-30', total: 300, owed: 300 }] };
   if (route === 'online') return { links: { d1: 'https://in.xero.com/example' } };
+  if (route === 'pack') return fakePack(body.month);
   if (route === 'month') return { from: body.from, to: body.to, creditsRead: true, invoices: [   // made-up figures
     { id: 'xm1', number: 'INV-31901', reference: 'P31600', customer: 'Example Customer Ltd', date: body.from, net: 2600 },
     { id: 'xm2', number: 'INV-31902', reference: 'Sage SO 9600', customer: 'Sample Works Ltd', date: body.from, net: 1550 },
@@ -159,6 +160,25 @@ export const loadCocs = async () => ({ issued: new Map(cocs), customers: new Set
 export const saveCoc = async (id, c) => { cocs.set(id, { ...c, issuedAt: new Date().toISOString(), issuedBy: 'you', emailedAt: cocs.get(id)?.emailedAt || null }); };
 export const markCocEmailed = async id => { const c = cocs.get(id); if (c) c.emailedAt = new Date().toISOString(); };
 export const setCustomerCoc = async (k, on) => { if (on) cocCustomers.add(k); else cocCustomers.delete(k); };
+// Keith's monthly pack: made-up reports in Xero's layout (header, then sections of rows and a total).
+const c = v => ({ Value: String(v) }), r = (l, ...v) => ({ RowType: 'Row', Cells: [c(l), ...v.map(c)] }), t = (l, ...v) => ({ RowType: 'SummaryRow', Cells: [c(l), ...v.map(c)] });
+const rep = (cols, ...secs) => ({ titles: [], rows: [{ RowType: 'Header', Cells: [c(''), ...cols.map(c)] }, ...secs.map(([Title, ...Rows]) => ({ RowType: 'Section', Title, Rows }))] });
+function fakePack(month) {
+  const [y, m] = month.split('-').map(Number);
+  const cols = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(y, m - 1 - i, 15)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }));
+  const sales = [84000, 78000, 91000, 69000, 88000, 95000, 72000, 81000, 76000, 90000, 83000, 70000], mats = sales.map(v => Math.round(v * 0.41)), sub = sales.map(v => Math.round(v * 0.06));
+  const pl = (cs, sl, mt, sb, rent, wages) => rep(cs, ['Trading Income', r('Sales', ...sl)], ['Cost of Sales', r('Materials', ...mt), r('Subcontract and coating', ...sb)],
+    ['Operating Expenses', r('Wages and Salaries', ...wages), r('Rent and rates', ...rent), r('Electricity', ...cs.map(() => 2100)), r('Motor and van', ...cs.map(() => 900))]);
+  return { month, fyStart: `${m >= 4 ? y : y - 1}-04-01`, yearEndMonth: 3, organisation: 'Clarke Lane Engineering Ltd', reports: {
+    trend: pl(cols, sales, mats, sub, cols.map(() => 4000), cols.map((_, i) => (i === 3 ? 0 : 21000))),
+    ytd: pl(['YTD'], [451000], [186000], [27000], [24000], [126000]), lastYtd: pl(['Last YTD'], [418000], [165000], [24000], [24000], [120000]),
+    lastYearMonth: pl(['Last year'], [79000], [31000], [4500], [4000], [20000]),
+    balance: rep(['End', 'Before'], ['Bank', r('Business Current Account', 41000, 38500), t('Total Bank', 41000, 38500)], ['Current Assets', r('Accounts Receivable', 118000, 112000), t('Total Current Assets', 118000, 112000)],
+      ['Current Liabilities', r('Accounts Payable', 46000, 43000), r('VAT', 17500, 15000), t('Total Current Liabilities', 63500, 58000)], ['', r('Net Assets', 162000, 158000)]),
+    bank: rep(['Opening Balance', 'Cash Received', 'Cash Spent', 'Closing Balance'], ['', r('Business Current Account', 38500, 96000, 93500, 41000), t('Total', 38500, 96000, 93500, 41000)]) } };
+}
+const packsKept = new Map();
+export const loadMonthPack = async m => packsKept.get(m) || null;
 let cmap = new Map();
 export const loadContactMap = async () => new Map(cmap);
 export const saveContact = async (k, c) => { cmap.set(k, c); };
@@ -295,6 +315,10 @@ export const salesAiCheckin = async facts => ({ subject: `Next batch of ${facts.
 export const practice = true;   // the board skips what would cost real AI calls here (the topic backfill, 21 Oct)
 const noRefs = { so: '', po: '', quote: '' };
 export const salesAi = async (facts, kind = 'checkin') => {
+  if (kind === 'monthpack') return { headline: `${facts.monthName}: sales up on last year, margin a little lower`,   // made up
+    summary: 'Sales were ahead of the same month last year and the year to date is up too. Gross margin slipped as materials rose faster than sales. Cash is steady and customers are paying at about the usual pace.',
+    sections: [{ title: 'Sales', points: ['Sales were higher than the same month last year.'] }, { title: 'Margins and costs', points: ['Materials rose faster than sales, so gross margin fell.'] }],
+    risks: ['One customer is a large share of the month.'], actions: ['Check steel prices on the next two purchase orders.'], questions: ['Are all of the month\'s wages posted?'], model: 'fake', costUsd: 0 };
   // Customers' emails (21 Oct): a complaint, a PO against a quote and a delivery question, with their topic and numbers.
   if (kind === 'enquiry' && /arrived bent/i.test(facts.text)) return { kind: 'customer', summary: 'The brackets on SO-9782 arrived bent; they need 10 re-made urgently.', company: 'Second Example Ltd', person: facts.fromName, phone: '', wants: '10 brackets re-made', hasDrawings: false, topic: 'complaint', refs: { ...noRefs, so: 'SO-9782' } };
   if (kind === 'enquiry' && /PO-4471/.test(facts.text)) return { kind: 'customer', summary: 'Sends their PO-4471 for quote Q-0320.', company: 'Example Customer Ltd', person: facts.fromName, phone: '', wants: '', hasDrawings: true, topic: 'po', refs: { so: '', po: 'PO-4471', quote: 'Q-0320' } };

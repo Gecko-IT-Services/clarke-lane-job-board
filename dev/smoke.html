@@ -524,6 +524,12 @@ table.lprocs tr.allrow td{background:var(--field);border-bottom:2px solid var(--
 .acc-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:10px 0} .acc-kv>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .acc-kv b{display:block;font-size:20px} .acc-kv span{font-size:12.5px;color:var(--mute)} .acc-kv .bad b{color:var(--bad,#C42B1C)}
 .acc-units{font-size:12.5px;color:var(--mute);margin-top:4px} .acc-list{margin:8px 0 0;padding-left:18px;font-size:13px}
+/* Keith's monthly pack (23 Oct): one series of bars, ink on the page; the figures are in the table under it */
+.ptrend{width:100%;height:auto;max-height:190px;display:block;margin:6px 0} .ptrend .bar{fill:var(--mute,#8C8C91)} .ptrend .bar.now{fill:var(--ink,#14161A)} .ptrend .bar:hover{opacity:.8}
+.ptrend .ax{font-size:11px;fill:var(--mute,#5F6670)} .ptrend .lbl{font-size:12px;font-weight:700;fill:var(--ink,#14161A)} .ptrend .base{stroke:var(--line,#BFC4CC);stroke-width:1}
+#v-accounts tr.sub td{border-top:1px solid var(--line)} .pcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px} #v-accounts h4,.pai h4{margin:12px 0 4px;font-size:14px}
+.pai ul{margin:0 0 6px;padding-left:18px} .pai li{margin:2px 0} .pai .phead{font-size:16px;margin:0 0 6px}
+.paper.ppack .ptrend .bar{fill:#9AA0A8} .paper.ppack .ptrend .bar.now,.paper.ppack .ptrend .lbl{fill:var(--paper-ink)} .paper .ppl{font-size:12.5px} .paper .ppl th,.paper .ppl td{padding:5px 6px}
 .paper{max-width:794px;margin:0 auto;background:var(--paper);color:var(--paper-ink);padding:44px 48px;border-radius:4px;font-size:13.5px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:22px}
 .paper .ph{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:flex-start}
 .paper .ph svg{height:46px;width:auto}
@@ -1067,7 +1073,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/deliveries.js', 'src/core/deliveries.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js', 'src/core/coc.js', 'src/accounts.js', 'src/core/accounts.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/deliveries.js', 'src/core/deliveries.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js', 'src/core/coc.js', 'src/accounts.js', 'src/core/accounts.js', 'src/core/pack.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

@@ -7,7 +7,8 @@ import * as realData from './data.js';
 import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo, looksSame, rankContacts } from './core/xero.js';
 import { cocRows, cocNeeded, COC_STATEMENT, DEFAULT_ORIGIN } from './core/coc.js';
-import { renderAccounts } from './accounts.js';
+import { renderAccounts, renderMonthPack, packPaper } from './accounts.js';
+import { packFacts as monthPackFacts, lastMonths } from './core/pack.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
 import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partsOnJob, lineNumbers } from './core/parts.js';
@@ -3007,9 +3008,60 @@ async function loadAccounts(force = false) {
   accLoading = false; render();
 }
 function renderAccountsView() {
-  const a = S.acc || {};
+  const a = S.acc || {}, tab = S.accTab || 'checks';
+  const switcher = `<div class="seg" role="group" aria-label="Which page"><button type="button" data-acctab="checks" aria-pressed="${tab === 'checks'}">Checks</button><button type="button" data-acctab="pack" aria-pressed="${tab === 'pack'}">Monthly pack</button></div>`;
+  if (tab === 'pack') {
+    const months = lastMonths(todayIso(), 12), month = S.packMonth || months[0], p = (S.packs || {})[month];
+    if (!p && !S.packLoading && !S.packErr) loadPack(month);
+    $('v-accounts').innerHTML = renderMonthPack({ months, month, facts: p?.facts, packErr: S.packErr, loading: S.packLoading, saved: p?.saved, aiBusy: S.packAi, aiErr: S.packAiErr, switcher }, { esc, fmt, gbp });
+    return;
+  }
   $('v-accounts').innerHTML = renderAccounts({ jobs: S.jobs, today: todayIso(), me: S.me, inv: a.inv, invErr: a.invErr, debts: a.debts, debtErr: a.debtErr,
-    purchases: a.purchases, purErr: a.purErr, outwork: S.outwork || [], chases: S.chases || [], view: S.accView || 'look', loading: a.loading }, { esc, fmt, gbp });
+    purchases: a.purchases, purErr: a.purErr, outwork: S.outwork || [], chases: S.chases || [], view: S.accView || 'look', loading: a.loading, switcher }, { esc, fmt, gbp });
+}
+/** One month's pack: Xero's reports (kept 6 hours for everyone), the month's sales invoices (top customers), the board,
+ *  and the analysis already written for that month, if any. */
+async function loadPack(month, fresh = false) {
+  if (!accounts() || S.packLoading) return;
+  S.packLoading = true; S.packErr = null; render();
+  try {
+    const [y, m] = month.split('-').map(Number), last = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+    const [pack, inv, saved] = await Promise.all([data.xero('pack', { month, fresh }), data.xero('month', { from: `${month}-01`, to: last, fresh }).catch(() => ({ invoices: [] })),
+      data.loadMonthPack(month).catch(() => null)]);
+    const facts = monthPackFacts({ pack, jobs: S.jobs, invoices: inv.invoices || [], today: todayIso() });
+    S.packs = { ...(S.packs || {}), [month]: { facts, saved } };
+  } catch (e) { S.packErr = e.message; }
+  S.packLoading = false; render();
+}
+/** The AI's commentary on the month (kept by the AI function, so it is paid for once). */
+async function writePackAnalysis() {
+  const month = S.packMonth || lastMonths(todayIso(), 1)[0], p = (S.packs || {})[month]; if (!p || S.packAi) return;
+  S.packAi = true; S.packAiErr = null; render();
+  try {
+    const r = await data.salesAi(p.facts, 'monthpack');
+    p.saved = { analysis: r, madeAt: new Date().toISOString() };
+    toast(`Analysis for ${p.facts.monthName} written. Check it before presenting.`);
+  } catch (e) { S.packAiErr = e.message; }
+  S.packAi = false; render();
+}
+/** The pack on A4, to print or save as a PDF. */
+function showPack() {
+  const month = S.packMonth || lastMonths(todayIso(), 1)[0], p = (S.packs || {})[month]; if (!p) return;
+  const name = `Management accounts - ${p.facts.monthName}`;
+  $('doc').innerHTML = `<div class="docbar"><span>The month's management accounts for Rob.</span>
+      <button class="btn" type="button" data-packpdf>${icon('doc')}Save PDF</button><button class="btn" type="button" data-print data-name="${esc(name)}">${icon('print')}Print</button><button class="btn" type="button" data-closedoc>Close</button></div>
+    <div class="paper ppack">${packPaper(p.facts, p.saved, { esc, gbp, logo: document.querySelector('.top .logo').outerHTML })}</div>`;
+  $('doc').hidden = false; document.body.classList.add('doc-open');
+}
+async function savePackPdf() {
+  const month = S.packMonth || lastMonths(todayIso(), 1)[0], p = (S.packs || {})[month]; if (!p) return;
+  const btn = document.querySelector('[data-packpdf]'), was = btn?.innerHTML; if (btn) { btn.disabled = true; btn.textContent = 'Making the PDF…'; }
+  try {
+    const b64 = await pdfBase64(packPaper(p.facts, p.saved, { esc, gbp, logo: document.querySelector('.top .logo').outerHTML }));
+    const a = document.createElement('a'); a.href = 'data:application/pdf;base64,' + b64; a.download = `Management accounts - ${p.facts.monthName}.pdf`;
+    document.body.append(a); a.click(); a.remove(); toast(`Saved ${a.download} to your Downloads.`);
+  } catch (e) { toast(e.message, null, true); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = was; } }
 }
 
 /* ---------- certificates of conformity (Philip, 23 Oct): one per dispatch note, office only ---------- */
@@ -3410,6 +3462,11 @@ function onClick(e) {
   }
   if (d.coc) return openCoc(+d.job, +d.coc);
   if (d.accview) { S.accView = d.accview; return render(); }
+  if (d.acctab) { S.accTab = d.acctab; return render(); }
+  if ('packread' in d) { const mm = S.packMonth || lastMonths(todayIso(), 1)[0]; return loadPack(mm, true); }
+  if ('packai' in d) return writePackAnalysis();
+  if ('packprint' in d) return showPack();
+  if ('packpdf' in d) return savePackPdf();
   if ('accrefresh' in d) return loadAccounts(true);
   if ('cocsave' in d) return saveCocNow();
   if (d.savedoc) return saveDoc(d.savedoc, +d.job, d.dnid ? +d.dnid : null);
@@ -3509,6 +3566,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'po-copy' && S.poForm && e.target.value) { collectPo(); copyPo(+e.target.value); return; }
   if (e.target.id === 'po-acc' && S.poForm) { collectPo(); showPoForm(); if (S.poForm.account === 'other') $('po-acc2')?.focus(); return; }
   if (e.target.id === 'coc-every' && S.coc) { S.coc.every = e.target.checked; return; }
+  if (e.target.dataset.packmonth !== undefined) { S.packMonth = e.target.value; S.packErr = null; S.packAiErr = null; return render(); }
   if (e.target.dataset.sendpick) { S.sendPick[+e.target.dataset.sendpick] = e.target.checked; render(); return; }
   if (e.target.id === 'dsel') { S.desp = +e.target.value || null; keepInputs = false; render(); showDespForm(); }
   if (e.target.dataset.taskdone) return toggleTask(+e.target.dataset.taskdone, e.target.checked);
