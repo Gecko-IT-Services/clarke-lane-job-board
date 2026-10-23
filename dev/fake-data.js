@@ -172,7 +172,7 @@ function fakePack(month) {
   const sales = [84000, 78000, 91000, 69000, 88000, 95000, 72000, 81000, 76000, 90000, 83000, 70000], mats = sales.map(v => Math.round(v * 0.41)), sub = sales.map(v => Math.round(v * 0.06));
   const pl = (cs, sl, mt, sb, rent, wages) => rep(cs, ['Trading Income', r('Sales', ...sl)], ['Cost of Sales', r('Materials', ...mt), r('Subcontract and coating', ...sb)],
     ['Operating Expenses', r('Wages and Salaries', ...wages), r('Rent and rates', ...rent), r('Electricity', ...cs.map(() => 2100)), r('Motor and van', ...cs.map(() => 900))]);
-  return { month, fyStart: `${m >= 4 ? y : y - 1}-04-01`, yearEndMonth: 3, organisation: 'Clarke Lane Engineering Ltd', reports: {
+  return { month, fyStart: `${m >= 10 ? y : y - 1}-10-01`, yearEndMonth: 9, /* October to September, as Clarke Lane's */ organisation: 'Clarke Lane Engineering Ltd', reports: {
     trend: pl(cols, sales, mats, sub, cols.map(() => 4000), cols.map((_, i) => (i === 3 ? 0 : i === 0 ? 48000 : 21000))),   // the month a loss, to show the brackets
     ytd: pl(['YTD'], [451000], [186000], [27000], [24000], [126000]), lastYtd: pl(['Last YTD'], [418000], [165000], [24000], [24000], [120000]),
     lastYearMonth: pl(['Last year'], [79000], [31000], [4500], [4000], [20000]),

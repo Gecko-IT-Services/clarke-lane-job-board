@@ -78,3 +78,15 @@ assert.deepEqual(fx.board.topCustomers, [{ customer: 'Example Customer Ltd', net
 assert.deepEqual(fx.biggestCosts.costOfSales, [{ label: 'Materials', month: 46000 }]);
 assert.ok(JSON.stringify(fx).length < 20000, 'small enough to send to the AI');
 console.log('pack: ok');
+
+// The financial year (24 Oct: October is Clarke Lane's first period; the year ends 30 September).
+{
+  const { finYear, packFacts: pf } = await import('../src/core/pack.js');
+  assert.deepEqual(finYear('2026-09', '2025-10-01'), { period: 12, isYearEnd: true, yearEnd: '2026-09-30', label: 'year ending 30 September 2026' });
+  assert.deepEqual([finYear('2025-10', '2025-10-01').period, finYear('2025-10', '2025-10-01').isYearEnd], [1, false], 'October is period 1');
+  assert.equal(finYear('2026-03', '2025-10-01').period, 6, 'six months in');
+  assert.equal(finYear('2026-02', '2025-03-01').yearEnd, '2026-02-28', 'a year ending in February ends on its last day');
+  assert.equal(finYear('2026-09', ''), null, 'no year start: nothing guessed');
+  assert.equal(pf({ pack: { ...pack, month: '2026-09', fyStart: '2025-10-01' }, today: '2026-10-24' }).financialYear.isYearEnd, true, 'the facts the AI gets say September closes the year');
+  console.log('pack year: ok');
+}

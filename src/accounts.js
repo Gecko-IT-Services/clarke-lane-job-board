@@ -143,7 +143,7 @@ function plTable(f, gbp, cls = 'lines home') {
   const per = k => pair.map(([n, w]) => `<td class="num">${n?.[k] != null ? n[k].toFixed(1) + '%' : '–'}</td><td class="num">${w?.[k] != null ? w[k].toFixed(1) + '%' : '–'}</td><td class="num chg">${pts(n?.[k], w?.[k])}</td>`).join('');
   const lossy = [F.month, F.yearToDate].some(x => x?.net < 0);
   return `<div class="tbl-wrap"><table class="${cls} pl"><thead>
-      <tr><th></th><th class="num grp" colspan="3">${esc0(f.monthName)}</th><th class="num grp" colspan="3">Year to date, from ${esc0(longDay(f.fyStart))}</th></tr>
+      <tr><th></th><th class="num grp" colspan="3">${esc0(f.monthName)}</th><th class="num grp" colspan="3">${f.financialYear?.isYearEnd ? `Full year to ${esc0(longDay(f.financialYear.yearEnd))}` : f.financialYear?.period === 1 ? 'Year to date: the first month' : `Year to date, from ${esc0(longDay(f.fyStart))}`}</th></tr>
       <tr><th></th><th class="num">This year</th><th class="num">Last year</th><th class="num">Change</th><th class="num">This year</th><th class="num">Last year</th><th class="num">Change</th></tr></thead><tbody>
     <tr><td>Sales</td>${money('sales')}</tr><tr><td>Cost of sales</td>${money('cos')}</tr><tr class="sub"><td><b>Gross profit</b></td>${money('gross', true)}</tr><tr class="pct"><td>Gross margin</td>${per('gm')}</tr>
     <tr><td>Overheads</td>${money('overheads')}</tr>${[F.month, F.yearToDate].some(x => x?.other) ? `<tr><td>Other income</td>${money('other')}</tr>` : ''}
@@ -163,7 +163,7 @@ function analysisHtml(a, esc) {
 export function renderMonthPack({ months, month, facts, packErr, loading, saved, aiBusy, aiErr, switcher = '' }, h) {
   const { esc, gbp } = h;
   const g = n => gbp(n, 0);
-  const head = `<div class="hhead"><div><h2>Monthly pack</h2><p class="sub">Management accounts for ${esc(facts?.monthName || month)}, from Xero and the board.</p></div>
+  const head = `<div class="hhead"><div><h2>Monthly pack</h2><p class="sub">Management accounts for ${esc(facts?.monthName || month)}${facts?.financialYear ? `, period ${facts.financialYear.period} of the ${esc(facts.financialYear.label)}${facts.financialYear.isYearEnd ? ' (the year end)' : ''}` : ''}, from Xero and the board.</p></div>
     <div class="hbtns">${switcher}<select class="f" data-packmonth aria-label="Which month">${months.map(m => `<option value="${m}"${m === month ? ' selected' : ''}>${new Date(m + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</option>`).join('')}</select>
       <button class="btn" type="button" data-packread ${loading ? 'disabled' : ''}>${loading ? 'Reading Xero…' : 'Read Xero again'}</button>
       ${facts ? '<button class="btn pri" type="button" data-packprint>Print or save PDF</button>' : ''}</div></div>`;
@@ -207,7 +207,7 @@ export function renderMonthPack({ months, month, facts, packErr, loading, saved,
 /** The pack on A4, to print or save as a PDF for Rob. */
 export function packPaper(facts, saved, h) {
   const { esc, gbp } = h, g = n => gbp(n, 0), b = facts.balance, k = facts.kpis, bd = facts.board;
-  return `<div class="ph">${h.logo || ''}<div><h1>Management accounts</h1><div class="dno">${esc(facts.monthName)}</div></div></div>
+  return `<div class="ph">${h.logo || ''}<div><h1>Management accounts</h1><div class="dno">${esc(facts.monthName)}${facts.financialYear ? ` · period ${facts.financialYear.period}${facts.financialYear.isYearEnd ? ', year end' : ''}` : ''}</div></div></div>
     ${plTable(facts, g, 'ppl')}
     <div><div class="k">Sales, last 12 months</div>${trendChart(facts.trend, g)}</div>
     <div class="two"><div><div class="k">Cash and the balance sheet</div><div class="kv">
