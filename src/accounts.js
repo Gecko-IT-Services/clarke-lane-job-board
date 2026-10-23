@@ -6,11 +6,10 @@
  */
 import { card } from './home.js';
 import { draftsToApprove, cutOff, moneyIn, matchPurchases, outworkWithoutBill } from './core/accounts.js';
-import { lineHtml } from './core/jobs.js';
 
 const STATUS = { DRAFT: 'Draft', SUBMITTED: 'Awaiting approval', AUTHORISED: 'Approved', BILLED: 'Billed' };
 
-export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, purchases, purErr, outwork, chases, view = 'look', loading }, h) {
+export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, purchases, purErr, outwork, chases, view = 'look', loading, switcher = '' }, h) {
   const { esc, fmt, gbp } = h;
   const money = n => gbp(n, 2);
   const chip = (t, tone = '') => `<span class="chip${tone ? ' ' + tone : ''}">${t}</span>`;
@@ -85,6 +84,105 @@ export function renderAccounts({ jobs, today, me, inv, invErr, debts, debtErr, p
     card('warn', 'late', m ? money(m.overdue) : '…', 'Overdue', !!m?.overdue),
   ].join('');
   return `<div class="home acc-page"><div class="hhead"><div><h2>Accounts</h2><p class="sub">For ${esc(me?.name || 'Keith')}. Read only: nothing here changes Xero or the board.</p></div>
-      <div class="hbtns"><button class="btn" type="button" data-accrefresh ${loading ? 'disabled' : ''}>${loading ? 'Reading Xero…' : 'Read Xero again'}</button></div></div>
+      <div class="hbtns">${switcher}<button class="btn" type="button" data-accrefresh ${loading ? 'disabled' : ''}>${loading ? 'Reading Xero…' : 'Read Xero again'}</button></div></div>
     <div class="hcards">${cards}</div>${draftBox}${poBox}${cutBox}${inBox}</div>`;
+}
+
+/* ---------- the monthly pack (Philip, 23 Oct): management accounts for a month, for Keith to take to Rob ---------- */
+const sign = n => (n > 0 ? '+' : '');
+/** % change from b to a, or '' when there is nothing to compare with. */
+const change = (a, b) => (b ? `${sign(a - b)}${(Math.round(((a - b) / Math.abs(b)) * 1000) / 10).toFixed(1)}%` : '');
+
+/** The 12 months' sales as bars, oldest first: one series, so no legend; each bar names its month and value on hover. */
+function trendChart(trend, gbp) {
+  if (!trend?.length) return '';
+  const W = 600, H = 150, pad = 18, top = Math.max(1, ...trend.map(t => t.sales)), bw = (W - pad * 2) / trend.length;
+  const bars = trend.map((t, i) => {
+    const h = Math.max(0, (t.sales / top) * (H - 34)), x = pad + i * bw + 2, w = Math.max(2, bw - 4), y = H - 18 - h;
+    return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" class="bar${i === trend.length - 1 ? ' now' : ''}"><title>${t.month}: sales ${gbp(t.sales)}, gross margin ${t.gm ?? '–'}%</title></rect>
+      <text x="${x + w / 2}" y="${H - 4}" text-anchor="middle" class="ax">${String(t.month).split(' ')[0].slice(0, 3)}</text></g>`;
+  }).join('');
+  const last = trend[trend.length - 1], lx = pad + (trend.length - 1) * bw + bw / 2, ly = H - 18 - (last.sales / top) * (H - 34) - 6;
+  return `<svg class="ptrend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sales for the last ${trend.length} months">
+    <line x1="${pad}" x2="${W - pad}" y1="${H - 18}" y2="${H - 18}" class="base"/>${bars}<text x="${lx}" y="${Math.max(10, ly)}" text-anchor="middle" class="lbl">${gbp(last.sales)}</text></svg>`;
+}
+
+/** The profit and loss table: the month, the same month last year, the year to date and the same period last year. */
+function plTable(f, gbp, cls = 'lines home') {
+  const c = [f.figures.month, f.figures.sameMonthLastYear, f.figures.yearToDate, f.figures.sameYearToDateLastYear];
+  const money = k => c.map(x => `<td class="num">${x ? gbp(x[k]) : '–'}</td>`).join('');
+  const per = k => c.map(x => `<td class="num">${x && x[k] != null ? x[k].toFixed(1) + '%' : '–'}</td>`).join('');
+  return `<div class="tbl-wrap"><table class="${cls}"><thead><tr><th></th><th class="num">${f.monthName}</th><th class="num">Same month last year</th><th class="num">Year to date</th><th class="num">Same period last year</th></tr></thead><tbody>
+    <tr><td>Sales</td>${money('sales')}</tr><tr><td>Cost of sales</td>${money('cos')}</tr><tr class="sub"><td><b>Gross profit</b></td>${money('gross')}</tr><tr><td>Gross margin</td>${per('gm')}</tr>
+    <tr><td>Overheads</td>${money('overheads')}</tr>${c.some(x => x?.other) ? `<tr><td>Other income</td>${money('other')}</tr>` : ''}
+    <tr class="sub"><td><b>Net profit</b></td>${money('net')}</tr><tr><td>Net margin</td>${per('nm')}</tr></tbody></table></div>`;
+}
+
+/** The AI's commentary, as kept. */
+function analysisHtml(a, esc) {
+  if (!a) return '';
+  const list = (t, xs) => xs?.length ? `<h4>${t}</h4><ul>${xs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+  return `<div class="pai"><p class="phead"><b>${esc(a.headline)}</b></p><p>${esc(a.summary)}</p>
+    ${(a.sections || []).map(s => list(esc(s.title), s.points)).join('')}${list('Risks to watch', a.risks)}${list('Actions for next month', a.actions)}${list('To check before presenting', a.questions)}</div>`;
+}
+
+export function renderMonthPack({ months, month, facts, packErr, loading, saved, aiBusy, aiErr, switcher = '' }, h) {
+  const { esc, gbp } = h;
+  const g = n => gbp(n, 0);
+  const head = `<div class="hhead"><div><h2>Monthly pack</h2><p class="sub">Management accounts for ${esc(facts?.monthName || month)}, from Xero and the board.</p></div>
+    <div class="hbtns">${switcher}<select class="f" data-packmonth aria-label="Which month">${months.map(m => `<option value="${m}"${m === month ? ' selected' : ''}>${new Date(m + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</option>`).join('')}</select>
+      <button class="btn" type="button" data-packread ${loading ? 'disabled' : ''}>${loading ? 'Reading Xero…' : 'Read Xero again'}</button>
+      ${facts ? '<button class="btn pri" type="button" data-packprint>Print or save PDF</button>' : ''}</div></div>`;
+  if (!facts) return `<div class="home acc-page">${head}${packErr ? `<div class="err">${esc(packErr)}${/permission|scope|401|403|Reconnect/i.test(packErr) ? '<br>Xero needs one more permission for its reports: ask Levi to press <b>Reconnect</b> on the Xero tab once.' : ''}</div>` : `<p class="note">${loading ? 'Reading the month\'s reports from Xero…' : 'Choose a month.'}</p>`}</div>`;
+  const m = facts.figures.month || {}, ly = facts.figures.sameMonthLastYear, ytd = facts.figures.yearToDate, lytd = facts.figures.sameYearToDateLastYear;
+  const cards = [
+    card('info', 'invoice', g(m.sales), `Sales in ${esc(facts.monthName.split(' ')[0])}${ly?.sales ? ` · ${change(m.sales, ly.sales)} on last year` : ''}`, true),
+    card(m.gm != null && ly?.gm != null && m.gm < ly.gm ? 'warn' : 'ok', 'ready', m.gm != null ? m.gm.toFixed(1) + '%' : '–', `Gross margin${ly?.gm != null ? ` (last year ${ly.gm.toFixed(1)}%)` : ''}`, true),
+    card(m.net < 0 ? 'warn' : 'ok', 'book', g(m.net), 'Net profit for the month', true),
+    card('info', 'home', g(facts.bank.closing || facts.balance.cash), `Cash at the month end${facts.bank.opening ? ` · ${sign(facts.bank.closing - facts.bank.opening)}${g(facts.bank.closing - facts.bank.opening)} in the month` : ''}`, true),
+  ].join('');
+  const b = facts.balance, k = facts.kpis, bd = facts.board, prev = b.monthBefore;
+  const vs = (now, was) => was != null ? ` <span class="note">(${sign(now - was)}${g(now - was)} on the month before)</span>` : '';
+  const costs = (t, xs) => `<div><h4>${t}</h4>${xs.length ? `<table class="lines home"><tbody>${xs.map(x => `<tr><td>${esc(x.label)}</td><td class="num">${g(x.month)}</td></tr>`).join('')}</tbody></table>` : '<p class="note">None this month.</p>'}</div>`;
+  return `<div class="home acc-page">${head}<div class="hcards">${cards}</div>
+    <section class="panel acc"><div class="ph"><h3>Profit and loss</h3><span class="note">net of VAT · year from ${esc(facts.fyStart)}</span></div>${plTable(facts, g)}
+      ${ytd && lytd?.sales ? `<p class="note">Year to date sales are ${change(ytd.sales, lytd.sales)} on the same period last year.</p>` : ''}</section>
+    <section class="panel acc"><div class="ph"><h3>Sales, last 12 months</h3></div>${trendChart(facts.trend, g)}
+      <div class="tbl-wrap"><table class="lines home"><thead><tr><th>Month</th>${facts.trend.map(t => `<th class="num">${esc(String(t.month).split(' ')[0].slice(0, 3))}</th>`).join('')}</tr></thead><tbody>
+        <tr><td>Sales</td>${facts.trend.map(t => `<td class="num">${g(t.sales)}</td>`).join('')}</tr><tr><td>Gross margin</td>${facts.trend.map(t => `<td class="num">${t.gm != null ? t.gm.toFixed(0) + '%' : '–'}</td>`).join('')}</tr>
+        <tr><td>Net profit</td>${facts.trend.map(t => `<td class="num">${g(t.net)}</td>`).join('')}</tr></tbody></table></div></section>
+    <section class="panel acc"><div class="ph"><h3>Biggest costs this month</h3></div><div class="pcols">${costs('Cost of sales', facts.biggestCosts.costOfSales)}${costs('Overheads', facts.biggestCosts.overheads)}</div></section>
+    <section class="panel acc"><div class="ph"><h3>Cash and the balance sheet</h3><span class="note">at the month end</span></div>
+      <div class="acc-kv"><div><b>${g(facts.bank.closing)}</b><span>In the bank: ${g(facts.bank.opening)} at the start, ${g(facts.bank.received)} in, ${g(facts.bank.spent)} out</span></div>
+        <div><b>${g(b.debtors)}</b><span>Owed by customers${k.debtorDays != null ? ` · ${k.debtorDays} days of sales` : ''}${vs(b.debtors, prev?.debtors)}</span></div>
+        <div><b>${g(b.creditors)}</b><span>Owed to suppliers${k.creditorDays != null ? ` · ${k.creditorDays} days of costs` : ''}${vs(b.creditors, prev?.creditors)}</span></div>
+        <div><b>${g(b.vat)}</b><span>VAT owed</span></div><div><b>${b.currentRatio ?? '–'}</b><span>Current ratio (what is owed to us and in the bank, for each £1 owed out)</span></div>
+        <div><b>${g(b.netAssets)}</b><span>Net assets</span></div></div></section>
+    <section class="panel acc"><div class="ph"><h3>From the board</h3><span class="note">orders and deliveries, which Xero does not see</span></div>
+      <div class="acc-kv"><div><b>${g(bd.ordersBooked.value)}</b><span>${bd.ordersBooked.count} order${bd.ordersBooked.count === 1 ? '' : 's'} booked in the month</span></div>
+        <div><b>${g(bd.orderBookNow)}</b><span>Order book still to make, now${k.orderBookMonths >= 0.1 ? ` · ${k.orderBookMonths} months of sales` : ''}</span></div>
+        <div><b>${bd.onTimePct != null ? bd.onTimePct + '%' : '–'}</b><span>${bd.deliveriesInMonth ? `of the ${bd.deliveriesInMonth} deliveries in the month went on or before their due date` : 'No deliveries made in the month'}</span></div></div>
+      ${bd.topCustomers.length ? `<h4>Biggest customers in the month (invoiced in Xero)</h4><table class="lines home"><tbody>${bd.topCustomers.map(c => `<tr><td>${esc(c.customer)}</td><td class="num">${g(c.net)}</td><td class="num">${c.share != null ? c.share + '%' : ''}</td></tr>`).join('')}</tbody></table>` : ''}</section>
+    <section class="panel acc"><div class="ph"><h3>Analysis</h3><span class="note">${saved ? `written ${new Date(saved.madeAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} from the figures above` : 'written by AI from the figures above'}</span>
+      <div class="hbtns" style="margin-left:auto"><button class="btn${saved ? '' : ' pri'}" type="button" data-packai ${aiBusy ? 'disabled' : ''}>${aiBusy ? 'Writing…' : saved ? 'Write it again' : 'Write the analysis'}</button></div></div>
+      ${aiErr ? `<div class="err">${esc(aiErr)}</div>` : ''}${saved ? analysisHtml(saved.analysis, esc) : `<p class="note">${aiBusy ? 'Reading the figures and writing the commentary: about half a minute.' : 'A plain-English commentary on the month and the year to date, with risks, actions and questions to check, for you to edit into your own words before presenting. It uses only the figures on this page.'}</p>`}
+      <p class="note">Wages: payroll moves into Xero in April. Until then, wages reach Xero as the payroll bureau posts them, so a month can look light or heavy on wages.</p></section></div>`;
+}
+
+/** The pack on A4, to print or save as a PDF for Rob. */
+export function packPaper(facts, saved, h) {
+  const { esc, gbp } = h, g = n => gbp(n, 0), b = facts.balance, k = facts.kpis, bd = facts.board;
+  return `<div class="ph">${h.logo || ''}<div><h1>Management accounts</h1><div class="dno">${esc(facts.monthName)}</div></div></div>
+    ${plTable(facts, g, 'ppl')}
+    <div><div class="k">Sales, last 12 months</div>${trendChart(facts.trend, g)}</div>
+    <div class="two"><div><div class="k">Cash and the balance sheet</div><div class="kv">
+        <span class="k">Bank at the month end</span><span>${g(facts.bank.closing)}</span><span class="k">In / out in the month</span><span>${g(facts.bank.received)} / ${g(facts.bank.spent)}</span>
+        <span class="k">Owed by customers</span><span>${g(b.debtors)}${k.debtorDays != null ? ` (${k.debtorDays} days)` : ''}</span><span class="k">Owed to suppliers</span><span>${g(b.creditors)}${k.creditorDays != null ? ` (${k.creditorDays} days)` : ''}</span>
+        <span class="k">VAT owed</span><span>${g(b.vat)}</span><span class="k">Net assets</span><span>${g(b.netAssets)}</span></div></div>
+      <div><div class="k">Orders and deliveries</div><div class="kv">
+        <span class="k">Booked in the month</span><span>${g(bd.ordersBooked.value)} (${bd.ordersBooked.count})</span><span class="k">Order book now</span><span>${g(bd.orderBookNow)}${k.orderBookMonths >= 0.1 ? ` (${k.orderBookMonths} months)` : ''}</span>
+        <span class="k">On time</span><span>${bd.deliveriesInMonth ? `${bd.onTimePct}% of ${bd.deliveriesInMonth} deliveries` : 'no deliveries'}</span>
+        ${bd.topCustomers.slice(0, 3).map((c, i) => `<span class="k">${i ? '' : 'Biggest customers'}</span><span>${esc(c.customer)} ${g(c.net)}${c.share != null ? ` (${c.share}%)` : ''}</span>`).join('')}</div></div></div>
+    ${saved ? `<div><div class="k">Commentary</div>${analysisHtml(saved.analysis, esc)}</div>` : ''}
+    <div class="foot">Clarke Lane Engineering Ltd. Management accounts for ${esc(facts.monthName)}, prepared from Xero and the job board on ${esc(facts.asAt)}. Unaudited.</div>`;
 }

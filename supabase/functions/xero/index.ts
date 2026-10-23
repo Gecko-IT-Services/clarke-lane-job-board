@@ -11,6 +11,8 @@
 //   POST bills     office only → the last 12 months' supplier bills, materials lines (account 5000) only. Read only.
 //   POST history   office only → sales invoices and credit notes, last 24 months, with their lines and what is owed (customer pages, Sales). Read only.
 //   POST disconnect office only
+//   POST pack     accounts only → one month's profit and loss (with 11 months before), year to date and a year earlier,
+//                 balance sheet and bank summary, as Xero lays them out (Keith's monthly pack, 23 Oct). Read only.
 //   POST purchases accounts only → purchase orders and supplier bills, last 120 days, with lines (Keith's page, 23 Oct). Read only.
 // The accounts login (Keith) may call invoices (with net and contact), debts and purchases; nothing that writes.
 //   (also: invoices = status by ids, online = pay-online links, po = draft purchase order, month = Levi's month)
@@ -36,7 +38,10 @@ const CLIENT_SECRET = Deno.env.get('XERO_CLIENT_SECRET') || '';
 // Granular scopes: Xero apps created after 2 March 2026 cannot use the old broad ones.
 // accounting.invoices covers invoices and quotes (sales orders), read and draft-invoice write.
 // accounting.settings.read: Products and services (Xero answered 401 to Items without it, 20 Oct).
-const SCOPES = [...new Set(`${Deno.env.get('XERO_SCOPES') || 'openid profile email offline_access accounting.invoices accounting.contacts.read'} accounting.settings.read`.split(/\s+/).filter(Boolean))].join(' ');
+// The three report scopes (23 Oct): Keith's monthly pack reads the profit and loss, balance sheet and bank summary.
+// Granular names; existing connections get them when Levi presses Reconnect on the Xero tab.
+const REPORTS = 'accounting.reports.profitandloss.read accounting.reports.balancesheet.read accounting.reports.banksummary.read';
+const SCOPES = [...new Set(`${Deno.env.get('XERO_SCOPES') || 'openid profile email offline_access accounting.invoices accounting.contacts.read'} accounting.settings.read ${REPORTS}`.split(/\s+/).filter(Boolean))].join(' ');
 const CALLBACK = `${SB_URL}/functions/v1/xero/callback`;
 const BOARD = 'https://jobs.clarke-lane.co.uk/';
 // The old GitHub address redirects to jobs.clarke-lane.co.uk; kept here in case it is used before the redirect.
@@ -352,6 +357,36 @@ async function purchases() {
     bills: bills.map((x: any) => ({ id: x.InvoiceID, number: x.InvoiceNumber || '', due: xDate(x.DueDateString || x.DueDate), ...head(x) })) };
 }
 
+/**
+ * Keith's monthly pack (23 Oct): one month's reports from Xero, as Xero lays them out (the board reads them, see
+ * src/core/pack.js). The profit and loss for the month and the 11 before it; the year to date and the same span a year
+ * earlier; the same month a year earlier; the balance sheet at the month end against the month before; the bank
+ * summary for the month. The financial year comes from the organisation's year end. Read only; accounts only.
+ */
+async function monthPack(month: string) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month || '')) throw new HttpError(400, 'Which month?');
+  const s = await session();
+  let org: any = {};
+  try { org = (await xero(s, 'Organisation')).Organisations?.[0] || {}; } catch (e) { console.warn('organisation not read:', (e as Error).message); }
+  const endM = Number(org.FinancialYearEndMonth) || 3;   // Xero says; 31 March if it does not
+  const [y, m] = month.split('-').map(Number);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const last = (yy: number, mm: number) => `${yy}-${pad(mm)}-${pad(new Date(Date.UTC(yy, mm, 0)).getUTCDate())}`;
+  const startM = endM === 12 ? 1 : endM + 1, startY = m >= startM ? y : y - 1;
+  const fyStart = `${startY}-${pad(startM)}-01`;
+  const slim = (r: any) => { const x = r?.Reports?.[0] || {}; return { titles: x.ReportTitles || [], rows: x.Rows || [] }; };
+  const pl = (from: string, to: string, extra = '') => xero(s, `Reports/ProfitAndLoss?fromDate=${from}&toDate=${to}${extra}`).then(slim);
+  const reports = {
+    trend: await pl(`${month}-01`, last(y, m), '&periods=11&timeframe=MONTH'),
+    ytd: await pl(fyStart, last(y, m)),
+    lastYtd: await pl(`${startY - 1}-${pad(startM)}-01`, last(y - 1, m)),
+    lastYearMonth: await pl(`${y - 1}-${pad(m)}-01`, last(y - 1, m)),
+    balance: slim(await xero(s, `Reports/BalanceSheet?date=${last(y, m)}&periods=1&timeframe=MONTH`)),
+    bank: slim(await xero(s, `Reports/BankSummary?fromDate=${month}-01&toDate=${last(y, m)}`)),
+  };
+  return { month, fyStart, yearEndMonth: endM, organisation: org.Name || s.tenant_name, reports };
+}
+
 /** A DRAFT purchase order in Xero for a sales order (office). Recorded on the board once Xero has it. */
 async function purchaseOrder(b: any, me: { email: string; name: string }) {
   const jobId = Number(b?.jobId), contactId = String(b?.contactId || ''), key = String(b?.key || '');
@@ -484,7 +519,11 @@ Deno.serve(async req => {
     const b = await req.json().catch(() => ({})) as any;
     const fresh = b?.fresh === true;
     // The accounts login (Keith) reads invoices, debts and purchases, and nothing else; purchases are his alone.
-    if (me.role === 'accounts' && !['invoices', 'debts', 'purchases'].includes(route || '')) throw new HttpError(403, 'The accounts login reads invoices, debts and purchases only.');
+    if (me.role === 'accounts' && !['invoices', 'debts', 'purchases', 'pack', 'month'].includes(route || '')) throw new HttpError(403, 'The accounts login reads invoices, debts, purchases and the monthly pack only.');
+    if (route === 'pack') {
+      if (me.role !== 'accounts') throw new HttpError(403, 'The monthly pack is on the accounts login only.');
+      return reply(await cached(`pack:${b?.month}`, 6 * HOUR, fresh, () => monthPack(String(b?.month || ''))));
+    }
     if (route === 'purchases') {
       if (me.role !== 'accounts') throw new HttpError(403, 'Purchases against bills are on the accounts login only.');
       return reply(await cached('purchases', 30 * MIN, fresh, purchases));
@@ -496,7 +535,7 @@ Deno.serve(async req => {
     if (route === 'items') return reply(await cached('items', HOUR, fresh, items));
     if (route === 'po') return reply(await purchaseOrder(b, me));
     if (route === 'month') {
-      if (me.role !== 'md') throw new HttpError(403, 'Only Levi can see the month figures.');
+      if (!['md', 'accounts'].includes(me.role)) throw new HttpError(403, 'Only Levi can see the month figures.');
       return reply(await cached(`month:${b?.from}:${b?.to}`, 15 * MIN, fresh, () => monthSales(b?.from, b?.to)));
     }
     if (route === 'debts') return reply(await cached('debts', 15 * MIN, fresh, debts));

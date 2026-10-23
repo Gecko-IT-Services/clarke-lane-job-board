@@ -47,9 +47,24 @@ async function staff(req: Request) {
   const { data, error } = await user.rpc('me');
   if (error) throw new HttpError(401, 'Your job board sign-in has expired. Reload the page.');
   const me = data?.[0];
-  if (!['md', 'office'].includes(me?.role)) throw new HttpError(403, 'Only Levi and Mandy can use this.');
+  if (!['md', 'office', 'accounts'].includes(me?.role)) throw new HttpError(403, 'Only Levi and Mandy can use this.');   // accounts: the monthly pack only (KINDS.who)
   return me as { email: string; name: string; role: string };
 }
+
+// Keith's monthly pack (23 Oct): commentary on a month's management accounts, for him to take to Rob, the owner.
+const MONTHPACK_SYSTEM = `You are a UK management accountant writing the commentary for the monthly management accounts of a small sheet metal and fabrication company (laser cutting, folding, welding, powder coating sent out). The reader is the owner, who is practical and not an accountant. The accountant will check your text and present it.
+
+Rules:
+- Use only the figures in the facts. Never invent, estimate or round a number into something it is not. If something cannot be told from the figures, say so in one line rather than guessing.
+- Compare the month with the same month last year, the year to date with the same period last year, and the 12-month trend (months are oldest first). Say what moved and the likely reason when the figures show it (for example materials or outwork costs rising faster than sales).
+- Cover: sales; gross margin (sales less cost of sales: materials, subcontract, coating); overheads; net profit; cash and the bank; debtors and debtor days; creditors; the order book and how many months of sales it covers; anything the board flags (deliveries not invoiced, bills that do not match their purchase orders).
+- Wages: until April 2027 payroll is run outside Xero, so wages may arrive as journals and look lumpy or missing in a month; from April payroll runs in Xero. Mention this only if wages look odd.
+- Plain English, short points, British spelling, £ with commas, percentages to one decimal place. No jargon without a few words saying what it means. No em dashes, no exclamation marks.
+- Actions: practical things the owner could do next month. Questions: things the accountant should check or ask before presenting.`;
+const MONTHPACK = { type: 'object', additionalProperties: false, required: ['headline', 'summary', 'sections', 'risks', 'actions', 'questions'],
+  properties: { headline: { type: 'string' }, summary: { type: 'string' },
+    sections: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['title', 'points'], properties: { title: { type: 'string' }, points: { type: 'array', items: { type: 'string' } } } } },
+    risks: { type: 'array', items: { type: 'string' } }, actions: { type: 'array', items: { type: 'string' } }, questions: { type: 'array', items: { type: 'string' } } } };
 
 const STYLE = 'British English, plain and friendly, not salesy, no exclamation marks, no buzzwords, no em dashes.';
 const SYSTEM = `You write short sales emails for a small UK sheet metal and fabrication company, sent by its managing director to an existing customer.
@@ -77,6 +92,7 @@ const EMAIL = { type: 'object', additionalProperties: false, required: ['subject
 
 const KINDS: Record<string, { who: string[]; effort: 'low' | 'medium'; system: string; schema: Record<string, unknown>; max: number }> = {
   checkin: { who: ['md', 'office'], effort: 'medium', system: SYSTEM, schema: EMAIL, max: 4000 },
+  monthpack: { who: ['accounts'], effort: 'medium', system: MONTHPACK_SYSTEM, schema: MONTHPACK, max: 8000 },
   summary: { who: ['md', 'office'], effort: 'medium', max: 3000, schema: { type: 'object', additionalProperties: false, required: ['summary', 'nextStep'],
       properties: { summary: { type: 'string' }, nextStep: { type: 'string' } } },
     system: `You help the managing director of a small UK sheet metal and fabrication company look after an existing customer.
@@ -185,9 +201,9 @@ Deno.serve(async req => {
     if (!k.who.includes(me.role)) throw new HttpError(403, 'Only Levi and Mandy can use this.');
     const facts = body?.facts;
     if (!facts || typeof facts !== 'object') throw new HttpError(400, 'Nothing was sent to read.');
-    customer = kind === 'digest' ? '(three things today)' : String(facts.customer || facts.from || facts.company || '').slice(0, 200) || '(unknown)';
+    customer = kind === 'digest' ? '(three things today)' : kind === 'monthpack' ? `(monthly pack ${String(facts.month || '').slice(0, 7)})` : String(facts.customer || facts.from || facts.company || '').slice(0, 200) || '(unknown)';
     const text = JSON.stringify(facts);   // the quote pack's documents travel beside the facts and are not counted here
-    if (text.length > (kind === 'ideas' ? 60000 : 20000)) throw new HttpError(400, 'Too much detail to send.');
+    if (text.length > (kind === 'ideas' ? 60000 : kind === 'monthpack' ? 40000 : 20000)) throw new HttpError(400, 'Too much detail to send.');
     // The quote pack's drawings and pictures: each read by the AI as a document (PDF) or an image block.
     const docs = kind === 'quotepack' && Array.isArray(body?.documents) ? body.documents : [];
     if (docs.length > DOC_MAX_FILES) throw new HttpError(413, `Too many attachments to read at once (${DOC_MAX_FILES} at most).`);
@@ -228,14 +244,20 @@ Deno.serve(async req => {
     try { email = JSON.parse(out && out.type === 'text' ? out.text : ''); } catch { throw new HttpError(502, 'The AI\'s answer could not be read. Try again.'); }
     const inT = res.usage.input_tokens + (res.usage.cache_read_input_tokens || 0), outT = res.usage.output_tokens;
     const cost = Math.round((inT * PRICE_IN + outT * PRICE_OUT) / 1e6 * 10000) / 10000;
-    await admin.from('sales_emails').insert({ customer, kind: body?.news ? 'news' : kind, ai: true, model: res.model, input_tokens: inT, output_tokens: outT, cost_usd: cost, created_by: me.email });
+    // The monthly pack is Keith's alone (23 Oct): its cost is kept on his own record below, not in the shared AI log.
+    if (kind !== 'monthpack') await admin.from('sales_emails').insert({ customer, kind: body?.news ? 'news' : kind, ai: true, model: res.model, input_tokens: inT, output_tokens: outT, cost_usd: cost, created_by: me.email });
+    // The monthly pack is kept, so it reads the same next time and is not paid for twice (only this function writes it).
+    if (kind === 'monthpack' && /^\d{4}-\d{2}$/.test(String(facts.month || ''))) {
+      const { error } = await admin.from('month_packs').upsert({ month: facts.month, facts, analysis: email, model: res.model, cost_usd: cost, made_at: new Date().toISOString(), made_by: me.email });
+      if (error) console.warn('month_packs save:', error.message);
+    }
     return cors(req, json({ ...email, model: res.model, costUsd: cost }));
   } catch (e) {
     const status = e instanceof HttpError ? e.status : e instanceof Anthropic.APIError ? 502 : 500;
     const msg = e instanceof Anthropic.RateLimitError ? 'The AI is busy. Try again in a minute.'
       : e instanceof Anthropic.AuthenticationError ? 'The AI key in Supabase was not accepted. Ask Gecko IT to check ANTHROPIC_API_KEY.'
       : (e as Error).message;
-    if (me && customer && (KINDS[kind] || kind === 'research') && !(e instanceof HttpError && [400, 403, 413, 429, 503].includes(e.status))) await admin.from('sales_emails').insert({ customer, kind, ai: true, model: MODEL, ok: false, error: msg.slice(0, 500), created_by: me.email });
+    if (me && customer && kind !== 'monthpack' && (KINDS[kind] || kind === 'research') && !(e instanceof HttpError && [400, 403, 413, 429, 503].includes(e.status))) await admin.from('sales_emails').insert({ customer, kind, ai: true, model: MODEL, ok: false, error: msg.slice(0, 500), created_by: me.email });
     return cors(req, json({ error: msg }, status));
   }
 });

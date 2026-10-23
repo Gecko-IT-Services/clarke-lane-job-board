@@ -206,6 +206,14 @@ export async function draftEmail({ to, cc, subject, html, fileName, pdfBase64, e
   return msg.webLink;
 }
 
+/** Keith's monthly pack: the analysis already written for a month ('2026-09'), or null. */
+export async function loadMonthPack(month) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('month_packs').select('analysis, made_at').eq('month', month).maybeSingle();
+  if (error || !data) return null;
+  return { analysis: data.analysis, madeAt: data.made_at };
+}
+
 /* ---------- certificates of conformity (23 Oct): one per dispatch note, office only ---------- */
 /** { issued: Map(despatchId → { lines, origin, signedBy, position, issuedAt, issuedBy, emailedAt }), customers: Set(customer_key) }.
  *  Before the migration the tables are missing: none issued, nobody marked. */
