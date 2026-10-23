@@ -776,10 +776,10 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-home#v-home .hcard>div{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0} #v-home#v-home .hcard b{font-size:19px;display:inline}
 #v-home#v-home .tcard{padding:6px 10px;flex-direction:row;align-items:baseline;gap:8px;flex-wrap:wrap} #v-home#v-home .tcard b{font-size:18px}
 #v-home#v-home .hmd .panel{padding:12px 16px;gap:8px} #v-home#v-home .hmd .panel h3{font-size:18px}
-#v-home .panel.fold>:is(.hsec-h,h3){cursor:pointer;user-select:none;position:relative;padding-right:30px;margin:0}
-#v-home .panel.fold>:is(.hsec-h,h3)::after{content:"";position:absolute;right:8px;top:50%;width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-30%) rotate(-135deg)}
-#v-home .panel.folded>:is(.hsec-h,h3)::after{transform:translateY(-70%) rotate(45deg)}
-#v-home .panel.folded>:not(.hsec-h):not(h3){display:none} #v-home .panel.folded{gap:0;padding-top:12px;padding-bottom:12px}
+.panel.fold>:is(.hsec-h,h3){cursor:pointer;user-select:none;position:relative;padding-right:30px;margin:0}
+.panel.fold>:is(.hsec-h,h3)::after{content:"";position:absolute;right:8px;top:50%;width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-30%) rotate(-135deg)}
+.panel.folded>:is(.hsec-h,h3)::after{transform:translateY(-70%) rotate(45deg)}
+.panel.folded>:not(.hsec-h):not(h3){display:none} .panel.folded{gap:0;padding-top:12px;padding-bottom:12px} .panel.fold>h3 small{font-weight:400;color:var(--muted);font-size:13px}
 #v-home#v-home .tcards{gap:8px} #v-home#v-home .tcard{padding:9px 12px;border-radius:10px} #v-home#v-home .tcard b{font-size:20px} #v-home#v-home .tcard span{font-size:12.5px}
 /* Home in black, silver and white (Philip, 21 Oct: "a metal fabrication company, black/silver/white"): urgency by depth, not colour */
 #v-home{--hm-ink:#141518;--hm-steel:#5B6068;--hm-silver:#B7BCC3;--hm-silver-soft:#ECEEF1}
@@ -1095,7 +1095,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/deliveries.js', 'src/core/deliveries.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js', 'src/core/coc.js', 'src/accounts.js', 'src/core/accounts.js', 'src/core/pack.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/fold.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/deliveries.js', 'src/core/deliveries.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js', 'src/core/coc.js', 'src/accounts.js', 'src/core/accounts.js', 'src/core/pack.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;

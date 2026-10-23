@@ -428,7 +428,7 @@ async function deleteOrder(id) {
 /* ---------- tabs ---------- */
 // Home's drop-down panels (25 Oct): which are open, remembered on this computer. Reorder round and the station snapshot start folded; the shop floor's notes start open.
 S.folds = {};
-try { for (const k of ['fnotes', 'reround', 'snap']) { const v = localStorage.getItem('fold:' + k); if (v != null) S.folds[k] = v === '1'; } } catch { /* a private window: not remembered */ }
+try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('fold:')) S.folds[k.slice(5)] = localStorage.getItem(k) === '1'; } } catch { /* a private window: not remembered */ }
 const TABS = [['home', 'Home'], ['sales', 'CRM'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices'], ['deliveries', 'Deliveries'], ['accounts', 'Accounts']];   // left to right, the order work flows; CRM (was Sales) beside Home, where the work starts (Philip, 25 Oct)
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
@@ -1764,7 +1764,7 @@ function renderSalesView() {
   const m = salesModel();
   $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histStale: S.histNote || '', histEarliest: S.hist?.earliest, ai: S.ai,
     reorderBox: reordersHtml(false), more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md(),
-    prices: m.base ? priceReview(m.base, S.salesActs || S.salesF?.actions || [], m.today) : [], spend: m.base ? spendChanges(m.base, m.today, S.hist?.earliest) : null, qai: S.qai }, { esc, fmt, gbp });
+    prices: m.base ? priceReview(m.base, S.salesActs || S.salesF?.actions || [], m.today) : [], spend: m.base ? spendChanges(m.base, m.today, S.hist?.earliest) : null, qai: S.qai, folds: S.folds }, { esc, fmt, gbp });
 }
 function crmHead() {
   const n = (S.ideas || []).filter(i => i.status === 'new').length;
@@ -3347,7 +3347,7 @@ function onClick(e) {
     if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
     return;
   }
-  const fh = e.target.closest('#v-home .panel.fold > .hsec-h, #v-home .panel.fold > h3');   // a Home panel's header drops it down or folds it (25 Oct)
+  const fh = e.target.closest('.panel.fold > .hsec-h, .panel.fold > h3');   // a panel's heading drops it down or folds it (25 Oct: Home, then the CRM)
   if (fh && !e.target.closest('button, a, input, select, label')) { const k = fh.parentElement.dataset.fold, folded = !fh.parentElement.classList.contains('folded'); S.folds[k] = folded; try { localStorage.setItem('fold:' + k, folded ? '1' : '0'); } catch { /* not remembered */ } render(); return; }
   const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen],tr[data-sopen],tr[data-enqopen]'); if (!t) return;
   const d = t.dataset;
