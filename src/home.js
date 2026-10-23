@@ -6,6 +6,7 @@
  * h: the formatting helpers from app.js.
  */
 import { icon, XERO } from './icons.js';
+import { fold } from './fold.js';
 import { monthPanel } from './gauge.js';
 import { monthProgress, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue, homeGaps } from './core/jobs.js';
 
@@ -14,9 +15,6 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
-
-/** A panel that drops down (Philip, 25 Oct: the boxes took a lot of room): folded, only its header shows; the header toggles it. */
-const fold = (key, html, folded) => String(html || '').replace(/^(\s*<(?:section|div) class="panel )/, `$1fold${folded ? ' folded' : ''} `).replace(/^(\s*<(?:section|div) class="panel[^"]*")/, `$1 data-fold="${key}"`);
 
 export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;

@@ -4,13 +4,14 @@
  * the board or written by AI from the facts. Logic in core/sales.js (tested); this file only draws.
  */
 import { icon } from './icons.js';
+import { fold } from './fold.js';
 import { STAGES } from './core/sales.js';
 import { customerQuestion } from './core/inbox.js';
 
 export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply', 'Job cancelled', 'Other'];
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
 
-export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histStale = '', histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false, prices = [], spend = null, qai = null }, h) {
+export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histStale = '', histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false, prices = [], spend = null, qai = null, folds = {} }, h) {
   const { esc, fmt, gbp } = h;
   if (err) return `<div class="hhead"><div><h2>CRM</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
   if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
@@ -36,7 +37,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
     ${m.gap ? `<p class="sline">${m.afterLikely ? `Even if the likely quotes come in, <b>${gbp(m.afterLikely)}</b> is still to find.` : 'If the likely quotes come in, the target is reached.'}
       ${m.quotesNeeded ? ` At your win rate (${pc(stats.rate)}) and average won order (${gbp(stats.avgWon)}), that is about <b>${m.quotesNeeded} more quote${m.quotesNeeded === 1 ? '' : 's'}</b> to send, or chase the ones below.` : ''}</p>` : ''}</section>`;
 
-  const chaseBox = `<section class="panel"><h3>Chase these today <small>${chase.length ? 'most likely value first' : ''}</small></h3>
+  const chaseBox = `<section class="panel"><h3>Chase these today <small>${chase.length} to chase${chase.length ? ', most likely value first' : ''}</small></h3>
     ${chase.length ? `<div class="schase">${chase.map(q => `<article class="scard">
         <div class="stop"><div><b>${esc(q.customer)}</b><span class="mono">${esc(q.quoteNo)}</span>${q.contactName ? `<small>${esc(q.contactName)}</small>` : ''}</div>
           <div class="sval"><b>${gbp(q.value)}</b><small>${pc(q.chance)} chance · sent ${esc(days(q.age))} ago</small></div></div>
@@ -94,7 +95,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
         <div class="actions"><button class="btn pri" type="button" data-qaiwrite="${qq.spId}" ${qai.busy ? 'disabled' : ''}>${qai.busy ? 'Writing…' : 'Write the email with AI'}</button><button class="btn" type="button" data-qaiplain="${qq.spId}">Plain template instead</button><button class="btn" type="button" data-qaiclose>Cancel</button>
         <span class="note">About 1p. It uses the quote number, what was quoted (never the price), the customer's question if they asked one, how many times it has been chased, and your words above.</span></div></div>`}</section>`;
   const writeBtn = (c, angle = '') => `<button class="btn sm pri" type="button" data-aiopen="${esc(c.key)}" data-angle="${esc(angle)}">Write an email</button>`;
-  const custBox = `<section class="panel"><h3>Customers to get back in touch with</h3>
+  const custBox = `<section class="panel"><h3>Customers to get back in touch with <small>${(quiet || []).length} gone quiet or lapsed</small></h3>
     ${histErr ? `<div class="err">Xero's invoices could not be read: ${esc(histErr)}</div>` : !base ? '<p class="note">Reading Xero\'s invoices…</p>'
       : `${histStale ? `<p class="note">${esc(histStale)}</p>` : ''}<p class="note">From Xero's sales invoices${histEarliest ? ` (back to ${esc(fmt(histEarliest))})` : ''}: regular customers who have gone quiet for well past their usual gap, and customers who have not ordered for 6 months.${histEarliest && histEarliest > new Date(Date.parse(today) - 200 * 864e5).toISOString().slice(0, 10) ? ' <b>Xero only has a few months of history</b>, so this fills in as orders build up.' : ''}</p>
       ${quiet.length ? `<div class="tbl-wrap"><table class="lines squiet"><thead><tr><th>Customer</th><th>Usually orders</th><th>Last order</th>${md ? '<th class="num">Last 12 months</th>' : ''}<th>They buy</th><th></th></tr></thead><tbody>
@@ -106,14 +107,14 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
         : '<p class="allclear ok">Nobody has gone quiet.</p>'}`}</section>`;
 
   // Repeat parts due again: the Reorder round (src/reorders.js, drawn by app.js); and work a regular customer could also give us.
-  const moreBox = more.length ? `<section class="panel"><h3>Could give us more <small>regular customers who have never had these from us</small></h3>
+  const moreBox = more.length ? `<section class="panel"><h3>Could give us more <small>${more.length} regular customers who have never had these from us</small></h3>
       <div class="tbl-wrap"><table class="lines"><thead><tr><th>Customer</th><th>Has from us</th><th>Worth asking about</th><th></th></tr></thead><tbody>${more.slice(0, 15).map(x => `<tr><td><b>${esc(x.customer)}</b></td>
         <td>${esc(x.has.join(', '))}</td><td>${esc(x.missing.join(', '))}</td><td>${writeBtn(x, `Mention that we also do ${x.missing.join(' and ')} in-house or through our partners, so they can send the whole job to one supplier. Do not assume they need it.`)}</td></tr>`).join('')}</tbody></table></div>
       <p class="note">From the processes on their orders and the words on their invoices: a prompt to ask, not a guess about their business.</p></section>` : '';
   // Price review (25 Oct, towards £20k a month): repeat parts on the same price for over a year, biggest first. Levi and Mandy (prices).
   const months = d => { const m = Math.round(d / 30.4); return m >= 24 ? `${Math.floor(m / 12)} years` : `${m} months`; };
   const pv = prices.reduce((a, p) => a + p.yearValue, 0), pu = prices.reduce((a, p) => a + p.uplift, 0);
-  const priceBox = !base ? '' : `<section class="panel" id="sprices"><h3>Price review <small>repeat parts on the same price for over a year</small></h3>
+  const priceBox = !base ? '' : `<section class="panel" id="sprices"><h3>Price review <small>${prices.length} repeat part${prices.length === 1 ? '' : 's'} on the same price for over a year</small></h3>
     ${prices.length ? `<p class="sline">${prices.length} part${prices.length === 1 ? '' : 's'} still being ordered at a price set over a year ago: <b>${gbp(pv)}</b> of orders in the last 12 months. Five per cent on these is <b>${gbp(pu)}</b> a year, for no more work in the factory.</p>
       <div class="tbl-wrap"><table class="lines sprices"><thead><tr><th>Customer</th><th>Part</th><th class="num">Price now</th><th>Same since</th><th class="num">Last 12 months</th><th class="num">+5% is worth</th><th></th></tr></thead><tbody>
       ${prices.slice(0, 40).map(p => `<tr><td><b>${esc(p.customer)}</b></td><td>${esc(p.item)}${p.code ? `<small class="mono">${esc(p.code)}</small>` : ''}</td><td class="num">${gbp(p.price)}<small>each</small></td><td>${esc(fmt(p.since))}<small>${months(p.days)}</small></td>
@@ -124,7 +125,7 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
   // Spending less than last year (25 Oct): still ordering, but down on the 12 months before. Levi only (customer spend).
   const down = spend?.down || [], fell = down.reduce((a, r) => a + r.change, 0);
   const spendAngle = 'Their orders with us are down on last year. Ask, in a friendly way and without mentioning any figures, whether anything has changed on their side and whether there is work coming up we could help with. Do not sound as if we are checking up on them.';
-  const spendBox = !md || !spend ? '' : `<section class="panel" id="sspend"><h3>Spending less than last year <small>still ordering, but down on the 12 months before</small></h3>
+  const spendBox = !md || !spend ? '' : `<section class="panel" id="sspend"><h3>Spending less than last year <small>${down.length} still ordering, but down on the 12 months before</small></h3>
     ${spend.partial && histEarliest ? `<p class="note">Xero's invoices only go back to ${esc(fmt(histEarliest))}, so "the 12 months before" is not a full year yet and the falls look smaller than they are.</p>` : ''}
     ${down.length ? `<p class="sline">Together these ${down.length} customer${down.length === 1 ? '' : 's'} spent <b>${gbp(-fell)}</b> less than the year before. Winning half of that back is about <b>${gbp(-fell / 24)} a month</b>, from people who already know us.</p>
       <div class="tbl-wrap"><table class="lines sspend"><thead><tr><th>Customer</th><th class="num">Last 12 months</th><th class="num">12 months before</th><th class="num">Change</th><th>Last order</th><th>They buy</th><th></th></tr></thead><tbody>
@@ -134,6 +135,8 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
       : '<p class="allclear ok">No regular customer is down on last year.</p>'}
     ${spend.up.length ? `<p class="note">Going the other way: ${spend.up.slice(0, 5).map(r => `<b>${esc(r.customer)}</b> up ${gbp(r.change)}`).join(', ')}.</p>` : ''}</section>`;
 
+  // Every panel after Chase these today drops down from its heading (25 Oct), closed unless opened on this computer; the counts stay in the headings.
+  const f = (key, html) => fold('crm:' + key, html, folds['crm:' + key] !== false);
   // The monthly news email: one personal draft per ticked customer.
   const active = (base || []).filter(c => c.since != null && c.since <= 365 && c.yearNet > 0);
   const newsBox = !base ? '' : `<section class="panel" id="snews"><h3>Email your customers <small>a short personal note to each, e.g. once a month</small></h3>
@@ -144,5 +147,5 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
 
   return `<div class="hhead"><div><h2>CRM</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with.${md ? ' Only you see the month\'s figures and totals.' : ''}</p></div>
       <div class="hbtns"><button class="btn" type="button" data-salesreload>${icon('refresh')}Refresh</button></div></div>
-    ${md ? monthBox : ''}${enquiriesBox}${aiBox}${qaiBox}${chaseBox}${listBox}${reorderBox}${priceBox}${spendBox}${moreBox}${custBox}${newsBox}${says}`;
+    ${md ? monthBox : ''}${enquiriesBox}${aiBox}${qaiBox}${chaseBox}${f('quotes', listBox)}${f('reorders', reorderBox)}${f('prices', priceBox)}${f('spend', spendBox)}${f('more', moreBox)}${f('quiet', custBox)}${f('news', newsBox)}${f('says', says)}`;
 }
