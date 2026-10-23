@@ -25,8 +25,8 @@ let jobs = [
 ];
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
-const whoEmail = () => role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : 'workshop@clarke-lane.example';
-export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : 'Shop Floor', role });
+const whoEmail = () => role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : role === 'accounts' ? 'accounts@clarke-lane.example' : 'workshop@clarke-lane.example';
+export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : role === 'accounts' ? 'Keith' : 'Shop Floor', role });
 const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
 export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
 export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
@@ -139,7 +139,17 @@ export const xero = async (route, body) => {
   if (route === 'po') { const no = 'PO-' + String(pos.length + 1).padStart(4, '0'), sup = body.contactId.endsWith('a1') ? 'Example Powder Coaters Ltd' : 'Example Steel Supplies';
     pos.push({ id: pos.length + 1, jobId: body.jobId, xeroId: 'x' + pos.length, no, supplier: sup, supplierId: body.contactId, account: body.accountCode || '', delivery: body.deliveryDate || null, lines: body.lines, net: body.lines.reduce((a, l) => a + l.qty * l.unit, 0), at: new Date().toISOString() });
     return { id: 'x', number: no, supplier: sup, recorded: true }; }
-  if (route === 'invoices') return { invoices: body.ids.map(id => ({ id, number: 'INV-0001', status: 'DRAFT' })) };
+  // The accounts login also gets net and contact: made up, with the draft changed in Xero after the board made it (£120 on the board).
+  if (route === 'invoices') return { invoices: body.ids.map(id => ({ id, number: 'INV-0001', status: 'DRAFT', ...(role === 'accounts' ? { net: 132, contact: 'Ninth Example Ltd' } : {}) })) };
+  if (route === 'purchases') return { from: '2026-06-25', pos: [   // made-up suppliers and figures
+      { id: 'p1', number: 'PO-0438', supplierId: 's1', supplier: 'Example Steel Supplies', date: '2026-10-01', status: 'BILLED', reference: 'SO-9781', net: 500, lines: [{ code: 'SHT3', description: 'Sheet 3mm S275 2500x1250', qty: 10, unit: 50, amount: 500 }] },
+      { id: 'p2', number: 'PO-0439', supplierId: 's1', supplier: 'Example Steel Supplies', date: '2026-10-08', status: 'AUTHORISED', reference: '', net: 200, lines: [] },
+      { id: 'p3', number: 'PO-0440', supplierId: 's2', supplier: 'Example Powder Coaters Ltd', date: '2026-09-20', status: 'AUTHORISED', reference: 'SO-9782', net: 80, lines: [] },
+      { id: 'p4', number: 'PO-0441', supplierId: 's3', supplier: 'Sample Alloys Ltd', date: '2026-10-02', status: 'BILLED', reference: '', net: 40, lines: [] }],
+    bills: [
+      { id: 'b1', number: 'SI-7781', reference: 'PO-0438', supplierId: 's1', supplier: 'Example Steel Supplies', date: '2026-10-05', due: '2026-11-30', status: 'AUTHORISED', net: 530, lines: [{ code: 'SHT3', description: 'Sheet 3mm S275 2500x1250', qty: 10, unit: 53, amount: 530 }] },
+      { id: 'b2', number: 'SI-7790', reference: '', supplierId: 's1', supplier: 'Example Steel Supplies', date: '2026-10-12', due: '2026-11-30', status: 'AUTHORISED', net: 200, lines: [] },
+      { id: 'b3', number: 'SI-7795', reference: 'stock', supplierId: 's1', supplier: 'Example Steel Supplies', date: '2026-10-15', due: '2026-11-30', status: 'DRAFT', net: 75, lines: [] }] };
   if (route === 'disconnect') { sessionStorage.removeItem('fakeXero'); return {}; }
 };
 // Certificates of conformity: in memory. DN-0001 has one; Fourth Example wants one with every delivery.
