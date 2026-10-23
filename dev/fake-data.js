@@ -26,7 +26,7 @@ let jobs = [
 const hide = j => role !== 'floor' ? j : { ...j, lines: j.lines.map(l => ({ ...l, price: null })) };
 const find = id => jobs.find(j => j.id === id);
 const whoEmail = () => role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : role === 'accounts' ? 'accounts@clarke-lane.example' : 'workshop@clarke-lane.example';
-export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : role === 'accounts' ? 'Keith' : 'Shop Floor', role });
+export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : role === 'accounts' ? 'Keith Morell' : 'Shop Floor', role });
 const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
 export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
 export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };

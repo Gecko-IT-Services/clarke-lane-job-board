@@ -98,6 +98,6 @@ console.log('accounts: ok');
   assert.ok(html.includes('Two invoices &lt;are&gt; overdue.'), "the AI's words are escaped");
   assert.ok(html.includes('£350.00') && html.includes('INV-15') && html.includes('href="https://in.xero.com/x"'), 'the table and the link come from Xero, not the AI');
   assert.equal((html.match(/View and pay online/g) || []).length, 1, 'a link only where Xero gave one');
-  assert.match(html, /Kind regards,<br>Keith<br>Accounts, Clarke Lane Engineering Ltd/);
+  assert.match(html, /Kind regards,<br>Keith Morell<br>Accounts, Clarke Lane Engineering Ltd/, 'his full name: he is a bit old school (24 Oct)');
   console.log('accounts chase: ok');
 }

@@ -172,14 +172,14 @@ export function chaseFacts(g, { person = '', chases = [], today }) {
   return { customer: g.customer, contactFirstName: String(person || '').trim().split(/\s+/)[0] || '',
     invoices: g.invoices.map(x => ({ number: x.number, date: x.date || '', due: x.due || '', owed: x.owed, daysOverdue: x.days })),
     totalOwed: g.owed, oldestDaysOverdue: g.days, chasedBefore: before.slice(0, 5),
-    chasedInLast30Days: before.some(d => dayNo(today) - dayNo(d) <= 30), from: 'Keith, Accounts' };
+    chasedInLast30Days: before.some(d => dayNo(today) - dayNo(d) <= 30), from: 'Keith Morell, Accounts' };
 }
 
 /**
  * The email: the AI's greeting and paragraphs around a table the board builds itself from Xero (invoice, date, due,
  * amount, pay-online link), and the sign-off. ai: { subject, greeting, before: [..], after: [..] }; links: { id: url }.
  */
-export function chaseHtml(ai, g, { links = {}, from = 'Keith', company = 'Clarke Lane Engineering Ltd' } = {}) {
+export function chaseHtml(ai, g, { links = {}, from = 'Keith Morell', company = 'Clarke Lane Engineering Ltd' } = {}) {
   const td = 'padding:4px 12px 4px 0', p = xs => (xs || []).map(t => `<p>${escH(t)}</p>`).join('');
   const rows = g.invoices.map(x => `<tr><td style="${td}">${escH(x.number)}${x.reference ? ` <span style="color:#666">(${escH(x.reference)})</span>` : ''}</td><td style="${td}">${escH(long(x.date))}</td>
     <td style="${td}">${escH(long(x.due))}</td><td style="${td};text-align:right">${escH(money(x.owed))}</td><td style="padding:4px 0">${links[x.id] ? `<a href="${escH(links[x.id])}">View and pay online</a>` : ''}</td></tr>`).join('');
