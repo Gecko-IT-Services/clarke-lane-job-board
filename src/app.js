@@ -174,7 +174,7 @@ async function reload() {
     if (office()) [S.tasks, S.enq, S.staff] = await Promise.all([data.loadTasks().catch(e => { S.tasksErr = e.message; return S.tasks || []; }),
       data.loadEnquiries().catch(e => { S.enqErr = e.message; return S.enq || []; }), S.staff ? S.staff : data.loadStaff().catch(() => [])]);
     if (office()) S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
-    if (accounts()) S.chases = await data.loadChases().catch(() => S.chases || []);
+    if (accounts()) [S.chases, S.accPeople] = await Promise.all([data.loadChases().catch(() => S.chases || []), data.loadPeopleForAccounts().catch(() => S.accPeople || [])]);
     if (office()) S.cocs = await data.loadCocs().catch(() => S.cocs || { issued: new Map(), customers: new Set() });   // certificates of conformity (23 Oct)
     if (office()) S.metal = await data.loadMetal().then(r => { S.metalErr = null; return r; }).catch(e => { S.metalErr = e.message; return S.metal || []; });
     if (office()) [S.chases, S.parts] = await Promise.all([data.loadChases().catch(() => S.chases || []), data.loadParts().catch(e => { S.partsErr = e.message; return S.parts || []; })]);
@@ -3007,6 +3007,20 @@ async function loadAccounts(force = false) {
     debts: debts.status === 'fulfilled' ? debts.value.invoices || [] : was.debts || null, debtErr: why(debts),
     purchases: pur.status === 'fulfilled' ? pur.value : was.purchases || null, purErr: why(pur) };
   accLoading = false; render();
+  loadAccContacts();
+}
+/** Who to ring (24 Oct): Xero's contact details for each overdue customer, one at a time (Xero keeps them an hour for
+ *  everyone, so this is cheap after the first look). */
+let accContactsLoading = false;
+async function loadAccContacts() {
+  if (accContactsLoading || !S.acc?.debts) return;
+  const today = todayIso(), ids = [...new Set(S.acc.debts.filter(x => x.contactId && (!x.due || x.due < today)).map(x => x.contactId))].filter(id => !(S.accContacts || {})[id]);
+  if (!ids.length) return;
+  accContactsLoading = true; S.accContacts = { ...(S.accContacts || {}) };
+  for (const id of ids.slice(0, 40)) {
+    try { S.accContacts[id] = await data.xero('contact', { id }); } catch { S.accContacts[id] = {}; }
+  }
+  accContactsLoading = false; render();
 }
 function renderAccountsView() {
   const a = S.acc || {}, tab = S.accTab || 'checks';
@@ -3018,7 +3032,7 @@ function renderAccountsView() {
     return;
   }
   $('v-accounts').innerHTML = renderAccounts({ jobs: S.jobs, today: todayIso(), me: S.me, inv: a.inv, invErr: a.invErr, debts: a.debts, debtErr: a.debtErr,
-    purchases: a.purchases, purErr: a.purErr, outwork: S.outwork || [], chases: S.chases || [], view: S.accView || 'look', loading: a.loading, switcher, chasing: S.accChasing || null }, { esc, fmt, gbp });
+    purchases: a.purchases, purErr: a.purErr, outwork: S.outwork || [], chases: S.chases || [], view: S.accView || 'look', loading: a.loading, switcher, chasing: S.accChasing || null, contacts: S.accContacts || {}, people: S.accPeople || [] }, { esc, fmt, gbp });
 }
 /** Keith's chase (24 Oct): the customer's email and pay-online links from Xero, the AI's words around the board's own
  *  table of invoices, an Outlook draft in his mailbox (never sent by the board), and a chase note so nobody chases twice. */

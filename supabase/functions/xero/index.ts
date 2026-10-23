@@ -252,7 +252,10 @@ async function contact(id: string) {
   const primary = [c.FirstName, c.LastName].filter(Boolean).join(' ');
   const person = primary || (alt ? [alt.FirstName, alt.LastName].filter(Boolean).join(' ') : '');
   const email = c.EmailAddress || alt?.EmailAddress || '';
-  return { id: c.ContactID, name: c.Name, email, person, address };
+  // Phone numbers (24 Oct: Keith rings overdue customers): Xero keeps the area code apart; +country only when not UK.
+  const ph = (t: string) => { const p = (c.Phones || []).find((x: any) => x.PhoneType === t && x.PhoneNumber);
+    return p ? [p.PhoneCountryCode && !['44', '+44'].includes(String(p.PhoneCountryCode)) ? '+' + String(p.PhoneCountryCode).replace(/^\+/, '') : '', p.PhoneAreaCode, p.PhoneNumber].filter(Boolean).join(' ').trim() : ''; };
+  return { id: c.ContactID, name: c.Name, email, person, address, phone: ph('DEFAULT') || ph('DDI'), mobile: ph('MOBILE') };
 }
 
 /** Xero's Products and services that are sold: what the order form offers as parts. Read only. */
@@ -532,7 +535,7 @@ Deno.serve(async req => {
     if (route === 'connect') return reply({ url: await connectUrl(me.email) });
     if (route === 'read') return reply(await cached('read', 15 * MIN, fresh, read));
     if (route === 'contacts') return reply(await cached('contacts', 30 * MIN, fresh, contacts));
-    if (route === 'contact') return reply(await contact(b?.id));
+    if (route === 'contact') return reply(await cached(`contact:${b?.id}`, HOUR, fresh, () => contact(b?.id)));   // kept an hour (24 Oct): Keith's page asks for every overdue customer
     if (route === 'items') return reply(await cached('items', HOUR, fresh, items));
     if (route === 'po') return reply(await purchaseOrder(b, me));
     if (route === 'month') {
