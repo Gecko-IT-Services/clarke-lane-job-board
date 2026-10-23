@@ -83,6 +83,18 @@ export const shiftMonth = (ym, k) => { let [y, m] = ym.split('-').map(Number); m
 /** '2026-09' → 'Sep 2026', the same in every browser (some write "Sept"). */
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const shortMonth = ym => `${MON[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+/**
+ * Where a month sits in the financial year (Philip, 24 Oct: October is Clarke Lane's first period). fyStart:
+ * '2025-10-01'. → { period: 12, isYearEnd: true, yearEnd: '2026-09-30', label: 'year ending 30 September 2026' }.
+ */
+export function finYear(ym, fyStart) {
+  const start = String(fyStart || '').slice(0, 7); if (!/^\d{4}-\d{2}$/.test(start)) return null;
+  const [y1, m1] = start.split('-').map(Number), [y2, m2] = ym.split('-').map(Number);
+  const period = (y2 - y1) * 12 + (m2 - m1) + 1, endYm = shiftMonth(start, 11);
+  const [ey, em] = endYm.split('-').map(Number), last = new Date(Date.UTC(ey, em, 0)).getUTCDate();
+  const yearEnd = `${endYm}-${pad(last)}`;
+  return { period, isYearEnd: period === 12, yearEnd, label: `year ending ${last} ${new Date(Date.UTC(ey, em - 1, 15)).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })} ${ey}` };
+}
 /** The complete months before today, newest first: '2026-09', '2026-08', … */
 export function lastMonths(today, n = 12) {
   let [y, m] = today.slice(0, 7).split('-').map(Number);
@@ -118,6 +130,8 @@ export function packFacts({ pack, jobs = [], invoices = [], today }) {
   const top = (lines, n) => lines.map(l => ({ label: l.label, month: l.values[0] || 0 })).filter(l => l.month).sort((p, q) => Math.abs(q.month) - Math.abs(p.month)).slice(0, n);
   return {
     company: 'Clarke Lane Engineering Ltd', month: ym, monthName: monthName(ym), fyStart: pack.fyStart,
+    // Which month of the financial year this is (period 1 = the first), and whether it closes the year.
+    financialYear: finYear(ym, pack.fyStart),
     figures: { month: keep(month), sameMonthLastYear: keep(lastYear), yearToDate: keep(ytd), sameYearToDateLastYear: keep(lastYtd) },
     // Named by the board, oldest first: Xero heads each column with the month's last day ("30 Sep 26"), not its name (24 Oct).
     trend: trend.cols.map((c, i) => ({ month: shortMonth(shiftMonth(ym, -i)),
