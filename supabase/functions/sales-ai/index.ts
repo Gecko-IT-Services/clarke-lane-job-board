@@ -67,7 +67,9 @@ const CHASE_SYSTEM = `You write a short, polite payment chase email for a small 
 
 Tone, from the facts: if the oldest invoice is under 30 days overdue and there has been no chase in the last 30 days, a friendly reminder that it may have been missed. If it is 30 to 60 days overdue, or they were chased before, firmer: ask for a payment date. Over 60 days, or chased twice or more: clear and direct, ask for payment or a call this week, and say the account may be put on hold for new orders; never threaten legal action or debt collection.
 Always: thank them if payment has already been made and ask for the date so it can be matched; offer copies of the invoices or to sort out any problem with them.
-British English, plain and courteous, no exclamation marks, no buzzwords, no em dashes. Two short paragraphs before the table, one after it. The greeting uses the contact's first name when given, otherwise "Hello".`;
+British English, plain and courteous, no exclamation marks, no buzzwords, no em dashes. Two short paragraphs before the table, one after it. The greeting uses the contact's first name when given, otherwise "Hello".
+Write as Clarke Lane Engineering (the company in the facts): say "we" or "Clarke Lane Engineering", never "our company". Say "your account", not the customer's company name. Refer to invoices by their number only.
+The greeting goes only in "greeting", never at the start of "before". End "after" with your last sentence: no sign-off, no "Kind regards", no name, no job title. The board adds the sign-off itself.`;
 const CHASE = { type: 'object', additionalProperties: false, required: ['subject', 'greeting', 'before', 'after'],
   properties: { subject: { type: 'string' }, greeting: { type: 'string' }, before: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } } } };
 const MONTHPACK = { type: 'object', additionalProperties: false, required: ['headline', 'summary', 'sections', 'risks', 'actions', 'questions'],

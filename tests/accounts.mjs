@@ -99,5 +99,18 @@ console.log('accounts: ok');
   assert.ok(html.includes('£350.00') && html.includes('INV-15') && html.includes('href="https://in.xero.com/x"'), 'the table and the link come from Xero, not the AI');
   assert.equal((html.match(/View and pay online/g) || []).length, 1, 'a link only where Xero gave one');
   assert.match(html, /Kind regards,<br>Keith Morell<br>Accounts, Clarke Lane Engineering Ltd/, 'his full name: he is a bit old school (24 Oct)');
+  // From Philip's phone (24 Oct): the AI signed it too, and the reference repeated the number.
+  const { withoutSignOff, withoutGreeting } = await import('../src/core/accounts.js');
+  assert.deepEqual(withoutSignOff(['If you have paid, thank you.\nKind regards,\nKeith, Accounts']), ['If you have paid, thank you.']);
+  assert.deepEqual(withoutSignOff(['First.', 'Kind regards,', 'Keith Morell']), ['First.']);
+  assert.deepEqual(withoutSignOff(['Many thanks for your help with this.']), ['Many thanks for your help with this.'], 'a closing sentence stays');
+  assert.deepEqual(withoutSignOff(['Thank you.', 'Many thanks,']), ['Thank you.'], 'a short thank-you sign-off goes');
+  assert.deepEqual(withoutSignOff(['Please let me know the date. Thanks in advance for sorting it.']), ['Please let me know the date. Thanks in advance for sorting it.'], 'a sentence that merely contains thanks stays');
+  assert.deepEqual(withoutGreeting(['Hello Roz, I hope you are well.'], 'Hello Roz,'), ['I hope you are well.']);
+  const twice = chaseHtml({ greeting: 'Hello Roz,', before: ['I hope you are well.'], after: ['Thank you.\nKind regards,\nKeith, Accounts'] },
+    { customer: 'X', owed: 10, invoices: [{ id: 'a', number: '31921', reference: '31921', date: '2026-09-16', due: '2026-10-16', owed: 10 }] });
+  assert.equal((twice.match(/Kind regards/g) || []).length, 1, 'signed once');
+  assert.ok(!twice.includes('(31921)'), 'the reference is not repeated when it is the number');
+  assert.ok(twice.includes('<p style="margin:0 0 12px">Hello Roz,</p>'), 'a gap after the greeting, even in Outlook on a phone');
   console.log('accounts chase: ok');
 }
