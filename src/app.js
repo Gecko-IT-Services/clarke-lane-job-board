@@ -426,6 +426,9 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
+// Home's drop-down panels (25 Oct): which are open, remembered on this computer. Reorder round and the station snapshot start folded; the shop floor's notes start open.
+S.folds = {};
+try { for (const k of ['fnotes', 'reround', 'snap']) { const v = localStorage.getItem('fold:' + k); if (v != null) S.folds[k] = v === '1'; } } catch { /* a private window: not remembered */ }
 const TABS = [['home', 'Home'], ['sales', 'CRM'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices'], ['deliveries', 'Deliveries'], ['accounts', 'Accounts']];   // left to right, the order work flows; CRM (was Sales) beside Home, where the work starts (Philip, 25 Oct)
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
@@ -3271,7 +3274,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), folds: S.folds, jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, note: S.debtNote || '', chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: wonWaiting(),
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
@@ -3344,6 +3347,8 @@ function onClick(e) {
     if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
     return;
   }
+  const fh = e.target.closest('#v-home .panel.fold > .hsec-h, #v-home .panel.fold > h3');   // a Home panel's header drops it down or folds it (25 Oct)
+  if (fh && !e.target.closest('button, a, input, select, label')) { const k = fh.parentElement.dataset.fold, folded = !fh.parentElement.classList.contains('folded'); S.folds[k] = folded; try { localStorage.setItem('fold:' + k, folded ? '1' : '0'); } catch { /* not remembered */ } render(); return; }
   const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen],tr[data-sopen],tr[data-enqopen]'); if (!t) return;
   const d = t.dataset;
   if ('goback' in d) return history.back();

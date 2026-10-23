@@ -15,7 +15,10 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
+/** A panel that drops down (Philip, 25 Oct: the boxes took a lot of room): folded, only its header shows; the header toggles it. */
+const fold = (key, html, folded) => String(html || '').replace(/^(\s*<(?:section|div) class="panel )/, `$1fold${folded ? ' folded' : ''} `).replace(/^(\s*<(?:section|div) class="panel[^"]*")/, `$1 data-fold="${key}"`);
+
+export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -149,14 +152,14 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
   // Three things today (21 Oct) sits above everything on both Homes: the day's three most useful actions.
   const main = md ? `${digestBox}<div class="hmd">${month}${todayBox}</div>
     <div class="hcards">${[cards.book, cards.late, cards.soon, debtCard].join('')}</div>
-    ${notesBox}${reorderBox}`
+    ${fold('fnotes', notesBox, folds.fnotes === true)}${fold('reround', reorderBox, folds.reround !== false)}`
   // Mandy's Home (Philip, 21 Oct: "remove the areas that don't matter, align the ones that do"): Today and Sales this
   // week side by side at the same height, then two rows of four cards (the work; invoicing and what is out), the shop
   // floor's notes, the reorder round and the station snapshot, every box on the same gutters.
   : `${digestBox}${todayBox ? `<div class="hmd">${todayBox}</div>` : ''}
     <div class="hcards hcards8">${Object.values(cards).join('')}${money2}</div>
-    ${notesBox}${reorderBox}
-    <section class="panel snapbox"><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><button class="btn sm link" type="button" data-tab="floor">Open shop floor</button></div>${snap}</section>`;
+    ${fold('fnotes', notesBox, folds.fnotes === true)}${fold('reround', reorderBox, folds.reround !== false)}
+    ${fold('snap', `<section class="panel snapbox"><div class="hsec-h"><h3>Station snapshot</h3><span class="note">open jobs still needing each process</span><button class="btn sm link" type="button" data-tab="floor">Open shop floor</button></div>${snap}</section>`, folds.snap !== false)}`;
   return `<div class="home">${top}${main}
     <section id="home-list"><div class="hsec-h"><h3>${drill ? drill.title : isOut ? 'Going out this week and next' : 'Needs attention'}</h3>${drill ? `<span class="note">${drill.sub}</span>` : ''}${seg}</div>${table}</section>
   </div>`;
