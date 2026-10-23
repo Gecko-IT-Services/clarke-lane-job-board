@@ -40,8 +40,8 @@ import { CONFIG } from './config.js';
 import { searchAll } from './core/search.js';
 import { newDispatches } from './core/mood.js';
 import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf, quoteTurnaround } from './core/crm.js';
-import { linkEmail, emailActions, sortEmails, emailTaskTitle, needTopic, cleanTopic, ASKED } from './core/inbox.js';
-import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue, priceReview, spendChanges, PRICE_REVIEWED } from './core/sales.js';
+import { linkEmail, emailActions, sortEmails, emailTaskTitle, needTopic, cleanTopic, ASKED, customerQuestion } from './core/inbox.js';
+import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue, priceReview, spendChanges, PRICE_REVIEWED, quoteChaseFacts } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
 import { renderSalesOrders } from './orders.js';
 import { renderDispatch } from './dispatch.js';
@@ -426,6 +426,9 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
+// Home's drop-down panels (25 Oct): which are open, remembered on this computer. Reorder round and the station snapshot start folded; the shop floor's notes start open.
+S.folds = {};
+try { for (const k of ['fnotes', 'reround', 'snap']) { const v = localStorage.getItem('fold:' + k); if (v != null) S.folds[k] = v === '1'; } } catch { /* a private window: not remembered */ }
 const TABS = [['home', 'Home'], ['sales', 'CRM'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices'], ['deliveries', 'Deliveries'], ['accounts', 'Accounts']];   // left to right, the order work flows; CRM (was Sales) beside Home, where the work starts (Philip, 25 Oct)
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
@@ -1761,7 +1764,7 @@ function renderSalesView() {
   const m = salesModel();
   $('v-sales').innerHTML = crmHead() + renderSales({ ...m, err: null, view: S.salesView, openId: S.salesOpen, histErr: S.xero ? S.histErr : 'Xero is not connected', histStale: S.histNote || '', histEarliest: S.hist?.earliest, ai: S.ai,
     reorderBox: reordersHtml(false), more: m.base ? couldBuyMore(m.base, S.jobs) : [], news: S.news, enquiriesBox: enquiriesHtml(), md: md(),
-    prices: m.base ? priceReview(m.base, S.salesActs || S.salesF?.actions || [], m.today) : [], spend: m.base ? spendChanges(m.base, m.today, S.hist?.earliest) : null }, { esc, fmt, gbp });
+    prices: m.base ? priceReview(m.base, S.salesActs || S.salesF?.actions || [], m.today) : [], spend: m.base ? spendChanges(m.base, m.today, S.hist?.earliest) : null, qai: S.qai }, { esc, fmt, gbp });
 }
 function crmHead() {
   const n = (S.ideas || []).filter(i => i.status === 'new').length;
@@ -1772,6 +1775,41 @@ function crmHead() {
 }
 const plusDays = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 const salesQuote = spId => salesModel().open.find(q => q.spId === spId) || (S.salesQ || []).find(q => q.spId === spId);
+/* ---------- The AI follow-up on a quote (25 Oct): what was quoted, never the price; changes with each chase ---------- */
+function openQuoteAi(spId) {
+  const q = salesQuote(spId); if (!q) return;
+  S.qai = { spId, busy: false, draft: null, angle: '', to: q.contactEmail || '' }; render();
+  setTimeout(() => $('qaibox')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+}
+async function writeQuoteAi(spId) {
+  const q = salesQuote(spId); if (!q || !S.qai || S.qai.spId !== spId) return;
+  if ($('qai-angle')) S.qai.angle = $('qai-angle').value.trim();
+  S.qai.busy = true; S.qai.draft = null; render();
+  try {
+    const m = salesModel(), lines = await data.quoteLines(spId).catch(() => []);   // no lines (a quote with none, or SharePoint down): the AI writes from the rest
+    const facts = quoteChaseFacts(q, { lines, actions: m.actions, customer: (m.base || []).find(c => c.key === normName(q.customer)) || null, question: customerQuestion(m.actions, spId, m.today), angle: S.qai.angle, from: S.me.name, today: m.today });
+    const r = await data.salesAi(facts, 'quotechase');
+    S.qai.draft = { subject: r.subject, greeting: r.greeting, paragraphs: r.paragraphs || [] };
+  } catch (e) { toast(e.message, null, true); }
+  if (S.qai) S.qai.busy = false; render();
+}
+async function draftQuoteAi(spId) {
+  const q = salesQuote(spId); if (!q || !S.qai?.draft || S.busy) return;
+  const to = $('qai-to').value.trim(), subject = $('qai-subj').value.trim(), parts = $('qai-body').value.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  if (!subject || !parts.length) return toast('The email needs a subject and some text.', null, true);
+  S.busy = true;
+  try {
+    const link = await data.draftEmail({ to, subject, html: aiEmailHtml({ greeting: parts[0], paragraphs: parts.slice(1) }, S.me.name) });
+    await data.addSalesAction({ spId, customer: q.customer, kind: 'email', note: `Follow-up email for ${q.quoteNo}` });
+    await data.setFollow(q, { nextOn: plusDays(todayIso(), 7) });
+    data.logSalesEmail({ customer: q.customer, kind: 'quote' }).catch(() => {});
+    S.qai = null;
+    toast(`Follow-up for ${q.quoteNo} is in your Outlook Drafts${to ? ` to ${to}` : ' (no email on the quote: add one in Outlook)'}. Check it and press Send. Next follow-up booked for a week's time.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (e) { toast(mailErr(e), null, true); }
+  S.busy = false; loadSalesData();
+}
+/** The plain follow-up (no AI): the same short template every time, for when the AI is not wanted or not there. */
 async function chaseQuote(spId) {
   const q = salesQuote(spId); if (!q) return;
   if (S.busy) return; S.busy = true;
@@ -3236,7 +3274,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), folds: S.folds, jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, note: S.debtNote || '', chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: wonWaiting(),
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
@@ -3309,6 +3347,8 @@ function onClick(e) {
     if (e.target !== inp) { try { inp.showPicker(); } catch { inp.focus(); } }
     return;
   }
+  const fh = e.target.closest('#v-home .panel.fold > .hsec-h, #v-home .panel.fold > h3');   // a Home panel's header drops it down or folds it (25 Oct)
+  if (fh && !e.target.closest('button, a, input, select, label')) { const k = fh.parentElement.dataset.fold, folded = !fh.parentElement.classList.contains('folded'); S.folds[k] = folded; try { localStorage.setItem('fold:' + k, folded ? '1' : '0'); } catch { /* not remembered */ } render(); return; }
   const t = e.target.closest('button,a,input[data-pick],input[data-pickall],tr[data-open],tr[data-rfopen],tr[data-sopen],tr[data-enqopen]'); if (!t) return;
   const d = t.dataset;
   if ('goback' in d) return history.back();
@@ -3406,7 +3446,11 @@ function onClick(e) {
   if (d.rsemail) { const r = (S.research || []).find(x => x.key === d.rsemail), o = r?.openings[+d.i]; if (o) openAi(r.key, `${o.angle} (From their website or public pages: ${o.why})`); return; }
   if (d.rstask) return openTaskForm(`rs:${d.rstask}:${d.i}`);
   if (d.sopen) { S.salesOpen = S.salesOpen === +d.sopen ? null : +d.sopen; return render(); }
-  if (d.qchase) return chaseQuote(+d.qchase);
+  if (d.qchase) return openQuoteAi(+d.qchase);
+  if (d.qaiwrite) return writeQuoteAi(+d.qaiwrite);
+  if (d.qaidraft) return draftQuoteAi(+d.qaidraft);
+  if (d.qaiplain) { S.qai = null; return chaseQuote(+d.qaiplain); }
+  if ('qaiclose' in d) { S.qai = null; return render(); }
   if (d.qcall) return logCall(+d.qcall, null);
   if (d.ccall) return logCall(null, d.ccall);
   if (d.aiopen) return openAi(d.aiopen, d.angle || '', d.reitem || '');

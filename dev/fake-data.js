@@ -321,6 +321,9 @@ export const salesAiCheckin = async facts => ({ subject: `Next batch of ${facts.
 export const practice = true;   // the board skips what would cost real AI calls here (the topic backfill, 21 Oct)
 const noRefs = { so: '', po: '', quote: '' };
 export const salesAi = async (facts, kind = 'checkin') => {
+  if (kind === 'quotechase') return { subject: `Quote ${facts.quoteNo}: anything to change?`, greeting: facts.contactFirstName ? `Hi ${facts.contactFirstName},` : 'Hello,',   // made up
+    paragraphs: [`Made-up AI text for the practice page: ${facts.followUpsSoFar ? 'I wrote a little while ago about' : 'I just wanted to check in on'} quote ${facts.quoteNo}${facts.whatWasQuoted?.length ? ` for the ${facts.whatWasQuoted[0].replace(/^\d+ × /, '')}` : ''}.`,
+      'If anything needs changing, such as quantities, material or lead time, let me know and we will look at it again. If you are ready to go ahead, just reply with your order number.'], model: 'practice', costUsd: 0 };
   if (kind === 'chase') return { subject: `Overdue invoices: ${facts.customer}`, greeting: facts.contactName ? `Dear ${facts.contactName},` : 'Dear Sir or Madam,',   // made up
     before: ['I hope you are well. Our records show the invoices below are now past their due date.', 'Could you let me know when we can expect payment?'],
     after: ['If you have already paid, thank you: please let me know the date so we can match it. If there is a problem with any invoice, just reply and we will sort it out.'], model: 'fake', costUsd: 0 };

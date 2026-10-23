@@ -101,11 +101,19 @@ const PACK = { type: 'object', additionalProperties: false, required: ['summary'
 // What a customer's email is about (the enquiry kind's "topic", 21 Oct): the board turns each into an action.
 const TOPICS = ['po', 'quote_question', 'order_change', 'delivery', 'complaint', 'lead_time', 'invoice', 'other'];
 
+// A follow-up on one quote (25 Oct): changes with each chase, knows what was quoted but never the price.
+const QUOTECHASE_SYSTEM = `You write a short follow-up email about a quote, for a small UK sheet metal and fabrication company, sent by the person named in "from" to the customer it was quoted to.
+You are given a JSON object of facts. Use only those facts. Never invent or mention a price, a discount, an offer, a deadline, capacity or news; only mention something like that when it is in angleFromLevi, and then in his words.
+The aim: a friendly, useful nudge that makes it easy for the customer to go ahead, or to say what needs changing. Name the quote by quoteNo and say in plain words what it was for (whatWasQuoted; sum it up rather than listing every line when there are many). If customerAsked is given, acknowledge their question first and say you will answer it, or have.
+followUpsSoFar is how many times this quote has been chased already. 0: a first, light touch. 1: say briefly that you wrote before, and ask if anything needs changing (quantities, material, finish, lead time). 2 or more: ask plainly and kindly whether the job is still going ahead or has been put on hold, so it can be closed off either way. A regularCustomer is written to as a regular, not a stranger. End by saying that if they are ready to go ahead, replying with their order number is all that is needed.
+Style: British English, plain and friendly, not salesy, not pushy, no exclamation marks, no buzzwords, no em dashes. At most 3 short paragraphs, under 110 words in total. The greeting uses contactFirstName ("Hi Sam,") or "Hello," if there is none. Do not add a sign-off or name: it is added afterwards. The subject is short and names the quote number.`;
+
 const EMAIL = { type: 'object', additionalProperties: false, required: ['subject', 'greeting', 'paragraphs'],
   properties: { subject: { type: 'string' }, greeting: { type: 'string' }, paragraphs: { type: 'array', items: { type: 'string' } } } };
 
 const KINDS: Record<string, { who: string[]; effort: 'low' | 'medium'; system: string; schema: Record<string, unknown>; max: number }> = {
   checkin: { who: ['md', 'office'], effort: 'medium', system: SYSTEM, schema: EMAIL, max: 4000 },
+  quotechase: { who: ['md', 'office'], effort: 'low', system: QUOTECHASE_SYSTEM, schema: EMAIL, max: 2000 },
   monthpack: { who: ['accounts'], effort: 'medium', system: MONTHPACK_SYSTEM, schema: MONTHPACK, max: 8000 },
   chase: { who: ['accounts'], effort: 'low', system: CHASE_SYSTEM, schema: CHASE, max: 2000 },
   summary: { who: ['md', 'office'], effort: 'medium', max: 3000, schema: { type: 'object', additionalProperties: false, required: ['summary', 'nextStep'],
@@ -260,7 +268,7 @@ Deno.serve(async req => {
     const inT = res.usage.input_tokens + (res.usage.cache_read_input_tokens || 0), outT = res.usage.output_tokens;
     const cost = Math.round((inT * PRICE_IN + outT * PRICE_OUT) / 1e6 * 10000) / 10000;
     // The monthly pack is Keith's alone (23 Oct): its cost is kept on his own record below, not in the shared AI log.
-    if (!['monthpack', 'chase'].includes(kind)) await admin.from('sales_emails').insert({ customer, kind: body?.news ? 'news' : kind, ai: true, model: res.model, input_tokens: inT, output_tokens: outT, cost_usd: cost, created_by: me.email });
+    if (!['monthpack', 'chase'].includes(kind)) await admin.from('sales_emails').insert({ customer, kind: body?.news ? 'news' : kind === 'quotechase' ? 'quote' : kind, ai: true, model: res.model, input_tokens: inT, output_tokens: outT, cost_usd: cost, created_by: me.email });
     // The monthly pack is kept, so it reads the same next time and is not paid for twice (only this function writes it).
     if (kind === 'monthpack' && /^\d{4}-\d{2}$/.test(String(facts.month || ''))) {
       const { error } = await admin.from('month_packs').upsert({ month: facts.month, facts, analysis: email, model: res.model, cost_usd: cost, made_at: new Date().toISOString(), made_by: me.email });

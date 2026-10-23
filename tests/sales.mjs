@@ -126,3 +126,17 @@ console.log('sales: ok');
   assert.equal(spendChanges(customerBase(sp, today), today, ago(500)).partial, true, 'under two years of invoices: say so');
   console.log('sales prices and spend: ok');
 }
+
+// The AI follow-up on a quote (25 Oct): what it may know, and what it may not (the price).
+{
+  const { quoteChaseFacts } = await import('../src/core/sales.js');
+  const q = { spId: 7, quoteNo: 'Q-0320', customer: 'Example Customer Ltd', contactName: 'Sam Buyer', quoteDate: ago(12), age: 12 };
+  const lines = [{ lineNo: 1, qty: 10, sellTotal: 290.25, desc: 'Valve guard', thickness: 2, material: 'Zintec' }, { lineNo: 2, qty: 4, sellTotal: 80, desc: 'Cover plate', thickness: '', material: '' }];
+  const actions = [{ spId: 7, kind: 'email', at: ago(5) + 'T10:00:00Z' }, { spId: 7, kind: 'call', at: ago(3) + 'T10:00:00Z' }, { spId: 8, kind: 'email', at: ago(1) + 'T10:00:00Z' }];
+  const f = quoteChaseFacts(q, { lines, actions, customer: { orders: 5, last: ago(40) }, question: 'Does the price include folding?', angle: 'we could fit it in next week', from: 'Levi', today });
+  assert.deepEqual(f.whatWasQuoted, ['10 × Valve guard 2mm Zintec', '4 × Cover plate']);
+  assert.deepEqual([f.followUpsSoFar, f.lastFollowUp, f.callsSoFar, f.regularCustomer, f.contactFirstName, f.daysSinceQuote], [1, ago(5), 1, true, 'Sam', 12], 'only this quote\'s chases count');
+  assert.ok(!JSON.stringify(f).includes('290') && !JSON.stringify(f).includes('sellTotal'), 'no price goes to the AI');
+  assert.equal(quoteChaseFacts(q, { from: 'Levi' }).regularCustomer, false);
+  console.log('sales quote chase facts: ok');
+}

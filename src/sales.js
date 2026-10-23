@@ -10,7 +10,7 @@ import { customerQuestion } from './core/inbox.js';
 export const LOST_REASONS = ['Price', 'Lead time', 'Went elsewhere', 'No reply', 'Job cancelled', 'Other'];
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
 
-export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histStale = '', histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false, prices = [], spend = null }, h) {
+export function renderSales({ loading, err, open, chase, stats, month, view, openId, actions, base, quiet, histErr, histStale = '', histEarliest, ai, today, reorderBox = '', more = [], news = null, enquiriesBox = '', md = false, prices = [], spend = null, qai = null }, h) {
   const { esc, fmt, gbp } = h;
   if (err) return `<div class="hhead"><div><h2>CRM</h2></div></div><div class="err">${esc(err)} <button class="btn sm" type="button" data-salesreload>Try again</button></div>`;
   if (loading) return `<div class="hhead"><div><h2>CRM</h2></div></div><p class="note">Reading your quotes from the quote calculator…</p>`;
@@ -82,6 +82,17 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
       : `<div class="saibox"><label class="fl">Anything to say? (optional)<input type="text" id="ai-angle" value="${esc(ai.angle || '')}" placeholder="e.g. we have laser capacity next week; new powder coat colours; check their next batch"></label>
         <div class="actions"><button class="btn pri" type="button" data-aiwrite="${esc(aiC.key)}" ${ai.busy ? 'disabled' : ''}>${ai.busy ? 'Writing…' : 'Write the email with AI'}</button><button class="btn" type="button" data-aiclose>Cancel</button>
         <span class="note">About 1p an email. It only uses what they buy, when, and your words above: never prices.</span></div></div>`}</section>`;
+  // The AI follow-up on a quote (25 Oct): opened by Draft follow-up email; what was quoted, never the price; changes with each chase.
+  const qq = qai ? open.find(q => q.spId === qai.spId) : null;
+  const qaiBox = !qq ? '' : `<section class="panel saipanel" id="qaibox"><h3>Follow-up on ${esc(qq.quoteNo)} for ${esc(qq.customer)} <small>${touched(qq)}</small></h3>${qai.draft ? `<div class="saibox">
+        <label class="fl">To<input type="text" id="qai-to" value="${esc(qai.to || '')}" placeholder="their email"></label>
+        <label class="fl">Subject<input type="text" id="qai-subj" value="${esc(qai.draft.subject)}"></label>
+        <label class="fl">Email (edit anything)<textarea id="qai-body" rows="7">${esc([qai.draft.greeting, ...qai.draft.paragraphs].join('\n\n'))}</textarea></label>
+        <p class="note">Written by AI from the quote (what was quoted, never the price), how many times it has been chased${qai.angle ? ', and your words' : ''}: check it before sending. Your name and Clarke Lane are added at the end.</p>
+        <div class="actions"><button class="btn pri" type="button" data-qaidraft="${qq.spId}">${icon('mail')}Put in my Outlook Drafts</button><button class="btn" type="button" data-qaiwrite="${qq.spId}">Write it again</button><button class="btn" type="button" data-qaiclose>Close</button></div></div>`
+      : `<div class="saibox">${asked(qq)}<label class="fl">Anything to say? (optional)<input type="text" id="qai-angle" value="${esc(qai.angle || '')}" placeholder="e.g. we could fit this in next week; happy to split the delivery"></label>
+        <div class="actions"><button class="btn pri" type="button" data-qaiwrite="${qq.spId}" ${qai.busy ? 'disabled' : ''}>${qai.busy ? 'Writing…' : 'Write the email with AI'}</button><button class="btn" type="button" data-qaiplain="${qq.spId}">Plain template instead</button><button class="btn" type="button" data-qaiclose>Cancel</button>
+        <span class="note">About 1p. It uses the quote number, what was quoted (never the price), the customer's question if they asked one, how many times it has been chased, and your words above.</span></div></div>`}</section>`;
   const writeBtn = (c, angle = '') => `<button class="btn sm pri" type="button" data-aiopen="${esc(c.key)}" data-angle="${esc(angle)}">Write an email</button>`;
   const custBox = `<section class="panel"><h3>Customers to get back in touch with</h3>
     ${histErr ? `<div class="err">Xero's invoices could not be read: ${esc(histErr)}</div>` : !base ? '<p class="note">Reading Xero\'s invoices…</p>'
@@ -133,5 +144,5 @@ export function renderSales({ loading, err, open, chase, stats, month, view, ope
 
   return `<div class="hhead"><div><h2>CRM</h2><p class="sub">Your open quotes to chase, what your quote history says, and customers to get back in touch with.${md ? ' Only you see the month\'s figures and totals.' : ''}</p></div>
       <div class="hbtns"><button class="btn" type="button" data-salesreload>${icon('refresh')}Refresh</button></div></div>
-    ${md ? monthBox : ''}${enquiriesBox}${aiBox}${chaseBox}${listBox}${reorderBox}${priceBox}${spendBox}${moreBox}${custBox}${newsBox}${says}`;
+    ${md ? monthBox : ''}${enquiriesBox}${aiBox}${qaiBox}${chaseBox}${listBox}${reorderBox}${priceBox}${spendBox}${moreBox}${custBox}${newsBox}${says}`;
 }
