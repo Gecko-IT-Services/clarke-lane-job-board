@@ -98,3 +98,31 @@ const e = quoteChaseEmail(open[1], 'Levi');
 assert.ok(e.subject.includes(open[1].quoteNo) && e.html.includes('Hi Sam') && e.html.includes('Levi'));
 assert.equal(quoteValue({ sellTotal: 100.1, carriage: 20.2 }), 120.3);
 console.log('sales: ok');
+
+// Price review and spending less than last year (25 Oct).
+{
+  const { priceReview, spendChanges, PRICE_REVIEWED } = await import('../src/core/sales.js');
+  const inv = (customer, date, item, qty, amount, code = '') => ({ contactId: 'c', customer, date, net: amount, lines: [{ description: item, code, qty, amount }] });
+  const rows = [];
+  for (let i = 0; i < 6; i++) rows.push(inv('Flat Ltd', ago(30 + i * 90), 'Bracket', 10, 124));                 // £12.40 each for 480 days
+  for (let i = 0; i < 6; i++) rows.push(inv('Moved Ltd', ago(30 + i * 90), 'Plate', 10, i < 4 ? 150 : 120));    // put up to £15 ten months ago
+  rows.push(inv('Flat Ltd', ago(10), 'Carriage', 1, 15), inv('Once Ltd', ago(500), 'Hopper', 1, 900), inv('Once Ltd', ago(20), 'Hopper', 1, 900));
+  const base = customerBase(rows, today), pr = priceReview(base, [], today);
+  assert.deepEqual(pr.map(p => [p.customer, p.item, p.price, p.times]), [['Flat Ltd', 'Bracket', 12.4, 6]], 'Moved Ltd changed its price this year; carriage and a part sold twice are left out');
+  assert.deepEqual([pr[0].since, pr[0].days, pr[0].yearValue, pr[0].yearQty, pr[0].uplift], [ago(480), 480, 496, 40, 24.8], 'four of the six invoices fall in the last 12 months');
+  assert.equal(priceReview(base, [{ customer: 'Flat Ltd', kind: 'note', note: PRICE_REVIEWED + 'Bracket', at: ago(3) + 'T10:00:00Z' }], today).length, 0, 'reviewed: off the list');
+  assert.equal(priceReview(base, [{ customer: 'Flat Ltd', kind: 'note', note: PRICE_REVIEWED + 'Bracket', at: ago(400) + 'T10:00:00Z' }], today).length, 1, 'a review over a year ago no longer counts');
+  assert.equal(priceReview(base, [], today, { staleDays: 200 }).length, 2, 'with a shorter yardstick Moved Ltd (ten months) shows too');
+
+  const sp = [];
+  for (let i = 0; i < 12; i++) sp.push(inv('Down Ltd', ago(20 + i * 30), 'Panel', 1, 600), inv('Down Ltd', ago(380 + i * 30), 'Panel', 1, 1800));
+  for (let i = 0; i < 12; i++) sp.push(inv('Up Ltd', ago(20 + i * 30), 'Lid', 1, 900), inv('Up Ltd', ago(380 + i * 30), 'Lid', 1, 500));
+  for (let i = 0; i < 4; i++) sp.push(inv('Small Ltd', ago(20 + i * 30), 'Clip', 1, 100), inv('Small Ltd', ago(380 + i * 30), 'Clip', 1, 200));   // under £1,000 before: too small to call
+  for (let i = 0; i < 6; i++) sp.push(inv('Gone Ltd', ago(200 + i * 30), 'Tray', 1, 300), inv('Gone Ltd', ago(400 + i * 30), 'Tray', 1, 900));   // lapsed: on the get-back-in-touch list, not here
+  const s = spendChanges(customerBase(sp, today), today, ago(720));
+  assert.deepEqual(s.down.map(r => [r.customer, r.yearNet, r.prevNet, r.change, r.pct]), [['Down Ltd', 7200, 21600, -14400, -67]]);
+  assert.deepEqual(s.up.map(r => [r.customer, r.change]), [['Up Ltd', 4800]]);
+  assert.equal(s.partial, false);
+  assert.equal(spendChanges(customerBase(sp, today), today, ago(500)).partial, true, 'under two years of invoices: say so');
+  console.log('sales prices and spend: ok');
+}

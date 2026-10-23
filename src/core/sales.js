@@ -181,3 +181,61 @@ export function aiEmailHtml({ paragraphs, greeting }, from, company = 'Clarke La
 <p>${esc(greeting || 'Hello,')}</p>${(paragraphs || []).map(p => `<p>${esc(p)}</p>`).join('')}
 <p>Kind regards,<br>${esc(from)}<br>${esc(company)}</p></div>`;
 }
+
+/**
+ * Price review (25 Oct, towards £20k a month): repeat parts still being ordered whose price has not moved for over
+ * a year. From the invoice lines (the price is the line amount over the quantity, so Xero's rounding is allowed
+ * for). A part counts when it has been invoiced `minTimes` or more, at least once in the last 12 months, and the
+ * price it is on now started over `staleDays` ago. One looked at (a sales_actions note "Price reviewed: <item>")
+ * stays off the list for a year. Biggest last-12-months value first, with what 5% on it would be worth.
+ */
+export const PRICE_REVIEWED = 'Price reviewed: ';
+export function priceReview(base, actions, today, { minTimes = 3, staleDays = 365 } = {}) {
+  const t = dayNo(today), reviewed = new Set();
+  for (const a of actions || []) if (a.kind === 'note' && String(a.note || '').startsWith(PRICE_REVIEWED) && t - dayNo(a.at) <= 365)
+    reviewed.add(normName(a.customer) + '|' + a.note.slice(PRICE_REVIEWED.length).trim().toLowerCase());
+  const out = [];
+  for (const c of base || []) {
+    const parts = new Map();
+    for (const x of c.invoices) {
+      if (!(x.net > 0)) continue;
+      for (const l of x.lines || []) {
+        const name = String(l.description || '').split('\n')[0].trim(), qty = Number(l.qty) || 0, amount = Number(l.amount) || 0;
+        if (!name || /^(carriage|delivery|postage)/i.test(name) || qty <= 0 || amount <= 0) continue;
+        const k = String(l.code || name).toLowerCase(), p = parts.get(k) || { item: name, code: l.code || '', lines: [] };
+        p.lines.push({ date: x.date, unit: amount / qty, qty, amount }); parts.set(k, p);
+      }
+    }
+    for (const p of parts.values()) {
+      if (reviewed.has(c.key + '|' + p.item.toLowerCase())) continue;
+      p.lines.sort((a, b) => a.date.localeCompare(b.date));
+      const year = p.lines.filter(l => t - dayNo(l.date) <= 365);
+      if (p.lines.length < minTimes || !year.length) continue;
+      const now = p.lines.at(-1).unit;
+      let since = p.lines.at(-1).date;   // when the price now started: back while it is the same (within ½%)
+      for (let i = p.lines.length - 1; i >= 0 && Math.abs(p.lines[i].unit - now) <= now * 0.005; i--) since = p.lines[i].date;
+      const days = t - dayNo(since);
+      if (days < staleDays) continue;
+      const yearValue = r2(year.reduce((a, l) => a + l.amount, 0));
+      out.push({ key: c.key, customer: c.customer, contactId: c.contactId, item: p.item, code: p.code, times: p.lines.length, price: r2(now), first: r2(p.lines[0].unit), since, days,
+        yearQty: year.reduce((a, l) => a + l.qty, 0), yearValue, uplift: r2(yearValue * 0.05) });
+    }
+  }
+  return out.sort((a, b) => b.yearValue - a.yearValue);
+}
+
+/**
+ * Spending less than last year (25 Oct): regular customers still ordering (in the last year) but down on the
+ * 12 months before by `minFall` or more, biggest fall in £ first; and the ones up, for balance. Customers under
+ * `minPrev` the year before are too small to call. Needs two years of invoices: `partial` says Xero's history
+ * is shorter, so the year before is not all there.
+ */
+export function spendChanges(base, today, earliest = '', { minPrev = 1000, minFall = 0.15 } = {}) {
+  const t = dayNo(today);
+  const rows = (base || []).filter(c => c.since != null && c.since <= 365 && !c.quiet && !c.lapsed && c.prevNet >= minPrev)   // the quiet and lapsed have their own list
+    .map(c => ({ key: c.key, customer: c.customer, contactId: c.contactId, yearNet: c.yearNet, prevNet: c.prevNet, change: r2(c.yearNet - c.prevNet),
+      pct: Math.round(((c.yearNet - c.prevNet) / c.prevNet) * 100), last: c.last, since: c.since, items: c.items }));
+  return { down: rows.filter(r => r.change < 0 && -r.change / r.prevNet >= minFall).sort((a, b) => a.change - b.change),
+    up: rows.filter(r => r.change > 0 && r.change / r.prevNet >= minFall).sort((a, b) => b.change - a.change),
+    partial: !!earliest && t - dayNo(earliest) < 700 };
+}
