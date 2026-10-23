@@ -11,6 +11,8 @@
 //   POST bills     office only → the last 12 months' supplier bills, materials lines (account 5000) only. Read only.
 //   POST history   office only → sales invoices and credit notes, last 24 months, with their lines and what is owed (customer pages, Sales). Read only.
 //   POST disconnect office only
+//   POST purchases accounts only → purchase orders and supplier bills, last 120 days, with lines (Keith's page, 23 Oct). Read only.
+// The accounts login (Keith) may call invoices (with net and contact), debts and purchases; nothing that writes.
 //   (also: invoices = status by ids, online = pay-online links, po = draft purchase order, month = Levi's month)
 //
 // Xero allows 5,000 calls a day per organisation. Read answers are kept in public.xero_cache and shared by
@@ -61,7 +63,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const back = (msg: string) => Response.redirect(`${BOARD}?xero=${encodeURIComponent(msg)}#dispatch`, 302);
 
-/** The caller, if they are office staff on the board. */
+/** The caller, if they are office staff on the board, or the accounts login (Keith, 23 Oct: reads only, see the routes). */
 async function office(req: Request) {
   const auth = req.headers.get('authorization') || '';
   if (!auth.startsWith('Bearer ')) throw new HttpError(401, 'Sign in to the job board first.');
@@ -69,7 +71,7 @@ async function office(req: Request) {
   const { data, error } = await user.rpc('me');
   if (error) throw new HttpError(401, 'Your job board sign-in has expired. Reload the page.');
   const me = data?.[0];
-  if (!['md', 'office'].includes(me?.role)) throw new HttpError(403, 'Only Levi and Mandy can use the Xero connection.');
+  if (!['md', 'office', 'accounts'].includes(me?.role)) throw new HttpError(403, 'Only Levi and Mandy can use the Xero connection.');
   return me as { email: string; name: string; role: string };
 }
 
@@ -318,7 +320,7 @@ async function send(items: { despatchId: number; contactId: string }[]) {
 
 /** ids → each invoice's status in Xero (DRAFT, SUBMITTED, AUTHORISED, PAID, VOIDED, DELETED), one call
  *  per 40. The board asks only about invoices it made and has not yet seen approved. */
-async function invoiceStatus(ids: unknown) {
+async function invoiceStatus(ids: unknown, withAmounts = false) {
   if (!Array.isArray(ids)) throw new HttpError(400, 'No invoices given.');
   const want = [...new Set(ids.filter((i): i is string => typeof i === 'string' && /^[0-9a-f-]{36}$/i.test(i)))].slice(0, 400);
   if (!want.length) return { invoices: [] };
@@ -326,9 +328,28 @@ async function invoiceStatus(ids: unknown) {
   const out = [];
   for (let i = 0; i < want.length; i += 40) {
     const r = await xero(s, `Invoices?IDs=${want.slice(i, i + 40).join(',')}&summaryOnly=true`);
-    out.push(...(r.Invoices || []).map((v: any) => ({ id: v.InvoiceID, number: v.InvoiceNumber || '', status: v.Status })));
+    // The accounts login also gets the net and the contact, to set beside the board's own figure (23 Oct).
+    out.push(...(r.Invoices || []).map((v: any) => ({ id: v.InvoiceID, number: v.InvoiceNumber || '', status: v.Status,
+      ...(withAmounts ? { net: Number(v.SubTotal ?? 0), contact: v.Contact?.Name || '', date: xDate(v.DateString || v.Date) } : {}) })));
   }
   return { invoices: out };
+}
+
+/** Keith's Accounts page (23 Oct): purchase orders and supplier bills of the last 120 days, with their lines, so bills
+ *  can be matched to orders and price differences spotted. Read only; the accounts login only. */
+async function purchases() {
+  const s = await session();
+  const since = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
+  const pos = await allPages(s, `PurchaseOrders?DateFrom=${since}`, 'PurchaseOrders');
+  const where = encodeURIComponent(`Type=="ACCPAY" AND Date>=DateTime(${since.split('-').map(Number).join(',')})`);
+  const bills = await allPages(s, `Invoices?where=${where}&Statuses=DRAFT,SUBMITTED,AUTHORISED,PAID`, 'Invoices');
+  const line = (l: any) => ({ code: l.ItemCode || '', description: String(l.Description || '').slice(0, 200), qty: Number(l.Quantity || 0),
+    unit: Number(l.UnitAmount || 0), amount: Number(l.LineAmount || 0) });
+  const head = (x: any) => ({ supplierId: x.Contact?.ContactID || '', supplier: x.Contact?.Name || '', date: xDate(x.DateString || x.Date),
+    status: x.Status || '', reference: x.Reference || '', net: Number(x.SubTotal || 0), lines: (x.LineItems || []).map(line) });
+  return { from: since,
+    pos: pos.filter((p: any) => p.Status !== 'DELETED').map((p: any) => ({ id: p.PurchaseOrderID, number: p.PurchaseOrderNumber || '', ...head(p) })),
+    bills: bills.map((x: any) => ({ id: x.InvoiceID, number: x.InvoiceNumber || '', due: xDate(x.DueDateString || x.DueDate), ...head(x) })) };
 }
 
 /** A DRAFT purchase order in Xero for a sales order (office). Recorded on the board once Xero has it. */
@@ -462,6 +483,12 @@ Deno.serve(async req => {
     const reply = (body: unknown) => cors(req, json({ ...(body as Record<string, unknown>), xero_left: limits }));
     const b = await req.json().catch(() => ({})) as any;
     const fresh = b?.fresh === true;
+    // The accounts login (Keith) reads invoices, debts and purchases, and nothing else; purchases are his alone.
+    if (me.role === 'accounts' && !['invoices', 'debts', 'purchases'].includes(route || '')) throw new HttpError(403, 'The accounts login reads invoices, debts and purchases only.');
+    if (route === 'purchases') {
+      if (me.role !== 'accounts') throw new HttpError(403, 'Purchases against bills are on the accounts login only.');
+      return reply(await cached('purchases', 30 * MIN, fresh, purchases));
+    }
     if (route === 'connect') return reply({ url: await connectUrl(me.email) });
     if (route === 'read') return reply(await cached('read', 15 * MIN, fresh, read));
     if (route === 'contacts') return reply(await cached('contacts', 30 * MIN, fresh, contacts));
@@ -477,7 +504,7 @@ Deno.serve(async req => {
     // per-invoice amounts, as Mandy sees on orders; totals are drawn for Levi only
     if (route === 'history') return reply(await cached('history', 6 * HOUR, fresh, history));
     if (route === 'online') return reply(await onlineLinks(b?.ids));
-    if (route === 'invoices') return reply(await invoiceStatus(b?.ids));
+    if (route === 'invoices') return reply(await invoiceStatus(b?.ids, me.role === 'accounts'));
     if (route === 'send') return reply(await send(b?.items));
     if (route === 'disconnect') { await admin.rpc('xero_disconnect'); return reply({ ok: true }); }
     throw new HttpError(404, 'Not found');

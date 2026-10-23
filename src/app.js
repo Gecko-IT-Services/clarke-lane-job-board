@@ -7,6 +7,7 @@ import * as realData from './data.js';
 import { previewJobs } from './core/preview.js';
 import { normName, matchContact, dispatchPo, looksSame, rankContacts } from './core/xero.js';
 import { cocRows, cocNeeded, COC_STATEMENT, DEFAULT_ORIGIN } from './core/coc.js';
+import { renderAccounts } from './accounts.js';
 import { agedDebt, debtFor, recentChase, chaseEmail, DEBT_DAYS } from './core/debts.js';
 import { readDrawing, toAdd, processesFromHistory } from './core/drawing.js';
 import { normPartNo, currentFile, drawingsToLink, findPart, ordersForPart, suggestedParts, openOrdersNeeding, partsOnJob, lineNumbers } from './core/parts.js';
@@ -106,6 +107,8 @@ const S = { orderView: 'outstanding', ask: null, forcePick: new Set(), xc: null,
 const office = () => ['md', 'office'].includes(S.me?.role);
 /** Levi (MD): the business figures (target, order book and other totals). Mandy (office) keeps prices on orders. */
 const md = () => S.me?.role === 'md';
+/** Keith (23 Oct): the accounts login. Reads his Accounts page and nothing else; changes nothing. */
+const accounts = () => S.me?.role === 'accounts';
 const job = id => S.jobs.find(j => j.id === id);
 /** Ordered quotes with where each stands (waiting / job / dismissed), or null until read. */
 const quotes = () => S.quotesRaw ? quoteStates(S.quotesRaw, S.jobs, S.dismissed) : null;
@@ -133,7 +136,8 @@ async function boot() {
   try { const v = localStorage.getItem('clj.wonview'); if (v === 'made' || v === 'gone') S.wonView = v; } catch { /* none kept */ }
   try { S.kiosk = localStorage.getItem('clj.kiosk') === '1'; } catch { /* none kept */ }
   fromHash();
-  if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
+  if (accounts()) S.tab = 'accounts';   // Keith's login has only his page
+  else if (!office() && !location.hash) S.tab = 'floor';   // the factory tablet opens on its own screen
   history.replaceState({ ...navOf(), i: 0 }, '', '#' + S.tab);   // the first step: ← Back stays hidden here
   await reload();
   try { if (localStorage.getItem('clj.share') === '1') startSharing(); } catch { /* not kept */ }   // the van's phone carries on sharing
@@ -154,7 +158,7 @@ function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeou
 
 async function reload() {
   try {
-    [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() }),
+    [S.jobs, S.dismissed, S.xeroOrders, S.book] = await Promise.all([data.loadJobs({ office: office() || accounts() }),
       office() ? data.loadDismissed() : [], office() ? data.loadXeroOrders() : [], office() ? data.loadContactBook() : { people: [], sites: [] }]);
     // Work sent out (powder coat, plating): everyone, the shop floor included. A missing table just means none yet.
     S.outwork = await data.loadOutwork().then(r => { S.outErr = null; return r; }).catch(e => { S.outErr = e.message; return S.outwork || []; });
@@ -168,6 +172,7 @@ async function reload() {
     if (office()) [S.tasks, S.enq, S.staff] = await Promise.all([data.loadTasks().catch(e => { S.tasksErr = e.message; return S.tasks || []; }),
       data.loadEnquiries().catch(e => { S.enqErr = e.message; return S.enq || []; }), S.staff ? S.staff : data.loadStaff().catch(() => [])]);
     if (office()) S.salesActs = await data.loadActions().catch(() => S.salesActs || []);
+    if (accounts()) S.chases = await data.loadChases().catch(() => S.chases || []);
     if (office()) S.cocs = await data.loadCocs().catch(() => S.cocs || { issued: new Map(), customers: new Set() });   // certificates of conformity (23 Oct)
     if (office()) S.metal = await data.loadMetal().then(r => { S.metalErr = null; return r; }).catch(e => { S.metalErr = e.message; return S.metal || []; });
     if (office()) [S.chases, S.parts] = await Promise.all([data.loadChases().catch(() => S.chases || []), data.loadParts().catch(e => { S.partsErr = e.message; return S.parts || []; })]);
@@ -177,7 +182,8 @@ async function reload() {
   loadInvoiceStatus();
   loadMonthSales();
   loadDebts();
-  if (office() && !S.enqStarted) { S.enqStarted = true; syncEnquiries(); }   // info@: then every 15 minutes
+  if (office() && !S.enqStarted) { S.enqStarted = true; syncEnquiries(); }
+  if (accounts()) loadAccounts();   // info@: then every 15 minutes
 }
 async function loadQuotes() {
   S.quotesErr = null;
@@ -418,7 +424,7 @@ async function deleteOrder(id) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'CRM'], ['tv', 'TV board'], ['metal', 'Metal prices'], ['deliveries', 'Deliveries']];   // CRM (was Sales) last (Levi, 21 Oct)   // left to right, the order work flows
+const TABS = [['home', 'Home'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['sales', 'CRM'], ['tv', 'TV board'], ['metal', 'Metal prices'], ['deliveries', 'Deliveries'], ['accounts', 'Accounts']];   // CRM (was Sales) last (Levi, 21 Oct)   // left to right, the order work flows
 /** Open jobs with every process ticked and something still to send, in the running order. */
 const readyToDispatch = () => S.jobs.filter(j => onBoardStage(j) && j.status === 'open' && allDone(j)).sort(byRunningOrder);
 function renderTabs() {
@@ -427,7 +433,7 @@ function renderTabs() {
   // Map lives under Dispatch, Customers under CRM (Philip, 21 Oct), Parts and Metal under Sales orders; their parent tab stays lit.
   const lit = { map: 'dispatch', customers: 'sales', parts: 'orders', metal: 'orders', deliveries: 'dispatch' }[S.tab] || S.tab;
   $('tabs').hidden = !office();   // the shop floor login sees only its own screen, so no tabs
-  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal', 'deliveries'].includes(k)).map(([k, t]) => {
+  $('tabs').innerHTML = !office() ? '' : TABS.filter(([k]) => !['map', 'customers', 'parts', 'tv', 'metal', 'deliveries', 'accounts'].includes(k)).map(([k, t]) => {
     const b = k === 'quotes' ? ready + xeroWaiting().length : k === 'dispatch' && office() ? toXero : k === 'xero' ? xeroWaiting().length : 0;
     const go = k === 'dispatch' ? readyToDispatch().length : 0;
     return `<a href="#${k}" data-tab="${k}" ${lit === k ? 'aria-current="page"' : ''}>${k === 'xero' ? XERO : icon({ quotes: 'won', dispatch: 'truck', sales: 'book' }[k] || k) + t}${go ? `<span class="badge go" title="${go} ready to dispatch">${go} ready</span>` : ''}${b ? `<span class="badge" title="${k === 'dispatch' ? 'Delivered, waiting for Xero' : ''}">${b}</span>` : ''}</a>`;
@@ -2874,7 +2880,7 @@ function showDoc(kind, jobId, despId) {
   const d = kind === 'dn' ? j.despatches.find(x => x.id === despId) : null;
   const p = kind === 'pf' ? (S.pfs || []).find(x => x.id === despId) : null;
   const sentAt = kind === 'soa' ? j.ackEmailedAt : kind === 'pf' ? p?.emailedAt : kind === 'coc' ? S.cocs?.issued?.get(despId)?.emailedAt : d?.emailedAt;
-  const canEmail = !['job', 'pfnew'].includes(kind) && (kind === 'dn' || office()) && !p?.cancelledAt;
+  const canEmail = !['job', 'pfnew'].includes(kind) && (kind === 'dn' || office()) && !p?.cancelledAt && !accounts();
   const cocBtn = kind === 'dn' && office() && d && !d.cancelled ? `<button class="btn" type="button" data-coc="${despId}" data-job="${jobId}" title="A certificate of conformity for this delivery">${icon('doc')}C of C</button>` : '';
   const pfBtns = p && !p.cancelledAt ? `${p.paidOn ? `<button class="btn" type="button" data-pfmark="unpaid" data-pf="${p.id}">Not paid after all</button>`
       : `<button class="btn" type="button" data-pfmark="paid" data-pf="${p.id}">Mark paid</button><button class="btn" type="button" data-pfmark="cancel" data-pf="${p.id}">Cancel pro forma</button>`}` : '';
@@ -2981,6 +2987,31 @@ async function emailDoc(kind, jobId, despId) {
     if (btn) { btn.disabled = false; btn.textContent = 'Email to customer'; }
   }
 }
+/* ---------- Keith's Accounts page (Philip, 23 Oct): the accounts login only, read only ---------- */
+/** Xero's side of the page: the board's invoices (status, net, contact), unpaid invoices, purchase orders and bills.
+ *  Kept 15 minutes in this tab (Xero keeps debts and purchases for everyone too); "Read Xero again" fetches fresh. */
+let accLoading = false;
+async function loadAccounts(force = false) {
+  if (!accounts() || accLoading || PREVIEW.on) return;
+  if (!force && S.acc?.at && Date.now() - S.acc.at < 15 * 60e3) return;
+  accLoading = true; S.acc = { ...(S.acc || {}), loading: true }; render();
+  // The board's own invoices, newest dispatch first (Xero is asked about 400 at most).
+  const ids = [...new Set(S.jobs.flatMap(j => j.despatches).filter(d => d.xero?.id).sort((a, b) => String(b.date).localeCompare(String(a.date))).map(d => d.xero.id))].slice(0, 400);
+  const [inv, debts, pur] = await Promise.allSettled([ids.length ? data.xero('invoices', { ids }) : Promise.resolve({ invoices: [] }),
+    data.xero('debts', { fresh: force }), data.xero('purchases', { fresh: force })]);
+  const was = S.acc || {}, why = r => r.status === 'rejected' ? r.reason?.message || 'Xero could not be read.' : null;
+  S.acc = { at: Date.now(), loading: false,
+    inv: inv.status === 'fulfilled' ? new Map((inv.value.invoices || []).map(x => [x.id, x])) : was.inv || null, invErr: why(inv),
+    debts: debts.status === 'fulfilled' ? debts.value.invoices || [] : was.debts || null, debtErr: why(debts),
+    purchases: pur.status === 'fulfilled' ? pur.value : was.purchases || null, purErr: why(pur) };
+  accLoading = false; render();
+}
+function renderAccountsView() {
+  const a = S.acc || {};
+  $('v-accounts').innerHTML = renderAccounts({ jobs: S.jobs, today: todayIso(), me: S.me, inv: a.inv, invErr: a.invErr, debts: a.debts, debtErr: a.debtErr,
+    purchases: a.purchases, purErr: a.purErr, outwork: S.outwork || [], chases: S.chases || [], view: S.accView || 'look', loading: a.loading }, { esc, fmt, gbp });
+}
+
 /* ---------- certificates of conformity (Philip, 23 Oct): one per dispatch note, office only ---------- */
 const cocHelp = { needed: (j, d) => cocNeeded(j, d, S.cocs?.customers, S.cocs?.issued), issued: d => !!S.cocs?.issued?.has(d.id) };
 /** Opens the certificate for a dispatch note: the one saved, else a new one with the materials read from the lines. */
@@ -3090,9 +3121,11 @@ function render() {
   $('preview-bar').hidden = !PREVIEW.on;
   if (PREVIEW.on) $('preview-bar').innerHTML = `<b>Preview</b> <span>${PREVIEW.jobs.length} open sales orders read from Xero, shown as jobs in this browser only. Nothing is saved and Xero is not changed. Processes are guessed from the descriptions; due dates are Xero's expiry dates.</span> <button class="btn sm" type="button" data-leavepreview>Leave preview</button>`;
   const kept = snapshotInputs();
-  if (!office() && ['quotes', 'orders', 'customers', 'parts', 'xero', 'metal'].includes(S.tab)) S.tab = 'floor';
+  if (accounts()) S.tab = 'accounts';
+  else if (S.tab === 'accounts') { S.tab = office() ? 'home' : 'floor'; history.replaceState(history.state, '', '#' + S.tab); }   // Keith's page is his alone (Philip, 23 Oct)
+  if (!office() && !accounts() && ['quotes', 'orders', 'customers', 'parts', 'xero', 'metal'].includes(S.tab)) S.tab = 'floor';
   if (S.kiosk && !['tv', 'deliveries'].includes(S.tab)) { S.tab = 'floor'; if (location.hash !== '#floor') history.replaceState(null, '', '#floor'); }
-  if (!office() && !['floor', 'tv', 'deliveries'].includes(S.tab)) S.tab = 'floor';   // the driver's screen is the shop floor login's too (22 Oct)
+  if (!office() && !accounts() && !['floor', 'tv', 'deliveries'].includes(S.tab)) S.tab = 'floor';   // the driver's screen is the shop floor login's too (22 Oct)
   if (S.tab === 'sales' && !office()) S.tab = 'home';   // the CRM is Levi's and Mandy's; the month's figures in it are Levi's only   // the workshop TV uses the shop floor login too   // the shop floor login only has the Shop floor screen (Philip, 19 Oct)
   document.body.classList.toggle('kiosk-mode', !!S.kiosk || S.tab === 'tv');
   document.body.classList.toggle('tv-mode', S.tab === 'tv'); tvAwake(S.tab === 'tv');
@@ -3105,7 +3138,7 @@ function render() {
       wonQuotes: wonWaiting(),
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
-    tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, deliveries: renderDeliveriesView, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
+    tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, deliveries: renderDeliveriesView, accounts: renderAccountsView, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor' || S.tab === 'deliveries');   // big messages for big fingers
   renderDrawer();
   restoreInputs(kept);
@@ -3376,6 +3409,8 @@ function onClick(e) {
     return window.print();
   }
   if (d.coc) return openCoc(+d.job, +d.coc);
+  if (d.accview) { S.accView = d.accview; return render(); }
+  if ('accrefresh' in d) return loadAccounts(true);
   if ('cocsave' in d) return saveCocNow();
   if (d.savedoc) return saveDoc(d.savedoc, +d.job, d.dnid ? +d.dnid : null);
   if (d.emaildoc) return emailDoc(d.emaildoc, +d.job, +d.dnid || null);

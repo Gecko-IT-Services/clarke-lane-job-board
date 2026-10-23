@@ -29,11 +29,11 @@ assert.ok(!/job_lines \([^;]*price/.test(sql), 'job_lines carries no price colum
 // — The role helpers are never NULL: "if not is_office()" must raise for a caller who is not on
 //   the staff list, and anon can execute nothing (see 20261022170000_anon_rpc.sql). —
 const last = (name) => [...sql.matchAll(new RegExp(`create(?: or replace)? function public\\.${name}\\(\\)[^$]*\\$\\$([^$]*)\\$\\$`, 'g'))].at(-1)[1];
-for (const h of ['is_staff', 'is_office', 'is_md']) assert.match(last(h), /coalesce\(.*, false\)/, `${h}() is never null`);
+for (const h of ['is_staff', 'is_office', 'is_md', 'is_accounts']) assert.match(last(h), /coalesce\(.*, false\)/, `${h}() is never null`);
 assert.ok(sql.includes('revoke execute on all functions in schema public from anon'), 'anon can call no function');
 assert.ok(sql.includes('alter default privileges for role postgres in schema public revoke execute on functions from anon'), 'new functions are not granted to anon');
 // Every "if not X()" guard uses a helper that is never null.
-for (const m of sql.matchAll(/if not public\.(\w+)\(\)/g)) assert.ok(['is_staff', 'is_office', 'is_md'].includes(m[1]), `guard ${m[1]} is a known helper`);
+for (const m of sql.matchAll(/if not public\.(\w+)\(\)/g)) assert.ok(['is_staff', 'is_office', 'is_md', 'is_accounts'].includes(m[1]), `guard ${m[1]} is a known helper`);
 
 // — The browser writes four tables directly; it may touch only the columns the board actually sets.
 //   Everything else goes through the definer functions (see 20261022180000_delete_and_column_grants.sql). —
@@ -43,6 +43,12 @@ for (const [t, cols] of [['jobs', 'status, status_note, contact_email'], ['despa
   assert.ok(sql.includes(`grant update (${cols}) on public.${t} to authenticated`), `${t}: only ${cols}`);
 }
 assert.match(sql, /create policy jobs_office_delete on public\.jobs\s+for delete to authenticated using \(public\.is_office\(\) and public\.job_can_delete\(id\)\)/, 'a job with paperwork is never deleted');
+
+// — The accountant (23 Oct) reads; he is not staff, so he can change nothing staff can. —
+assert.match(last('is_staff'), /in \('md', 'office', 'floor'\)/, 'is_staff() leaves accounts out');
+for (const t of ['jobs', 'job_lines', 'job_line_prices', 'despatches', 'despatch_lines', 'outwork', 'debt_chases'])
+  assert.ok(sql.includes(`create policy ${t}_accounts_read on public.${t} for select to authenticated using (public.is_accounts())`), `${t}: accounts may read`);
+assert.ok(![...sql.matchAll(/create policy \w+ on public\.\w+ for (insert|update|delete|all)[^;]*is_accounts/g)].length, 'accounts writes nothing');
 
 // — Levi's nine processes, exactly. —
 const procs = sql.match(/process\s+text not null check \(process in \(([^)]*)\)\)/)[1]

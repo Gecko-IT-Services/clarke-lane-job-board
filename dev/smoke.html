@@ -518,6 +518,12 @@ table.lprocs tr.allrow td{background:var(--field);border-bottom:2px solid var(--
 .docbar .btn:first-of-type{margin-left:auto}
 /* Choosing the Xero contact on Waiting for Xero (22 Oct): a search box, the likeliest contacts as buttons */
 .xcpick{display:flex;flex-direction:column;gap:6px;min-width:240px;max-width:420px} .xcpick input{width:100%} .xcopts{display:flex;flex-wrap:wrap;gap:6px}
+/* Keith's Accounts page (23 Oct) */
+#v-accounts .acc{margin-top:16px} #v-accounts .acc .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap} #v-accounts .acc .ph h3{margin:0} #v-accounts .acc .ph .seg{margin-left:auto}
+#v-accounts .ref{display:block;font-size:12px;color:var(--mute)} #v-accounts td .chip{margin:2px 4px 2px 0}
+.acc-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:10px 0} .acc-kv>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.acc-kv b{display:block;font-size:20px} .acc-kv span{font-size:12.5px;color:var(--mute)} .acc-kv .bad b{color:var(--bad,#C42B1C)}
+.acc-units{font-size:12.5px;color:var(--mute);margin-top:4px} .acc-list{margin:8px 0 0;padding-left:18px;font-size:13px}
 .paper{max-width:794px;margin:0 auto;background:var(--paper);color:var(--paper-ink);padding:44px 48px;border-radius:4px;font-size:13.5px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:22px}
 .paper .ph{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:flex-start}
 .paper .ph svg{height:46px;width:auto}
@@ -691,12 +697,12 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 
 .crumb{margin:0 0 4px;font-size:14px}.crumb a{color:var(--muted);text-decoration:none;font-weight:600}.crumb a:hover{color:var(--ink)}
 /* home */
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) > .home{display:flex;flex-direction:column;gap:26px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hbtns{margin-left:auto;display:flex;gap:8px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) > .home{display:flex;flex-direction:column;gap:26px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-metal,#v-sales) .hhead{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-metal,#v-sales) .hhead h2{font-family:var(--body);font-weight:500;font-size:32px;letter-spacing:-.01em}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-metal,#v-sales) .hhead .sub{margin:2px 0 0;color:var(--muted);font-size:14px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-metal,#v-sales) .hbtns{margin-left:auto;display:flex;gap:8px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-sales) .hcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 #v-home .hmd{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:stretch}   /* Levi: the month beside what to chase (21 Oct) */
 @media (max-width:1000px){#v-home .hmd{grid-template-columns:1fr}}
 #v-home .hmd .month{margin:0} #v-home .sales-today{display:flex;flex-direction:column;gap:10px} #v-home .sales-today .tcards{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -722,27 +728,27 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-home .snapbox .snap{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}
 #v-home .hglance{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;align-items:start}   /* Levi: the month beside the cards, not below (21 Oct) */
 @media (max-width:1180px){#v-home .hglance{grid-template-columns:1fr}}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;transition:transform .12s ease, box-shadow .12s ease}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-sales) .hcard{display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.go{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;transition:transform .12s ease, box-shadow .12s ease}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.go:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #home-list,#won-list{scroll-margin-top:90px}
 #v-quotes .wlines{display:block;padding:2px 0 0;font-size:12.5px}
 #v-quotes tr.open td{background:var(--field)}
 #v-quotes tr.wdetail td{background:var(--field);padding:4px 14px 14px}
 #v-quotes table.wl{width:100%;background:var(--surface);border-radius:8px}
 #v-quotes table.wl th,#v-quotes table.wl td{padding:6px 10px;font-size:13.5px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard .ic{width:44px;height:44px;border-radius:10px;background:var(--field);color:var(--muted);display:grid;place-items:center;flex:none}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard svg{width:22px;height:22px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard b{display:block;font-size:26px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard div span{font-size:14px;color:var(--muted)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-bad{background:var(--bad-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-bad .ic{color:var(--bad)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-warn{background:var(--warn-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-warn .ic{color:var(--warn)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-ok{background:var(--ok-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-ok .ic{color:var(--ok)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-info{background:var(--info-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard.t-info .ic{color:var(--info)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard[class*="t-"] .ic{background:var(--surface)}
-@media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (max-width:480px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-sales) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hcard .ic{width:36px;height:36px} }
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard .ic{width:44px;height:44px;border-radius:10px;background:var(--field);color:var(--muted);display:grid;place-items:center;flex:none}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard svg{width:22px;height:22px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard b{display:block;font-size:26px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard div span{font-size:14px;color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-bad{background:var(--bad-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-bad .ic{color:var(--bad)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-warn{background:var(--warn-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-warn .ic{color:var(--warn)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-ok{background:var(--ok-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-ok .ic{color:var(--ok)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-info{background:var(--info-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-info .ic{color:var(--info)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard[class*="t-"] .ic{background:var(--surface)}
+@media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-sales) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:480px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-sales) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard .ic{width:36px;height:36px} }
 /* Home a size smaller (Levi, 21 Oct: "it's all a bit too big"); after the shared card rules so it wins */
 #v-home#v-home .hcards{gap:10px} #v-home#v-home .hcard{padding:12px 14px;gap:10px;border-radius:12px} #v-home#v-home .hcard .ic{width:34px;height:34px;border-radius:8px} #v-home#v-home .hcard svg{width:18px;height:18px}
 #v-home#v-home .hcard b{font-size:21px} #v-home#v-home .hcard div span{font-size:13px}
@@ -766,34 +772,34 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-home .vt-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.35) 0 4px,rgba(255,255,255,0) 4px 9px),linear-gradient(90deg,#E9ECEF 0%,#A3A9B1 50%,#6C727B 100%)}
 #v-home ul.tasks li.late{border-color:var(--hm-ink);border-left-width:4px} #v-home ul.tasks .chip.late{background:var(--hm-ink);color:var(--surface)}
 #v-home .vt-marks .vt-pace{color:var(--hm-ink)} #v-home .vt-marks .vt-pace::before{border-right-color:var(--hm-ink)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .snap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .st{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .st:hover{border-color:var(--muted)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .st:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .st .r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;font-size:14.5px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .st .r1 small{color:var(--muted)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .sbar{display:block;width:100%;height:6px;border-radius:3px;background:var(--field);overflow:hidden}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .sbar span{display:block;height:100%;border-radius:3px;min-width:4px;background:var(--ok)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .sbar.late span{background:var(--bad)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .seg{display:inline-flex;margin-left:auto;background:var(--field);border-radius:10px;padding:3px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .seg button{border:0;background:none;border-radius:8px;padding:7px 14px;min-height:38px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .seg em{font-style:normal;font-weight:500;margin-left:4px}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home th,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home td{text-align:left;padding:12px 14px;vertical-align:middle}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home .num,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home .act{text-align:right;white-space:nowrap}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home .ref{display:block;font-size:12.5px;color:var(--muted)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home tbody tr[data-open]{cursor:pointer}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home tbody tr[data-open]:hover td{background:var(--field)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .allclear{margin:0;padding:18px;color:var(--muted)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .allclear.ok{color:var(--ok);font-weight:600}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .tbl-wrap{position:relative}
-:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h input[type=search]{flex:0 1 260px;min-width:0}
-@media (max-width:560px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-metal,#v-sales) .hbtns,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .seg,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) th:nth-child(3),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) td:nth-child(3){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home.orders th:nth-child(2),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) table.home.orders td:nth-child(2){display:none} #v-orders table.home.orders .num,#v-jobs table.home.board :is(.ord,.num){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch) .hsec-h input[type=search]{flex:1 1 100%} :is(#v-orders,#v-jobs) .seg{width:100%} :is(#v-orders,#v-jobs) .seg button{flex:1 1 0;min-width:0;padding:6px 6px;font-size:13px} }
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hsec-h{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:12px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hsec-h h3{font-family:var(--body);font-weight:600;font-size:20px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hsec-h > a{margin-left:auto;font-weight:600;font-size:14px;color:var(--info);text-decoration:none}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .snap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .st{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .st:hover{border-color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .st:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .st .r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;font-size:14.5px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .st .r1 small{color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .sbar{display:block;width:100%;height:6px;border-radius:3px;background:var(--field);overflow:hidden}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .sbar span{display:block;height:100%;border-radius:3px;min-width:4px;background:var(--ok)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .sbar.late span{background:var(--bad)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .seg{display:inline-flex;margin-left:auto;background:var(--field);border-radius:10px;padding:3px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .seg button{border:0;background:none;border-radius:8px;padding:7px 14px;min-height:38px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .seg em{font-style:normal;font-weight:500;margin-left:4px}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home th,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home td{text-align:left;padding:12px 14px;vertical-align:middle}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home th{text-transform:none;letter-spacing:0;font-size:13px;background:var(--field)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home .num,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home .act{text-align:right;white-space:nowrap}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home .ref{display:block;font-size:12.5px;color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home tbody tr[data-open]{cursor:pointer}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home tbody tr[data-open]:hover td{background:var(--field)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .allclear{margin:0;padding:18px;color:var(--muted)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .allclear.ok{color:var(--ok);font-weight:600}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .tbl-wrap{position:relative}
+:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hsec-h input[type=search]{flex:0 1 260px;min-width:0}
+@media (max-width:560px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-metal,#v-sales) .hbtns,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .seg,:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hsec-h > a{margin-left:0} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) th:nth-child(3),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home:not(.orders):not(.board):not(.dispatch):not(.xero) td:nth-child(3){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home.orders th:nth-child(2),:is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) table.home.orders td:nth-child(2){display:none} #v-orders table.home.orders .num,#v-jobs table.home.board :is(.ord,.num){display:none} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hsec-h input[type=search]{flex:1 1 100%} :is(#v-orders,#v-jobs) .seg{width:100%} :is(#v-orders,#v-jobs) .seg button{flex:1 1 0;min-width:0;padding:6px 6px;font-size:13px} }
 #v-dispatch .act .next{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
 #v-dispatch .dfoot{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:12px}
 #v-dispatch .dfoot select{max-width:420px}
@@ -1049,6 +1055,7 @@ form.inv input{width:110px}
   <section class="view" id="v-metal" hidden></section>
   <section class="view" id="v-sales" hidden></section>
   <section class="view" id="v-deliveries" hidden></section>
+  <section class="view" id="v-accounts" hidden></section>
 </main>
 </div>
 <div class="scrim" id="scrim" hidden></div>
@@ -1060,7 +1067,7 @@ form.inv input{width:110px}
    app.js can meet an old module and fail to load. If that happens, fetch every module fresh and
    reload once. Keep MODULES in step with the files in src/. */
 (function () {
-  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/deliveries.js', 'src/core/deliveries.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js', 'src/core/coc.js'];
+  var MODULES = ['src/app.js', 'src/auth.js', 'src/board.js', 'src/config.js', 'src/data.js', 'src/dispatch.js', 'src/floor.js', 'src/gauge.js', 'src/help.js', 'src/home.js', 'src/icons.js', 'src/map.js', 'src/orders.js', 'src/wave.js', 'src/won.js', 'src/core/geo.js', 'src/core/jobs.js', 'src/core/preview.js', 'src/core/quotes.js', 'src/core/xero.js', 'src/core/debts.js', 'src/core/drawing.js', 'src/core/parts.js', 'src/core/outwork.js', 'src/tv.js', 'src/notes.js', 'src/core/notes.js', 'src/core/tv.js', 'src/metal.js', 'src/core/metal.js', 'src/sales.js', 'src/ideas.js', 'src/core/ideas.js', 'src/deliveries.js', 'src/core/deliveries.js', 'src/core/sales.js', 'src/customer.js', 'src/core/crm.js', 'src/spfiles.js', 'src/core/spfiles.js', 'src/core/search.js', 'src/mood.js', 'src/core/mood.js', 'src/reorders.js', 'src/core/reorders.js', 'src/digest.js', 'src/core/digest.js', 'src/core/quotepack.js', 'src/core/inbox.js', 'src/core/coc.js', 'src/accounts.js', 'src/core/accounts.js'];
   window.addEventListener('error', function (e) {
     var m = String(e.message || '');
     if (!/does not provide an export|Importing a module script failed|Failed to fetch dynamically imported module|SyntaxError/.test(m)) return;
