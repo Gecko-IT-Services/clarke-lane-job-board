@@ -2290,6 +2290,7 @@ function renderDrawer() {
   const ask = S.ask && S.ask.id === j.id ? S.ask.what : null;
   const actions = money && j.status !== 'cancelled' ? `<div class="actions">
       <button class="btn" type="button" data-amend="${j.id}">${icon('edit')}Amend order</button>
+      <button class="btn" type="button" data-pfnew="${j.id}">${icon('doc')}New pro forma</button>
       ${j.status === 'held' ? `<button class="btn" type="button" data-status="open" data-job="${j.id}">${icon('making')}Release from hold</button>`
         : st !== 'completed' ? `<button class="btn" type="button" data-status="held" data-job="${j.id}">${icon('hold')}Put on hold</button>` : ''}
       ${st !== 'completed' ? `<button class="btn" type="button" data-ask="cancel" data-job="${j.id}">Cancel order</button>` : ''}
