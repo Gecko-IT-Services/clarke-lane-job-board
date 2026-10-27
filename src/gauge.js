@@ -63,7 +63,7 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
     : mp.fromXero ? `${gbp(mp.fromXero)} invoiced in Xero (${mp.xeroCount} invoice${mp.xeroCount === 1 ? '' : 's'}) and ${gbp(mp.onBoard)} dispatched on the board.${xeroStale ? ` ${esc(xeroStale)}.` : ''}` : '';
   const seeInv = split && !compact ? ` <button type="button" class="btn link sm" data-homeview="invoiced">See what's been invoiced</button>` : '';
   const figs = `<div class="mfigs">
-      <div class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}"><span>Sales</span><b>${gbp(mp.dispatched)}</b><small>so far this month</small></div>
+      ${split && !compact ? `<button type="button" class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}" data-homeview="invoiced" title="See what is behind this figure">` : `<div class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}">`}<span>Sales</span><b>${gbp(mp.dispatched)}</b><small>so far this month${split && !compact ? ' · tap for the list' : ''}</small>${split && !compact ? '</button>' : '</div>'}
       <div class="mfig f-wip"><span>Work in progress</span><b>${gbp(wip)}</b><small>due by ${fmt(mp.end)}</small></div>
       ${set ? `<div class="mfig f-gap${gap ? '' : ' none'}"><span>Gap to ${target ? 'target' : 'break-even'}</span><b>${gap ? gbp(gap) : 'None'}</b><small>${gap ? 'after work in progress' : 'if it all goes out'}</small></div>` : ''}</div>`;
   const lines = set ? [
