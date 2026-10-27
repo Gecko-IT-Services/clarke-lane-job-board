@@ -43,13 +43,14 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
       : card(debts.list.length ? 'bad' : 'ok', 'late', debts.list.length ? gbp(debts.list.reduce((a, c) => a + c.over, 0)) : 0,
         debts.list.length ? `Over 60 days · ${plural(debts.list.length, 'customer')}` : 'Over 60 days · nobody', debts.list.length > 0,
         'data-homeview="debts" title="Show the customers with invoices over 60 days"');
+  const draftCard = ap.off ? card('info', 'doc', '—', 'In Xero, not approved · Xero not connected', false)
+      : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
+      : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
+        'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"');
   const money2 = office ? [
     card('warn', 'invoice', md && d.toXeroValue != null ? gbp(d.toXeroValue) : d.toXero.length, md ? `Delivered, not invoiced · ${plural(d.toXero.length, 'note')}` : 'Delivered, not invoiced', d.toXero.length > 0,
       'data-homeview="uninv" title="Show the delivered notes not yet sent to Xero"'),
-    ap.off ? card('info', 'doc', '—', 'In Xero, not approved · Xero not connected', false)
-      : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
-      : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
-        'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
+    draftCard,
     // Always four on Mandy's second row (Philip, 21 Oct: no gaps): without Xero the debt card says so.
     debtCard || card('info', 'late', '—', 'Over 60 days · Xero not connected', false),
     // Work at other companies (powder coat, plating): opens the Sent out whiteboard on the Shop floor. Always shown, silver at 0.
@@ -159,7 +160,7 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
   // station snapshot are Mandy's and the shop floor's: they stay on their Homes.
   // Three things today (21 Oct) sits above everything on both Homes: the day's three most useful actions.
   const main = md ? `${digestBox}<div class="hmd">${month}${todayBox}</div>
-    <div class="hcards">${[cards.book, cards.late, cards.soon, debtCard].join('')}</div>
+    <div class="hcards hcards5">${[cards.book, cards.late, cards.soon, debtCard, draftCard].join('')}</div>   <!-- the drafts card for Levi too (27 Oct) -->
     ${fold('fnotes', notesBox, folds.fnotes === true)}${fold('reround', reorderBox, folds.reround !== false)}`
   // Mandy's Home (Philip, 21 Oct: "remove the areas that don't matter, align the ones that do"): Today and Sales this
   // week side by side at the same height, then two rows of four cards (the work; invoicing and what is out), the shop

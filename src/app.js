@@ -325,6 +325,9 @@ async function toggleProc(id, p) {
   render();
   try {
     await data.setProcess(id, p, done, S.me.name);
+    S.ticks = S.ticks.filter(t => !(t.id === id && t.p === p));
+    if (done) S.ticks = [...S.ticks, { id, p, at: Date.now() }].slice(-5);
+    if (S.tab === 'floor') render();   // the Undo button names this tick
     toast(done ? `${p} done on ${j.so}` + (allDone(j) ? ' · ready to dispatch' : ` · next: ${nextStep(j)}`) : `${p} on ${j.so} set back to not done`,
       async () => { try { await data.setProcess(id, p, prev.done, prev.by || S.me.name); } catch (e) { toast(e.message, null, true); } reload(); });
   } catch (e) { j.procs[p] = prev; render(); toast(e.message, null, true); }
@@ -428,6 +431,7 @@ async function deleteOrder(id) {
 /* ---------- tabs ---------- */
 // Home's drop-down panels (25 Oct): which are open, remembered on this computer. Reorder round and the station snapshot start folded; the shop floor's notes start open.
 S.folds = {};
+S.ticks = [];   // processes ticked on this screen lately, newest last, for the shop floor's Undo button (27 Oct)
 try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('fold:')) S.folds[k.slice(5)] = localStorage.getItem(k) === '1'; } } catch { /* a private window: not remembered */ }
 const TABS = [['home', 'Home'], ['sales', 'CRM'], ['quotes', 'Won quotes'], ['orders', 'Sales orders'], ['jobs', 'Jobs'], ['floor', 'Shop floor'], ['dispatch', 'Dispatch'], ['map', 'Map'], ['customers', 'Customers'], ['parts', 'Parts'], ['xero', 'Xero'], ['help', 'Help'], ['tv', 'TV board'], ['metal', 'Metal prices'], ['deliveries', 'Deliveries'], ['accounts', 'Accounts']];   // left to right, the order work flows; CRM (was Sales) beside Home, where the work starts (Philip, 25 Oct)
 /** Open jobs with every process ticked and something still to send, in the running order. */
@@ -2002,8 +2006,14 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.tab === 
 // The Leave button shows when someone moves the mouse or touches the TV, and fades again after a few seconds.
 let tvTouchT;
 ['pointermove', 'pointerdown'].forEach(t => document.addEventListener(t, () => { if (S.tab !== 'tv') return; document.body.classList.add('tv-touch'); clearTimeout(tvTouchT); tvTouchT = setTimeout(() => document.body.classList.remove('tv-touch'), 4000); }, { passive: true }));
+/** The last process ticked on this screen in the last 2 hours that is still ticked: what the shop floor's Undo button undoes. */
+function lastTick() {
+  S.ticks = S.ticks.filter(t => Date.now() - t.at < 2 * 36e5 && job(t.id)?.procs[t.p]?.done);
+  return S.ticks.at(-1) || null;
+}
 function renderFloor() {
-  $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(),
+  const t = lastTick(), undo = t ? { so: job(t.id).so, p: t.p, mins: Math.round((Date.now() - t.at) / 6e4) } : null;
+  $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(), undo,
     kiosk: !!S.kiosk, canMove: office(), outwork: S.outwork || [], notes: S.notes || [], office: office(), outForm: S.outForm, canRemove: office() }, { esc, fmt, fmtTime, TICK });
 }
 
@@ -3391,6 +3401,7 @@ function onClick(e) {
   if ('dlist' in d) { Object.assign(S, { dpick: null, sig: '', dsign: {} }); keepInputs = false; render(); window.scrollTo(0, 0); return; }
   if ('sigclear' in d) { S.sig = ''; sigPad?.clear(); return; }
   if (d.proc) { e.stopPropagation(); return toggleProc(+d.job, d.proc); }
+  if ('untick' in d) { const t = lastTick(); if (t) toggleProc(t.id, t.p); return; }
   if (d.sendout) { e.stopPropagation(); return sendOutForm(+d.job, d.sendout); }
   if (d.outedit) { e.stopPropagation(); return editOut(+d.outedit); }
   if (d.outback) { e.stopPropagation(); return outBack(+d.outback); }

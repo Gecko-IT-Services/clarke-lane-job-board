@@ -79,7 +79,7 @@ function home(office) {
       ${card('Needs attention', `What is late, at risk (due within 3 working days with processes still to do), on hold or ready to go${office ? ', plus won quotes waiting and deliveries to invoice' : ''}. Worst first, each with one button for the next step.`, 't-warn')}
       ${card('Going out', 'Switch to this to see everything due from today to the Friday of next week.', 't-ok')}</div>
     ${office ? `<h3>Levi's Home</h3>
-    <p>Shorter, with the month's figures that only he sees: the month (invoiced, work in progress, break-even and target) beside <b>Sales this week</b> (quotes to chase, repeat parts to ask about, customers gone quiet, enquiries waiting) and his tasks; then four cards, the order book, running late, due in 7 days and owed over 60 days; the shop floor's notes; the reorder round; and what needs attention. Dispatch, invoicing and the station snapshot are on Mandy's Home.</p>` : ''}
+    <p>Shorter, with the month's figures that only he sees: the month (invoiced, work in progress, break-even and target) beside <b>Sales this week</b> (quotes to chase, repeat parts to ask about, customers gone quiet, enquiries waiting) and his tasks; then five cards, the order book, running late, due in 7 days, owed over 60 days and the draft invoices in Xero not yet approved; the shop floor's notes; the reorder round; and what needs attention. Dispatch, invoicing and the station snapshot are on Mandy's Home.</p>` : ''}
   </section>`;
 }
 
@@ -227,7 +227,7 @@ function shopFloor(office) {
     ${steps([`${n(1)} The screen starts on the <b>station tiles</b>. Tap your station to see only the jobs waiting for it, in the order to do them. Each job shows only your step to tap and only the parts that need it, with where they go next underneath (<b>Then: Weld → P/Coat</b>, or <b>Last step: back to the office</b>). If a step before yours is still to do, an amber line says so (<b>Before this: Laser still to do</b>). <b>All jobs</b> shows everything: every part and the whole route.`,
       '<b>Changing the order at one station</b> (Levi and Mandy, signed in on their own computer): open the station, then ⤒ (to the top), ▲ ▼ (one place) on a job. Only that station changes; the other stations and Jobs keep the running order. <b>Back to the running order</b> (top of the station) clears the moves there. Every move has <b>Undo</b>. The workshop screen just follows the order, without the buttons.',
       `${n(2)} Each job shows its whole route. When your process is finished, <b>tap its step</b>. It turns green with the time, and the message at the bottom says what comes next.`,
-      'Tapped the wrong one? Tap the green step again, or press <b>Undo</b> on the message.',
+      'Tapped the wrong one? Press the <b>Undo</b> button at the top of the station: it names the last step ticked on this screen (kept for 2 hours) and puts it back, even after the job has left the list. Or tap the green step again, or press Undo on the message.',
       'When every step is green the job is <b>ready to dispatch</b> and goes back to the office. The Dispatch tab shows it too.',
       'A job <b>on hold</b> can\'t be ticked: the office has paused it, so don\'t start it.',
       '<span class="chip late">Brought forward</span> means the office has moved this job up. Do it first.',
