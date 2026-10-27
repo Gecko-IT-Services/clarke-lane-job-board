@@ -8,7 +8,7 @@
 import { icon, XERO } from './icons.js';
 import { fold } from './fold.js';
 import { monthPanel } from './gauge.js';
-import { monthProgress, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue, homeGaps } from './core/jobs.js';
+import { monthProgress, monthInvoiced, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue, homeGaps } from './core/jobs.js';
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** A summary card. It only takes its colour when there is something to see. label/shown are HTML: escape before passing. */
@@ -58,7 +58,8 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
   ].join('') : '';
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
-  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), xeroNote: monthXero.note, xeroStale: monthXero.stale || '', breakeven, target, edit: editTarget,
+  const split = md ? monthInvoiced(jobs, today, monthXero.x) : null;   // what the sales figure is made of (27 Oct)
+  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), split, xeroNote: monthXero.note, xeroStale: monthXero.stale || '', breakeven, target, edit: editTarget,
     name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
@@ -110,6 +111,12 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
   const draftRow = r => `<tr data-open="${r.job.id}"><td>${who(r.job.customer, r.d.dn)}</td><td>Sent ${fmt((r.d.xero.at || '').slice(0, 10))}</td>
     <td class="mono">${esc(r.number || 'Draft')}</td><td><span class="chip soon">${r.status === 'SUBMITTED' ? 'Awaiting approval' : 'Draft'}</span></td>${money(despatchValue(r.job, r.d))}
     <td class="act"><a class="btn sm" href="${xeroLink(r.d.xero.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a></td></tr>`;
+  // Sales so far this month (27 Oct): each dispatch with where its invoice is, then what was raised in Xero outside the board.
+  const invChip = { approved: '<span class="chip ok">Approved in Xero</span>', draft: '<span class="chip soon">In Xero, not approved</span>', notsent: '<span class="chip">Not sent to Xero yet</span>' };
+  const invRow = r => `<tr data-open="${r.job.id}"><td>${who(r.job.customer, `${r.job.so} · ${r.d.dn}`)}</td><td>Dispatched ${fmt(r.d.date)}</td><td class="mono">${esc(r.number || '—')}</td><td>${invChip[r.state]}</td>${money(r.net)}
+    <td class="act">${r.d.xero ? `<a class="btn sm" href="${xeroLink(r.d.xero.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a>` : ''}</td></tr>`;
+  const outsideRow = x => `<tr><td>${who(x.customer, x.credit ? 'Credit note, raised in Xero' : 'Raised in Xero, not on the board')}</td><td>${fmt(x.date)}</td><td class="mono">${esc(x.number)}</td><td><span class="chip ok">Approved in Xero</span></td>${x.credit ? `<td class="num">-${gbp(-x.net, 2)}</td>` : money(x.net)}
+    <td class="act"><a class="btn sm" href="${xeroLink(x.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a></td></tr>`;
   const chased = c => { const ch = (debts.chases || []).find(x => x.customer === c.customer);
     return ch ? `<span class="chip ok">Chased ${fmt(ch.at.slice(0, 10))} · ${esc(ch.by.split(' ')[0])}</span>` : '<span class="chip soon">Not chased</span>'; };
   const debtRow = c => `<tr><td>${who(c.customer, `${c.invoices.length} invoice${c.invoices.length === 1 ? '' : 's'} over 60 days`)}</td>
@@ -128,6 +135,9 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
       empty: 'Every delivered note is in Xero.', cols: ['Customer', 'Delivered', 'Next step', 'Status'] },
     nodrawing: { title: 'Open orders with no drawing', sub: 'nothing attached yet · soonest due first · attach one on the job',
       list: homeGaps(jobs).noDrawing.map(j => jobRow(j, `<span class="chip soon">No drawing</span>${heldChip(j)}`, openBtn(j))), empty: 'Every open order has a drawing.' },
+    invoiced: { title: 'Sales so far this month', sub: split ? `${gbp(split.approved)} approved in Xero (what its profit and loss shows) · ${gbp(split.awaiting)} dispatched and still awaiting invoice or approval · approved first` : 'Xero has not been read yet',
+      list: !split ? [] : [...split.board.filter(r => r.state === 'approved').map(invRow), ...split.outside.map(outsideRow), ...split.board.filter(r => r.state !== 'approved').map(invRow)],
+      empty: 'Nothing dispatched or invoiced this month yet.', cols: ['Customer', 'Date', 'Invoice', 'Status'] },
     drafts: { title: 'In Xero, not approved', sub: 'draft invoices the board made, still waiting to be approved in Xero · oldest first',
       list: (ap.list || []).map(draftRow), empty: 'Nothing waiting: every invoice the board made has been approved in Xero.', cols: ['Customer', 'Sent', 'Invoice', 'Status'] },
   };

@@ -46,7 +46,7 @@ export function monthGauge(mp, breakeven, target, st, money) {
  * The "This month" panel for Home and Jobs. mp: monthProgress(); settings: { breakeven, target };
  * edit: show the form (Jobs only); compact: Home's short version with a link to Jobs.
  */
-export function monthPanel({ mp, breakeven, target, name, edit = false, compact = false, xeroNote = '', xeroStale = '' }, { gbp, esc, fmt }) {
+export function monthPanel({ mp, breakeven, target, name, edit = false, compact = false, xeroNote = '', xeroStale = '', split = null }, { gbp, esc, fmt }) {
   if (mp.dispatched == null) return '';
   const set = breakeven || target;
   const st = set ? monthState(mp, breakeven, target) : null;
@@ -58,25 +58,28 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
     // Where the invoiced figure comes from: the board's dispatch notes, plus Xero invoices raised outside it.
   const from = xeroNote === 'checking' ? 'Checking Xero for invoices raised outside the board…'
     : xeroNote ? `Not counting invoices raised in Xero outside the board: ${xeroNote}`
+    // Sales earned, split (27 Oct): approved in Xero (what its profit and loss shows) and dispatched but still awaiting invoice or approval.
+    : split ? `${gbp(split.approved)} approved in Xero (${split.approvedCount} invoice${split.approvedCount === 1 ? '' : 's'}) · ${gbp(split.awaiting)} dispatched, awaiting invoice or approval (${split.awaitingCount}).${xeroStale ? ` ${esc(xeroStale)}.` : ''}`
     : mp.fromXero ? `${gbp(mp.fromXero)} invoiced in Xero (${mp.xeroCount} invoice${mp.xeroCount === 1 ? '' : 's'}) and ${gbp(mp.onBoard)} dispatched on the board.${xeroStale ? ` ${esc(xeroStale)}.` : ''}` : '';
+  const seeInv = split && !compact ? ` <button type="button" class="btn link sm" data-homeview="invoiced">See what's been invoiced</button>` : '';
   const figs = `<div class="mfigs">
-      <div class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}"><span>Invoiced</span><b>${gbp(mp.dispatched)}</b><small>so far this month</small></div>
+      <div class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}"><span>Sales</span><b>${gbp(mp.dispatched)}</b><small>so far this month</small></div>
       <div class="mfig f-wip"><span>Work in progress</span><b>${gbp(wip)}</b><small>due by ${fmt(mp.end)}</small></div>
       ${set ? `<div class="mfig f-gap${gap ? '' : ' none'}"><span>Gap to ${target ? 'target' : 'break-even'}</span><b>${gap ? gbp(gap) : 'None'}</b><small>${gap ? 'after work in progress' : 'if it all goes out'}</small></div>` : ''}</div>`;
   const lines = set ? [
-    breakeven ? `Break-even ${gbp(breakeven)}: ${mp.dispatched >= breakeven ? '<b class="ok">passed</b>' : `<b>${gbp(breakeven - mp.dispatched)}</b> still to invoice`}` : '',
-    target ? `Target ${gbp(target)}: ${mp.dispatched >= target ? '<b class="ok">hit</b>' : `<b>${gbp(target - mp.dispatched)}</b> still to invoice`}` : '',
+    breakeven ? `Break-even ${gbp(breakeven)}: ${mp.dispatched >= breakeven ? '<b class="ok">passed</b>' : `<b>${gbp(breakeven - mp.dispatched)}</b> still to go`}` : '',
+    target ? `Target ${gbp(target)}: ${mp.dispatched >= target ? '<b class="ok">hit</b>' : `<b>${gbp(target - mp.dispatched)}</b> still to go`}` : '',
   ].filter(Boolean).join(' · ') : '';
   const later = gap && mp.dueLater > 0 ? `<p class="note">${gbp(mp.dueLater)} more is on order but due after ${fmt(mp.end)}: bringing some of it forward closes the gap.</p>` : '';
   const warn = st?.short > 0 && !later ? `<p class="bad">${gbp(st.short)} short of ${breakeven && mp.dispatched < breakeven ? 'break-even' : 'target'}, even if all the work in progress goes out.</p>` : '';
   const link = compact ? `<a href="#jobs" data-tab="jobs">${set ? 'See the jobs →' : 'Set break-even and target on Jobs →'}</a>`
     : edit ? form : `<button type="button" class="btn link sm" data-edittarget>${set ? 'Change break-even / target' : 'Set break-even and target'}</button>`;
-  return `<section class="month${set ? ' has-gauge' : ''}${compact ? ' compact' : ''}" aria-label="${esc(name)}: invoiced, work in progress and the gap to target">
+  return `<section class="month${set ? ' has-gauge' : ''}${compact ? ' compact' : ''}" aria-label="${esc(name)}: sales, work in progress and the gap to target">
     <div class="mhead"><h3>${esc(name)}</h3>${set ? `<span class="g-state g-${st.tone}">${esc(st.word)}</span>` : ''}</div>
     <div class="mbody">
-      ${set ? `<figure class="gwrap" role="img" aria-label="${esc(`${name}: ${gbp(mp.dispatched)} invoiced, ${gbp(wip)} work in progress${gap ? `, gap ${gbp(gap)}` : ''}. ${st.word}.`)}">${monthGauge(mp, breakeven, target, st, gbp)}<figcaption class="gtotal" title="Invoiced plus work in progress: what ${esc(name)} should invoice if it all goes out">${gbp(mp.dispatched + wip)}</figcaption></figure>` : ''}
+      ${set ? `<figure class="gwrap" role="img" aria-label="${esc(`${name}: ${gbp(mp.dispatched)} sales, ${gbp(wip)} work in progress${gap ? `, gap ${gbp(gap)}` : ''}. ${st.word}.`)}">${monthGauge(mp, breakeven, target, st, gbp)}<figcaption class="gtotal" title="Sales plus work in progress: what ${esc(name)} should invoice if it all goes out">${gbp(mp.dispatched + wip)}</figcaption></figure>` : ''}
       <div class="mside">${figs}
-        <div class="minfo">${lines ? `<p>${lines}</p>` : ''}${later}${warn}${from ? `<p class="note">${esc(from)}</p>` : ''}${link}</div></div></div></section>`;
+        <div class="minfo">${lines ? `<p>${lines}</p>` : ''}${later}${warn}${from ? `<p class="note">${esc(from)}${seeInv}</p>` : ''}${link}</div></div></div></section>`;
 }
 
 /** Jobs' one line (MD only): invoiced · work in progress · gap, and what is due later to bring forward. */
@@ -86,7 +89,7 @@ export function monthLine({ mp, breakeven, target, name }, { gbp, esc, fmt }) {
   if (!tgt) return `<p class="mline"><b>${esc(name)}</b> <a href="#home" data-tab="home">Set break-even and target on Home →</a></p>`;
   const gap = Math.max(0, tgt - mp.dispatched - mp.dueByEnd);
   const st = monthState(mp, breakeven, target);
-  return `<p class="mline"><b>${esc(name)}:</b> ${gbp(mp.dispatched)} invoiced · <span class="wip">${gbp(mp.dueByEnd)} work in progress</span> ·
+  return `<p class="mline"><b>${esc(name)}:</b> ${gbp(mp.dispatched)} sales · <span class="wip">${gbp(mp.dueByEnd)} work in progress</span> ·
     ${gap ? `<b class="gap">gap ${gbp(gap)}</b> to ${target ? 'target' : 'break-even'}` : `<b class="ok">no gap</b> if it all goes out`}
     ${gap && mp.dueLater > 0 ? ` · ${gbp(mp.dueLater)} more due after ${fmt(mp.end)}: bring some forward` : ''}
     <span class="g-state g-${st.tone}">${esc(st.word)}</span> <a href="#home" data-tab="home">Details on Home →</a></p>`;
