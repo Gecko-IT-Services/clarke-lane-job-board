@@ -56,6 +56,8 @@ assert.equal(inv.Type, 'ACCREC');
 assert.equal(inv.Reference, 'SO-9781 / PO P31620 / DN-0002');
 assert.equal(inv.LineItems.length, 1, 'parts not on this despatch are left off');
 assert.equal(inv.LineItems[0].Description, 'Luton bezel LH (call-off 2 of 5)');
+assert.equal(inv.LineItems[0].ItemCode, undefined, 'no item code unless the caller found one in Xero');
+assert.equal(buildInvoice({ dn: 'DN-3', date: '2026-10-27', so: 'SO-3', po: '', calloff: '', lines: [{ part: 'BRK-1 Bracket', qty: 2, unit: 5, code: 'BRK-1' }] }, 'c', '200').LineItems[0].ItemCode, 'BRK-1', 'a part number that is one of Xero\'s items fills the Item column (27 Oct)');
 assert.equal(invoiceNet(inv), 2287.8);
 assert.equal(buildInvoice({ dn: 'DN-1', date: '2026-10-16', so: 'SO-1', po: '', calloff: '', lines: [{ part: 'a', qty: 1, unit: 1 }] }, 'c', '200').Reference, 'SO-1 / DN-1');
 

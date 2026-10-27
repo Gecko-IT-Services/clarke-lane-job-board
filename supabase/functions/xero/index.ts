@@ -272,17 +272,18 @@ async function items() {
   const all = r.Items || [];
   return { total: all.length, items: all.map((i: any) => ({
     code: (i.Code || '').trim(), name: (i.Name || '').trim(), description: (i.Description || i.Name || '').trim(),
-    price: i.SalesDetails?.UnitPrice ?? null, sold: i.IsSold !== false })).filter((i: any) => i.code || i.description)
+    price: i.SalesDetails?.UnitPrice ?? null, sold: i.IsSold !== false, tracked: i.IsTrackedAsInventory === true })).filter((i: any) => i.code || i.description)
     .sort((a: any, b: any) => (a.code || a.description).localeCompare(b.code || b.description, 'en', { numeric: true })) };
 }
 
 /** items: [{ despatchId, contactId }] → one draft invoice each, recorded on the despatch. */
-async function send(items: { despatchId: number; contactId: string }[]) {
-  if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Nothing chosen to send.');
+async function send(picked: { despatchId: number; contactId: string }[]) {   // picked, not items: items() is Xero's products
+  if (!Array.isArray(picked) || !picked.length) throw new HttpError(400, 'Nothing chosen to send.');
   const s = await session();
   const d = await defaults(s);
   const out = [];
-  for (const it of items) {
+  const itemCodes = new Map<string, string>(); let codesRead = false;
+  for (const it of picked) {
     try {
       // Amounts come from the database, never from the browser.
       const { data: row, error } = await admin.from('despatches')
@@ -295,11 +296,19 @@ async function send(items: { despatchId: number; contactId: string }[]) {
       if (!row.delivered_on) throw new Error(`${row.dn_number} is not marked delivered yet.`);
       if (!it.contactId) throw new Error('Choose the Xero contact first.');
       const job: any = row.jobs;
+      // A line's Part no. box (22 Oct) goes in front of its description, one space, as Xero shows code and description.
+      // When it is one of Xero's Products and services (27 Oct: the Item column was empty) the line carries its ItemCode
+      // too, so Xero's item reports see it. Tracked inventory items are left alone (Xero refuses a sale past the stock).
+      // Xero's items come from the shared cache; if they cannot be read, the invoice goes without codes rather than fail.
+      if (!codesRead) {
+        codesRead = true;
+        try { for (const i of (await cached('items', HOUR, false, items)).items as any[]) if (i.code && i.tracked === false) itemCodes.set(i.code.toLowerCase(), i.code); }
+        catch (e) { console.warn('items not read for invoice codes:', (e as Error).message); }
+      }
       const lines = (row.despatch_lines as any[])
         .sort((a, b) => a.job_lines.line_no - b.job_lines.line_no)
-        // A line's Part no. box (22 Oct) goes in front of its description, one space, as Xero shows code and
-        // description. No ItemCode: this path does not read Xero's items, so it cannot know the code exists there.
-        .map(l => ({ part: l.job_lines.part_no ? `${l.job_lines.part_no} ${l.job_lines.part}` : l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price) }));
+        .map(l => ({ part: l.job_lines.part_no ? `${l.job_lines.part_no} ${l.job_lines.part}` : l.job_lines.part, qty: l.qty, unit: Number(l.job_lines.job_line_prices?.unit_price ?? l.job_lines.job_line_prices?.[0]?.unit_price),
+          code: l.job_lines.part_no ? itemCodes.get(String(l.job_lines.part_no).trim().toLowerCase()) || '' : '' }));
       if (lines.some(l => !Number.isFinite(l.unit))) throw new Error('A part on this dispatch has no price.');
       const { data: pfs } = await admin.from('proformas').select('pf_number')
         .eq('job_id', row.job_id).not('paid_on', 'is', null).is('cancelled_at', null).order('id');
