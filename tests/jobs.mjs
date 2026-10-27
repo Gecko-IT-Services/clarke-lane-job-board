@@ -459,6 +459,15 @@ console.log('jobs: ok');
   assert.equal(px.dueByEnd, p.dueByEnd, 'due figure unchanged');
   assert.equal(monthProgress(jobs, '2026-10-16').fromXero, 0, 'Xero not read: board only');
   assert.equal(monthProgress(jobs, '2026-10-16').xeroRead, false);
+  // What the sales figure is made of (27 Oct): approved in Xero, or dispatched and still awaiting invoice or approval.
+  const { monthInvoiced } = await import('../src/core/jobs.js');
+  jobs[0].despatches.push({ id: 9, date: '2026-10-12', lines: { 1: 2 }, xero: { id: 'draftid', no: 'INV-9' } }, { id: 10, date: '2026-10-14', lines: { 1: 1 } });
+  const mi = monthInvoiced(jobs, '2026-10-16', xero);
+  assert.deepEqual(mi.board.map(r => [r.d.id, r.state, r.net, r.number]), [[1, 'approved', 40, 'INV-1'], [9, 'draft', 20, 'INV-9'], [10, 'notsent', 10, '']], 'the Xero ID says approved; sent but not there is a draft; no ID is not sent');
+  assert.deepEqual([mi.approved, mi.approvedCount, mi.awaiting, mi.awaitingCount], [1190.5, 4, 30, 2], 'approved = the board\'s approved note + Xero outside the board; awaiting = drafts and not sent');
+  assert.equal(mi.approved + mi.awaiting, monthProgress(jobs, '2026-10-16', xero).dispatched, 'the two parts make the sales figure');
+  assert.deepEqual(mi.outside.map(x => x.id), ['old1', 'old2', 'cn'], 'raised in Xero, by date');
+  assert.equal(monthInvoiced(jobs, '2026-10-16', null), null, 'nothing until Xero is read');
   console.log('jobs month target: ok');
 }
 

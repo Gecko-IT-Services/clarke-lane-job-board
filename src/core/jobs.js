@@ -493,6 +493,28 @@ export function monthProgress(jobs, today, xero = null) {
     onBoard: money ? round2(dispatched) : null, fromXero, xeroCount: outside ? outside.invoices.length : 0, xeroRead: !!outside };
 }
 
+/**
+ * What the month's sales figure is made of (27 Oct: Levi's tile and Xero's profit and loss did not match, because
+ * the tile counts work dispatched whether or not Keith has approved its invoice yet). Every dispatch this month with
+ * whether its invoice is approved in Xero (its ID is among the month's approved invoices), still a draft there, or
+ * not sent yet; plus the invoices approved in Xero that the board did not raise. approved + awaiting is
+ * monthProgress().dispatched. Null until Xero's month has been read. xero: the month's approved invoices.
+ */
+export function monthInvoiced(jobs, today, xero) {
+  if (!xero) return null;
+  const start = today.slice(0, 7) + '-01', byId = new Map(xero.map(x => [x.id, x]));
+  const live = jobs.filter(j => j.status !== 'cancelled');
+  const board = live.flatMap(j => j.despatches.filter(d => d.date >= start && d.date <= today).map(d => {
+    const x = d.xero?.id ? byId.get(d.xero.id) : null;
+    return { job: j, d, net: despatchValue(j, d), state: x ? 'approved' : d.xero ? 'draft' : 'notsent', number: x?.number || d.xero?.no || '' };
+  })).sort((a, b) => a.d.date.localeCompare(b.d.date) || a.d.id - b.d.id);
+  const outside = xeroOutsideBoard(live, xero, start, today);
+  const sum = l => round2(l.reduce((a, r) => a + r.net, 0));
+  const approvedBoard = board.filter(r => r.state === 'approved'), waiting = board.filter(r => r.state !== 'approved');
+  return { board, outside: outside.invoices.slice().sort((a, b) => a.date.localeCompare(b.date)),
+    approved: round2(sum(approvedBoard) + outside.value), approvedCount: approvedBoard.length + outside.invoices.length, awaiting: sum(waiting), awaitingCount: waiting.length };
+}
+
 /** Xero invoice IDs the board should ask Xero about: every note sent to Xero, less those already known
  *  to be approved, paid or voided (settled: a Set of IDs). */
 export const invoiceIdsToCheck = (jobs, settled = new Set()) =>
