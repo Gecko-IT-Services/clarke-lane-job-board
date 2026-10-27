@@ -74,10 +74,11 @@ const round2 = n => (n < 0 ? -1 : 1) * Math.round(Math.round(Math.abs(n) * 1e8) 
  * would change the line total (Q-0078: 4000 × £3.01044), the line goes as 1 × the exact total
  * with the real quantity and unit price in the description, so the money is never altered.
  */
-export function invoiceLine(part, qty, unit, accountCode, taxType) {
+export function invoiceLine(part, qty, unit, accountCode, taxType, code = '') {
   const total = round2(qty * unit);
   const u4 = Math.round(unit * 10000) / 10000;
-  const base = { AccountCode: accountCode, ...(taxType ? { TaxType: taxType } : {}) };
+  // ItemCode (27 Oct: the Item column in Xero was empty) only when the caller has checked the code is one of Xero's Products and services.
+  const base = { ...(code ? { ItemCode: code } : {}), AccountCode: accountCode, ...(taxType ? { TaxType: taxType } : {}) };
   if (round2(qty * u4) === total) return { Description: part, Quantity: qty, UnitAmount: u4, ...base };
   return { Description: `${part} (${qty} @ £${unit})`, Quantity: 1, UnitAmount: total, ...base };
 }
@@ -95,7 +96,7 @@ export function buildInvoice(d, contactId, accountCode, taxType) {
     Date: d.date,
     Reference: [d.so, d.po ? `PO ${d.po}` : '', d.dn, d.prepaid?.length ? `paid in advance ${d.prepaid.join(', ')}` : ''].filter(Boolean).join(' / ').slice(0, 255),
     LineItems: d.lines.filter(l => l.qty > 0).map(l =>
-      invoiceLine(d.calloff ? `${l.part} (call-off ${d.calloff})` : l.part, l.qty, l.unit, accountCode, taxType))
+      invoiceLine(d.calloff ? `${l.part} (call-off ${d.calloff})` : l.part, l.qty, l.unit, accountCode, taxType, l.code || ''))
       .concat(d.prepaid?.length ? [{ Description: `Paid in advance: pro forma ${d.prepaid.join(', ')}` }] : []),
   };
 }

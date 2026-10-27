@@ -282,7 +282,7 @@ async function send(picked: { despatchId: number; contactId: string }[]) {   // 
   const s = await session();
   const d = await defaults(s);
   const out = [];
-  let itemCodes: Map<string, string> | null = null;
+  const itemCodes = new Map<string, string>(); let codesRead = false;
   for (const it of picked) {
     try {
       // Amounts come from the database, never from the browser.
@@ -300,8 +300,8 @@ async function send(picked: { despatchId: number; contactId: string }[]) {   // 
       // When it is one of Xero's Products and services (27 Oct: the Item column was empty) the line carries its ItemCode
       // too, so Xero's item reports see it. Tracked inventory items are left alone (Xero refuses a sale past the stock).
       // Xero's items come from the shared cache; if they cannot be read, the invoice goes without codes rather than fail.
-      if (!itemCodes) {
-        itemCodes = new Map();
+      if (!codesRead) {
+        codesRead = true;
         try { for (const i of (await cached('items', HOUR, false, items)).items as any[]) if (i.code && i.tracked === false) itemCodes.set(i.code.toLowerCase(), i.code); }
         catch (e) { console.warn('items not read for invoice codes:', (e as Error).message); }
       }
