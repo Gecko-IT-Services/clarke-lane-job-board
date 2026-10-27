@@ -136,8 +136,9 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
       empty: 'Every delivered note is in Xero.', cols: ['Customer', 'Delivered', 'Next step', 'Status'] },
     nodrawing: { title: 'Open orders with no drawing', sub: 'nothing attached yet · soonest due first · attach one on the job',
       list: homeGaps(jobs).noDrawing.map(j => jobRow(j, `<span class="chip soon">No drawing</span>${heldChip(j)}`, openBtn(j))), empty: 'Every open order has a drawing.' },
-    invoiced: { title: 'Sales so far this month', sub: split ? `${gbp(split.approved)} approved in Xero (what its profit and loss shows) · ${gbp(split.awaiting)} dispatched and still awaiting invoice or approval · approved first` : 'Xero has not been read yet',
-      list: !split ? [] : [...split.board.filter(r => r.state === 'approved').map(invRow), ...split.outside.map(outsideRow), ...split.board.filter(r => r.state !== 'approved').map(invRow)],
+    invoiced: { title: 'Sales so far this month', sub: split ? `${gbp(split.approved)} approved in Xero (what its profit and loss shows) · ${gbp(split.awaiting)} dispatched and still awaiting invoice or approval · newest first` : 'Xero has not been read yet',
+      list: !split ? [] : [...split.board.map(r => ({ date: r.d.date, html: invRow(r) })), ...split.outside.map(x => ({ date: x.date, html: outsideRow(x) }))]
+        .sort((a, b) => b.date.localeCompare(a.date)).map(r => r.html),   // newest first, like Xero's own list (Levi, 27 Oct)
       empty: 'Nothing dispatched or invoiced this month yet.', cols: ['Customer', 'Date', 'Invoice', 'Status'] },
     drafts: { title: 'In Xero, not approved', sub: 'draft invoices the board made, still waiting to be approved in Xero · oldest first',
       list: (ap.list || []).map(draftRow), empty: 'Nothing waiting: every invoice the board made has been approved in Xero.', cols: ['Customer', 'Sent', 'Invoice', 'Status'] },
