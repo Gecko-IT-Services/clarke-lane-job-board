@@ -3287,7 +3287,7 @@ function render() {
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
   ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), folds: S.folds, jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, note: S.debtNote || '', chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
-      wonQuotes: wonWaiting(),
+      wonQuotes: wonWaiting(), invFilter: S.invFilter || null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
       approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
     tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, deliveries: renderDeliveriesView, accounts: renderAccountsView, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
@@ -3385,7 +3385,7 @@ function onClick(e) {
   if ('signout' in d) { try { sessionStorage.removeItem('clj.monthx'); } catch { /* none */ } return auth.signOut(); }   // Levi's figures leave with him
   if ('reload' in d) return location.reload();
   if (d.homeview) {   // the switch is remembered; a card's list is just for now, and scrolls into view
-    S.homeView = d.homeview;
+    S.homeView = d.homeview; S.invFilter = d.invfilter || null;   // the sales list: all, approved only, or awaiting only (27 Oct)
     if (['attention', 'out'].includes(d.homeview)) { try { localStorage.setItem('clj.homeview', d.homeview); } catch { /* not kept */ } return render(); }
     render(); $('home-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
   }

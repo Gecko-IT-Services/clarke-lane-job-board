@@ -59,7 +59,7 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
   const from = xeroNote === 'checking' ? 'Checking Xero for invoices raised outside the board…'
     : xeroNote ? `Not counting invoices raised in Xero outside the board: ${xeroNote}`
     // Sales earned, split (27 Oct): approved in Xero (what its profit and loss shows) and dispatched but still awaiting invoice or approval.
-    : split ? `${gbp(split.approved)} approved in Xero (${split.approvedCount} invoice${split.approvedCount === 1 ? '' : 's'}) · ${gbp(split.awaiting)} dispatched, awaiting invoice or approval (${split.awaitingCount}).${xeroStale ? ` ${esc(xeroStale)}.` : ''}`
+    : split ? `${compact ? gbp(split.approved) : `<button type="button" class="btn link sm nfig" data-homeview="invoiced" data-invfilter="approved">${gbp(split.approved)}</button>`} approved in Xero (${split.approvedCount} invoice${split.approvedCount === 1 ? '' : 's'}) · ${compact ? gbp(split.awaiting) : `<button type="button" class="btn link sm nfig" data-homeview="invoiced" data-invfilter="awaiting">${gbp(split.awaiting)}</button>`} dispatched, awaiting invoice or approval (${split.awaitingCount}).${xeroStale ? ` ${esc(xeroStale)}.` : ''}`
     : mp.fromXero ? `${gbp(mp.fromXero)} invoiced in Xero (${mp.xeroCount} invoice${mp.xeroCount === 1 ? '' : 's'}) and ${gbp(mp.onBoard)} dispatched on the board.${xeroStale ? ` ${esc(xeroStale)}.` : ''}` : '';
   const seeInv = split && !compact ? ` <button type="button" class="btn link sm" data-homeview="invoiced">See what's been invoiced</button>` : '';
   const figs = `<div class="mfigs">
@@ -79,7 +79,7 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
     <div class="mbody">
       ${set ? `<figure class="gwrap" role="img" aria-label="${esc(`${name}: ${gbp(mp.dispatched)} sales, ${gbp(wip)} work in progress${gap ? `, gap ${gbp(gap)}` : ''}. ${st.word}.`)}">${monthGauge(mp, breakeven, target, st, gbp)}<figcaption class="gtotal" title="Sales plus work in progress: what ${esc(name)} should invoice if it all goes out">${gbp(mp.dispatched + wip)}</figcaption></figure>` : ''}
       <div class="mside">${figs}
-        <div class="minfo">${lines ? `<p>${lines}</p>` : ''}${later}${warn}${from ? `<p class="note">${esc(from)}${seeInv}</p>` : ''}${link}</div></div></div></section>`;
+        <div class="minfo">${lines ? `<p>${lines}</p>` : ''}${later}${warn}${from ? `<p class="note">${split && !compact ? from : esc(from)}${seeInv}</p>` : ''}${link}</div></div></div></section>`;
 }
 
 /** Jobs' one line (MD only): invoiced · work in progress · gap, and what is due later to bring forward. */
