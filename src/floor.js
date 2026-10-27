@@ -16,7 +16,7 @@ import { deliveryRuns } from './core/deliveries.js';
 const count = (n, w, many = w + 's') => `${n} ${n === 1 ? w : many}`;
 export const clockHtml = now => `<b>${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</b>${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
 
-export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = false, outwork = [], outForm = null, canRemove = false, notes = [], office = false }, h) {
+export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = false, outwork = [], outForm = null, canRemove = false, notes = [], office = false, undo = null }, h) {
   const { esc, fmt, fmtTime, TICK } = h;
   const bar = inner => `<div class="kbar">${inner}<div class="clock" id="fclock">${clockHtml(now)}</div></div>`;
 
@@ -97,7 +97,9 @@ export function renderShopFloor({ jobs, today, station, now, kiosk, canMove = fa
   const sub = isAll ? 'Tap any step when it is finished · tap a green step to undo it' : `${count(list.length, 'job')} waiting for ${esc(station)} · do them in this order`;
   const empty = isAll ? 'No open jobs.' : `Nothing waiting for ${esc(station)}.`;
   const reset = placed ? `<button type="button" class="btn" data-smove="reset" data-st="${esc(station)}" title="Clear the moves made at this station; it follows the running order from Jobs again">Back to the running order</button>` : '';
-  return `<div class="kiosk">${bar(`<button type="button" class="back" data-stations="1">← Stations</button><div><h2>${isAll ? 'All jobs' : esc(station)}</h2><p class="sub">${sub}${moving ? ' · ⤒ ▲ ▼ change the order here only' : ''}</p></div>${reset}`)}
+  // Undo (27 Oct): the last step ticked on this screen, named, so a wrong tap is put back even after the job has left the list.
+  const undoBtn = undo ? `<button type="button" class="btn fundo" data-untick title="Puts the last step ticked on this screen back to not done">↶ Undo: ${esc(SHORT[undo.p] || undo.p)} on ${esc(undo.so)}${undo.mins ? ` · ${undo.mins} min ago` : ''}</button>` : '';
+  return `<div class="kiosk">${bar(`<button type="button" class="back" data-stations="1">← Stations</button><div><h2>${isAll ? 'All jobs' : esc(station)}</h2><p class="sub">${sub}${moving ? ' · ⤒ ▲ ▼ change the order here only' : ''}</p></div>${undoBtn}${reset}`)}
     <div class="fq">${list.length ? list.map(card).join('') : `<p class="allclear ok">${empty}</p>`}</div></div>`;
 }
 

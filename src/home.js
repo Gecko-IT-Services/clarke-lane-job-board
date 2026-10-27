@@ -16,7 +16,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, approval = { off: true }, sentOut = null }, h) {
+export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, invFilter = null, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -43,13 +43,14 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
       : card(debts.list.length ? 'bad' : 'ok', 'late', debts.list.length ? gbp(debts.list.reduce((a, c) => a + c.over, 0)) : 0,
         debts.list.length ? `Over 60 days · ${plural(debts.list.length, 'customer')}` : 'Over 60 days · nobody', debts.list.length > 0,
         'data-homeview="debts" title="Show the customers with invoices over 60 days"');
+  const draftCard = ap.off ? card('info', 'doc', '—', 'In Xero, not approved · Xero not connected', false)
+      : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
+      : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
+        'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"');
   const money2 = office ? [
     card('warn', 'invoice', md && d.toXeroValue != null ? gbp(d.toXeroValue) : d.toXero.length, md ? `Delivered, not invoiced · ${plural(d.toXero.length, 'note')}` : 'Delivered, not invoiced', d.toXero.length > 0,
       'data-homeview="uninv" title="Show the delivered notes not yet sent to Xero"'),
-    ap.off ? card('info', 'doc', '—', 'In Xero, not approved · Xero not connected', false)
-      : !ap.list ? card('info', 'doc', '—', ap.err ? 'In Xero, not approved · could not check Xero' : 'In Xero, not approved · checking Xero…', false, ap.err ? `title="${esc(ap.err)}"` : '')
-      : card('info', 'doc', md && ap.value != null ? gbp(ap.value) : apN, md ? `In Xero, not approved · ${plural(apN, 'draft')}` : 'In Xero, not approved', apN > 0,
-        'data-homeview="drafts" title="Show the draft invoices waiting for approval in Xero"'),
+    draftCard,
     // Always four on Mandy's second row (Philip, 21 Oct: no gaps): without Xero the debt card says so.
     debtCard || card('info', 'late', '—', 'Over 60 days · Xero not connected', false),
     // Work at other companies (powder coat, plating): opens the Sent out whiteboard on the Shop floor. Always shown, silver at 0.
@@ -135,8 +136,12 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
       empty: 'Every delivered note is in Xero.', cols: ['Customer', 'Delivered', 'Next step', 'Status'] },
     nodrawing: { title: 'Open orders with no drawing', sub: 'nothing attached yet · soonest due first · attach one on the job',
       list: homeGaps(jobs).noDrawing.map(j => jobRow(j, `<span class="chip soon">No drawing</span>${heldChip(j)}`, openBtn(j))), empty: 'Every open order has a drawing.' },
-    invoiced: { title: 'Sales so far this month', sub: split ? `${gbp(split.approved)} approved in Xero (what its profit and loss shows) · ${gbp(split.awaiting)} dispatched and still awaiting invoice or approval · approved first` : 'Xero has not been read yet',
-      list: !split ? [] : [...split.board.filter(r => r.state === 'approved').map(invRow), ...split.outside.map(outsideRow), ...split.board.filter(r => r.state !== 'approved').map(invRow)],
+    invoiced: { title: invFilter === 'approved' ? 'Approved in Xero this month' : invFilter === 'awaiting' ? 'Dispatched, awaiting invoice or approval' : 'Sales so far this month',
+      sub: !split ? 'Xero has not been read yet' : invFilter === 'approved' ? `${gbp(split.approved)} · what Xero's profit and loss shows · newest first` : invFilter === 'awaiting' ? `${gbp(split.awaiting)} · drafts for Keith to approve, and dispatches not yet sent to Xero · newest first`
+        : `${gbp(split.approved)} approved in Xero (what its profit and loss shows) · ${gbp(split.awaiting)} dispatched and still awaiting invoice or approval · newest first`,
+      list: !split ? [] : [...split.board.filter(r => !invFilter || (invFilter === 'approved') === (r.state === 'approved')).map(r => ({ date: r.d.date, html: invRow(r) })),
+          ...(invFilter === 'awaiting' ? [] : split.outside.map(x => ({ date: x.date, html: outsideRow(x) })))]
+        .sort((a, b) => b.date.localeCompare(a.date)).map(r => r.html),   // newest first, like Xero's own list (Levi, 27 Oct)
       empty: 'Nothing dispatched or invoiced this month yet.', cols: ['Customer', 'Date', 'Invoice', 'Status'] },
     drafts: { title: 'In Xero, not approved', sub: 'draft invoices the board made, still waiting to be approved in Xero · oldest first',
       list: (ap.list || []).map(draftRow), empty: 'Nothing waiting: every invoice the board made has been approved in Xero.', cols: ['Customer', 'Sent', 'Invoice', 'Status'] },
@@ -159,7 +164,7 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
   // station snapshot are Mandy's and the shop floor's: they stay on their Homes.
   // Three things today (21 Oct) sits above everything on both Homes: the day's three most useful actions.
   const main = md ? `${digestBox}<div class="hmd">${month}${todayBox}</div>
-    <div class="hcards">${[cards.book, cards.late, cards.soon, debtCard].join('')}</div>
+    <div class="hcards hcards5">${[cards.book, cards.late, cards.soon, debtCard, draftCard].join('')}</div>   <!-- the drafts card for Levi too (27 Oct) -->
     ${fold('fnotes', notesBox, folds.fnotes === true)}${fold('reround', reorderBox, folds.reround !== false)}`
   // Mandy's Home (Philip, 21 Oct: "remove the areas that don't matter, align the ones that do"): Today and Sales this
   // week side by side at the same height, then two rows of four cards (the work; invoicing and what is out), the shop

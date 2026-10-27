@@ -196,6 +196,9 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .month .mbody{display:flex;gap:18px;align-items:stretch} .month .mside{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
 .month .mfigs{display:flex;flex-direction:column;gap:6px}
 .month .mfig{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);border-left-width:4px}
+.kiosk .fundo{border-color:var(--ok);color:var(--ok);font-weight:700}   /* the shop floor's Undo (27 Oct) */
+.month .note .nfig{display:inline;padding:0;font-size:inherit;font-weight:700;color:var(--ink);text-decoration:underline;text-underline-offset:2px}   /* the split's figures open their list (27 Oct) */
+.month button.mfig{font:inherit;color:inherit;background:transparent;text-align:left;width:100%;cursor:pointer} .month button.mfig:hover{background:var(--field)}   /* the sales figure opens its list (27 Oct) */
 .month .mfig span{font-size:12.5px;font-weight:600;color:var(--muted)} .month .mfig b{font:600 18px var(--display);letter-spacing:-.02em;grid-row:span 2} .month .mfig small{font-size:11.5px;color:var(--muted)}
 .month .f-inv{border-left-color:#E39A2C} .month .f-inv.good{border-left-color:#33A564} .month .f-wip{border-left-color:#5C8FCF} .month .f-gap{border-left-color:var(--muted)} .month .f-gap.none{border-left-color:var(--ok)}
 .month .minfo p{font-size:13px} .month .minfo p.note{font-size:12px}
@@ -766,7 +769,8 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-ok{background:var(--ok-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-ok .ic{color:var(--ok)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-info{background:var(--info-soft);border-color:transparent} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard.t-info .ic{color:var(--info)}
 :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard[class*="t-"] .ic{background:var(--surface)}
-@media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-sales) .hcards{grid-template-columns:repeat(2,minmax(0,1fr))} }
+#v-home .hcards.hcards5{grid-template-columns:repeat(5,minmax(0,1fr))}   /* Levi's row with the drafts card (27 Oct) */
+@media (max-width:900px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-sales) .hcards,#v-home .hcards.hcards5{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:480px){ :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts,#v-sales) .hcard{padding:14px;gap:10px} :is(#v-home,#v-quotes,#v-orders,#v-jobs,#v-dispatch,#v-accounts) .hcard .ic{width:36px;height:36px} }
 /* Home a size smaller (Levi, 21 Oct: "it's all a bit too big"); after the shared card rules so it wins */
 #v-home#v-home .hcards{gap:10px} #v-home#v-home .hcard{padding:12px 14px;gap:10px;border-radius:12px} #v-home#v-home .hcard .ic{width:34px;height:34px;border-radius:8px} #v-home#v-home .hcard svg{width:18px;height:18px}
