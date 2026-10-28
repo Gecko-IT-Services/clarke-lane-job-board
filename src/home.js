@@ -16,7 +16,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, invFilter = null, approval = { off: true }, sentOut = null }, h) {
+export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, changes = null, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, invFilter = null, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -60,7 +60,7 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
 
   // Levi's month at a glance (MD only); the detail and the settings are on Jobs.
   const split = md ? monthInvoiced(jobs, today, monthXero.x) : null;   // what the sales figure is made of (27 Oct)
-  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), split, xeroNote: monthXero.note, xeroStale: monthXero.stale || '', breakeven, target, edit: editTarget,
+  const month = md ? monthPanel({ mp: monthProgress(jobs, today, monthXero.x), split, changes, xeroNote: monthXero.note, xeroStale: monthXero.stale || '', breakeven, target, edit: editTarget,
     name: new Date(today + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) }, { gbp, esc, fmt }) : '';
 
   const busy = PROCESSES.filter(p => d.stations[p]).sort((a, b) => d.stations[b] - d.stations[a]);
