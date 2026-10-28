@@ -49,7 +49,7 @@ import { renderDeliveries, signaturePad } from './deliveries.js';
 import { deliveryRuns, deliveryProblem, signatureOk, vanStatus, worthSending } from './core/deliveries.js';
 import { drawMap, focusStop, fitAll, showVans, focusVan, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps, monthInvoiced, salesSnapshot, salesDiff, sameSnapshot } from './core/jobs.js';
 import { PROCESSES, SHORT, dayNo, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -2011,6 +2011,21 @@ function lastTick() {
   S.ticks = S.ticks.filter(t => Date.now() - t.at < 2 * 36e5 && job(t.id)?.procs[t.p]?.done);
   return S.ticks.at(-1) || null;
 }
+/**
+ * The sales figure's memory (Levi, 28 Oct): a snapshot of what makes up the month's figure, kept in this browser
+ * whenever it changes (up to 20 a month), and what changed since the last one that differed, for the line under the
+ * figure. Null until Xero's month has been read, or on the first look.
+ */
+function salesMemory() {
+  const today = todayIso(), key = 'clj.sales:' + today.slice(0, 7);
+  const now = salesSnapshot(monthInvoiced(S.jobs, today, monthXero().x), new Date().toISOString()); if (!now) return null;
+  let snaps = [];
+  try { snaps = JSON.parse(localStorage.getItem(key) || '[]'); for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k.startsWith('clj.sales:') && k !== key) localStorage.removeItem(k); } } catch { snaps = []; }
+  if (!snaps.length || !sameSnapshot(snaps.at(-1), now)) { snaps = [...snaps, now].slice(-20); try { localStorage.setItem(key, JSON.stringify(snaps)); } catch { /* not kept */ } }
+  const d = snaps.length > 1 ? salesDiff(snaps.at(-2), snaps.at(-1)) : null; if (!d) return null;
+  const day = d.since.slice(0, 10), t = new Date(d.since).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return { ...d, sinceText: `${day === today ? 'today' : day === plusDays(today, -1) ? 'yesterday' : fmt(day)} ${t}` };
+}
 /** Target hit (Philip, 28 Oct): the first time Levi sees it each month, confetti falls over the month panel; once per browser. */
 function celebrate() {
   const el = document.querySelector('#v-home .month.hit'); if (!el) return;
@@ -3298,7 +3313,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), folds: S.folds, jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), folds: S.folds, changes: md() ? salesMemory() : null, jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, note: S.debtNote || '', chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: wonWaiting(), invFilter: S.invFilter || null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),

@@ -703,3 +703,34 @@ export function emailList(text) {
   }
   return { ok, bad };
 }
+
+/**
+ * A memory for the month's sales figure (Levi, 28 Oct: "it was £84k yesterday and £79k today, is that Keith?").
+ * salesSnapshot: what the figure is made of right now, one entry per dispatch this month and per invoice raised in
+ * Xero outside the board, with its value and where its invoice is. salesDiff: what changed between two snapshots,
+ * in plain words with the money: gone (a note cancelled or un-delivered, an invoice re-dated, voided or credited),
+ * new, a value changed (an order amended), and invoices approved in Xero (which moves nothing). No window: the
+ * board keeps the snapshots in the browser.
+ */
+export function salesSnapshot(split, at) {
+  if (!split) return null;
+  const items = {};
+  for (const r of split.board) items['dn:' + r.d.id] = { label: `${r.d.dn} for ${r.job.customer}`, net: r.net, state: r.state };
+  for (const x of split.outside) items['xi:' + x.id] = { label: `${x.number || 'invoice'} for ${x.customer}${x.credit ? ' (credit note)' : ''}`, net: x.net, state: 'approved' };
+  return { at, total: round2(split.approved + split.awaiting), items };
+}
+export const sameSnapshot = (a, b) => !!a && !!b && a.total === b.total && JSON.stringify(a.items) === JSON.stringify(b.items);
+export function salesDiff(prev, now) {
+  if (!prev || !now) return null;
+  const lines = [];
+  for (const [k, v] of Object.entries(prev.items)) if (!now.items[k]) lines.push({ amount: -v.net, text: `${v.label} ${k.startsWith('dn:') ? 'no longer counted (cancelled, un-delivered or moved out of the month)' : 'out of the month in Xero (re-dated, voided or credited)'}` });
+  for (const [k, v] of Object.entries(now.items)) if (!prev.items[k]) lines.push({ amount: v.net, text: `${v.label} ${k.startsWith('dn:') ? 'dispatched' : 'raised in Xero'}` });
+  let approved = 0, approvedNet = 0;
+  for (const [k, v] of Object.entries(now.items)) {
+    const p = prev.items[k]; if (!p) continue;
+    if (p.net !== v.net) lines.push({ amount: round2(v.net - p.net), text: `${v.label} changed (an order amended, or a credit)` });
+    if (p.state !== 'approved' && v.state === 'approved') { approved++; approvedNet = round2(approvedNet + v.net); }
+  }
+  lines.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  return { since: prev.at, delta: round2(now.total - prev.total), lines, approved, approvedNet };
+}

@@ -46,7 +46,7 @@ export function monthGauge(mp, breakeven, target, st, money) {
  * The "This month" panel for Home and Jobs. mp: monthProgress(); settings: { breakeven, target };
  * edit: show the form (Jobs only); compact: Home's short version with a link to Jobs.
  */
-export function monthPanel({ mp, breakeven, target, name, edit = false, compact = false, xeroNote = '', xeroStale = '', split = null }, { gbp, esc, fmt }) {
+export function monthPanel({ mp, breakeven, target, name, edit = false, compact = false, xeroNote = '', xeroStale = '', split = null, changes = null }, { gbp, esc, fmt }) {
   if (mp.dispatched == null) return '';
   const set = breakeven || target;
   const st = set ? monthState(mp, breakeven, target) : null;
@@ -61,6 +61,9 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
     // Sales earned, split (27 Oct): approved in Xero (what its profit and loss shows) and dispatched but still awaiting invoice or approval.
     : split ? `${compact ? gbp(split.approved) : `<button type="button" class="btn link sm nfig" data-homeview="invoiced" data-invfilter="approved">${gbp(split.approved)}</button>`} approved in Xero (${split.approvedCount} invoice${split.approvedCount === 1 ? '' : 's'}) · ${compact ? gbp(split.awaiting) : `<button type="button" class="btn link sm nfig" data-homeview="invoiced" data-invfilter="awaiting">${gbp(split.awaiting)}</button>`} dispatched, awaiting invoice or approval (${split.awaitingCount}).${xeroStale ? ` ${esc(xeroStale)}.` : ''}`
     : mp.fromXero ? `${gbp(mp.fromXero)} invoiced in Xero (${mp.xeroCount} invoice${mp.xeroCount === 1 ? '' : 's'}) and ${gbp(mp.onBoard)} dispatched on the board.${xeroStale ? ` ${esc(xeroStale)}.` : ''}` : '';
+  // What changed since the last look (28 Oct): the money that moved and why, so a drop never needs a phone call.
+  const signed = n => `${n < 0 ? '-' : '+'}${gbp(Math.abs(n))}`;
+  const chg = changes && !compact && (changes.delta || changes.lines.length || changes.approved) ? `<p class="note mchg">Since ${esc(changes.sinceText)}: <b${changes.delta < 0 ? ' class="neg"' : ''}>${signed(changes.delta)}</b>${changes.lines.slice(0, 4).map(l => ` · ${esc(l.text)} (${signed(l.amount)})`).join('')}${changes.lines.length > 4 ? ` · and ${changes.lines.length - 4} more` : ''}${changes.approved ? ` · ${changes.approved} invoice${changes.approved === 1 ? '' : 's'} approved in Xero (${gbp(changes.approvedNet)}; the total does not move)` : ''}.</p>` : '';
   const seeInv = split && !compact ? ` <button type="button" class="btn link sm" data-homeview="invoiced">See what's been invoiced</button>` : '';
   const figs = `<div class="mfigs">
       ${split && !compact ? `<button type="button" class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}" data-homeview="invoiced" title="See what is behind this figure">` : `<div class="mfig f-inv${st && st.tone !== 'warn' ? ' good' : ''}">`}<span>Sales</span><b>${gbp(mp.dispatched)}</b><small>so far this month${split && !compact ? ' · tap for the list' : ''}</small>${split && !compact ? '</button>' : '</div>'}
@@ -79,7 +82,7 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
     <div class="mbody">
       ${set ? `<figure class="gwrap" role="img" aria-label="${esc(`${name}: ${gbp(mp.dispatched)} sales, ${gbp(wip)} work in progress${gap ? `, gap ${gbp(gap)}` : ''}. ${st.word}.`)}">${monthGauge(mp, breakeven, target, st, gbp)}<figcaption class="gtotal" title="Sales plus work in progress: what ${esc(name)} should invoice if it all goes out">${gbp(mp.dispatched + wip)}</figcaption></figure>` : ''}
       <div class="mside">${figs}
-        <div class="minfo">${lines ? `<p>${lines}</p>` : ''}${later}${warn}${from ? `<p class="note">${split && !compact ? from : esc(from)}${seeInv}</p>` : ''}${link}</div></div></div></section>`;
+        <div class="minfo">${lines ? `<p>${lines}</p>` : ''}${later}${warn}${from ? `<p class="note">${split && !compact ? from : esc(from)}${seeInv}</p>` : ''}${chg}${link}</div></div></div></section>`;
 }
 
 /** Jobs' one line (MD only): invoiced · work in progress · gap, and what is due later to bring forward. */

@@ -593,3 +593,23 @@ console.log('jobs: ok');
   assert.deepEqual(homeGaps([]).noDrawing, []);
   console.log('homeGaps ok');
 }
+
+// The sales figure's memory (28 Oct): what changed since the last look, in plain words with the money.
+{
+  const { salesSnapshot, salesDiff, sameSnapshot } = await import('../src/core/jobs.js');
+  const row = (id, dn, customer, net, state) => ({ d: { id, dn }, job: { customer }, net, state });
+  const before = salesSnapshot({ board: [row(1, 'DN-0021', 'Haig Engineering Ltd', 4002, 'notsent'), row(2, 'DN-0022', 'VFS Ltd', 2600, 'draft'), row(3, 'DN-0023', 'Lime Signs', 648, 'draft')],
+    outside: [{ id: 'x1', number: 'INV-31900', customer: 'Old Ltd', net: 1000, credit: false }], approved: 1000, awaiting: 7250 }, '2026-10-27T13:10:00Z');
+  const after = salesSnapshot({ board: [row(2, 'DN-0022', 'VFS Ltd', 2600, 'approved'), row(3, 'DN-0023', 'Lime Signs', 600, 'approved'), row(4, 'DN-0024', 'New Ltd', 300, 'notsent')],
+    outside: [{ id: 'x1', number: 'INV-31900', customer: 'Old Ltd', net: 1000, credit: false }, { id: 'c1', number: 'CN-0101', customer: 'Old Ltd', net: -150, credit: true }], approved: 4050, awaiting: 300 }, '2026-10-28T09:00:00Z');
+  assert.equal(before.total, 8250); assert.equal(after.total, 4350);
+  const d = salesDiff(before, after);
+  assert.equal(d.delta, -3900);
+  assert.deepEqual(d.lines.map(l => [l.amount, l.text.split(' ').slice(0, 2).join(' ')]), [[-4002, 'DN-0021 for'], [300, 'DN-0024 for'], [-150, 'CN-0101 for'], [-48, 'DN-0023 for']], 'biggest first: the cancelled note, the new one, the credit, the amended one');
+  assert.ok(d.lines[0].text.includes('no longer counted') && d.lines[2].text.includes('credit note') && d.lines[3].text.includes('amended'));
+  assert.deepEqual([d.approved, d.approvedNet], [2, 3200], 'two invoices approved in Xero, which moves nothing');
+  assert.equal(sameSnapshot(after, salesSnapshot({ board: [row(2, 'DN-0022', 'VFS Ltd', 2600, 'approved'), row(3, 'DN-0023', 'Lime Signs', 600, 'approved'), row(4, 'DN-0024', 'New Ltd', 300, 'notsent')],
+    outside: [{ id: 'x1', number: 'INV-31900', customer: 'Old Ltd', net: 1000 }, { id: 'c1', number: 'CN-0101', customer: 'Old Ltd', net: -150, credit: true }], approved: 4050, awaiting: 300 }, '2026-10-28T10:00:00Z')), true, 'the time does not make it different');
+  assert.equal(salesSnapshot(null, 'x'), null); assert.equal(salesDiff(null, after), null);
+  console.log('jobs sales memory: ok');
+}
