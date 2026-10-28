@@ -2011,6 +2011,19 @@ function lastTick() {
   S.ticks = S.ticks.filter(t => Date.now() - t.at < 2 * 36e5 && job(t.id)?.procs[t.p]?.done);
   return S.ticks.at(-1) || null;
 }
+/** Target hit (Philip, 28 Oct): the first time Levi sees it each month, confetti falls over the month panel; once per browser. */
+function celebrate() {
+  const el = document.querySelector('#v-home .month.hit'); if (!el) return;
+  const key = 'clj.party:' + (el.dataset.month || todayIso().slice(0, 7));
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch { /* a private window: every visit, then */ }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const colours = ['#E8C15A', '#2557A7', '#25744A', '#B4321F', '#B45309', '#FFF1B8'];
+  const party = document.createElement('div'); party.className = 'party';
+  party.innerHTML = Array.from({ length: 90 }, (_, i) => `<i style="left:${(Math.random() * 100).toFixed(1)}%;background:${colours[i % colours.length]};animation-delay:${(Math.random() * 1.2).toFixed(2)}s;animation-duration:${(2.2 + Math.random() * 1.4).toFixed(2)}s;transform:rotate(${Math.round(Math.random() * 360)}deg)"></i>`).join('');
+  el.appendChild(party); el.classList.add('party-on');
+  setTimeout(() => { party.remove(); el.classList.remove('party-on'); }, 4500);
+  toast(`Target hit for ${el.querySelector('h3')?.textContent || 'the month'}. Nice one.`);
+}
 function renderFloor() {
   const t = lastTick(), undo = t ? { so: job(t.id).so, p: t.p, mins: Math.round((Date.now() - t.at) / 6e4) } : null;
   $('v-floor').innerHTML = renderShopFloor({ jobs: S.jobs, today: todayIso(), station: S.station, now: new Date(), undo,
@@ -3289,7 +3302,7 @@ function render() {
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, note: S.debtNote || '', chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: wonWaiting(), invFilter: S.invFilter || null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
-      approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); },
+      approval: !S.xero || PREVIEW.on ? { off: true } : S.inv ? awaitingApproval(S.jobs, S.inv) : { err: S.invErr, list: null } }, { esc, fmt, gbp }); if (md()) celebrate(); },
     tv: renderTvView, metal: renderMetalView, sales: renderSalesView, orders: renderOrders, map: renderMapTab, customers: renderCustomers, parts: renderParts, jobs: renderJobs, floor: renderFloor, deliveries: renderDeliveriesView, accounts: renderAccountsView, quotes: renderQuotes, dispatch: renderDespatch, xero: renderXero, help: () => { if (!$('v-help').innerHTML) $('v-help').innerHTML = renderHelp(office()); } })[S.tab]();
   document.body.classList.toggle('on-floor', S.tab === 'floor' || S.tab === 'deliveries');   // big messages for big fingers
   renderDrawer();

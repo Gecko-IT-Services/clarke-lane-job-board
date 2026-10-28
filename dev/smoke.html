@@ -184,7 +184,18 @@ tr.drop-before td{box-shadow:inset 0 3px 0 var(--ink)} tr.drop-after td{box-shad
 .vt-fill,.vt-could{position:absolute;left:0;right:0;bottom:0;border-radius:0 0 29px 29px}
 .vt-fill{background:linear-gradient(90deg,var(--f1) 0%,var(--f2) 45%,var(--f3) 100%);box-shadow:inset -3px 0 4px rgba(0,0,0,.25),0 -2px 3px rgba(0,0,0,.18)}
 .vt-fill.t-warn{--f1:#FFD9A0;--f2:#E39A2C;--f3:#A8620C}
-.vt-fill.t-ok,.vt-fill.t-top{--f1:#A6EBC2;--f2:#33A564;--f3:#1D6A40}
+/* Target hit (Philip, 28 Oct: "something visually happy"): the tube turns gold, the chip shines, and the first time Levi sees it each month confetti falls over the panel. */
+.vt-fill.t-top{--f1:#FFF1B8;--f2:#E8C15A;--f3:#B8891A}
+.month{position:relative}
+.month.hit .g-state.g-top{background:linear-gradient(90deg,#FFF1B8,#E8C15A 60%,#FFF1B8);background-size:200% 100%;color:#5A4300;border:1px solid #D9B24A;animation:gshine 2.4s linear infinite}
+#v-home .month.hit .g-state.g-top{background:linear-gradient(90deg,#FFF1B8,#E8C15A 60%,#FFF1B8);background-size:200% 100%;color:#5A4300;border-color:#D9B24A}
+.month.hit .gtotal{color:#B8891A} .month.hit.party-on .gtotal{animation:gpop .7s ease-out}
+@keyframes gshine{to{background-position:-200% 0}} @keyframes gpop{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
+.party{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:inherit;z-index:2}
+.party i{position:absolute;top:-14px;width:8px;height:14px;border-radius:2px;opacity:.95;animation:pfall 2.8s ease-in forwards}
+@keyframes pfall{to{transform:translateY(520px) rotate(720deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){.party{display:none} .month.hit .g-state.g-top,.month.hit.party-on .gtotal{animation:none}}
+.vt-fill.t-ok{--f1:#A6EBC2;--f2:#33A564;--f3:#1D6A40}   /* t-top is gold, above (28 Oct) */
 .vt-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 5px,rgba(255,255,255,0) 5px 10px),linear-gradient(90deg,#B9D3F2 0%,#5C8FCF 45%,#2F5E9E 100%);box-shadow:inset -3px 0 4px rgba(0,0,0,.22)}
 .vt-ring{position:absolute;left:-1px;right:-1px;height:4px;margin-bottom:-2px;background:linear-gradient(180deg,#3A3D42,#C9CDD2,#3A3D42);box-shadow:0 0 0 1px rgba(0,0,0,.25)}
 .vt-marks{position:relative;font-size:12px;color:var(--muted);white-space:nowrap}
@@ -801,7 +812,7 @@ body.on-floor .toast button{min-height:56px;padding:0 24px;border-radius:12px;ba
 #v-home#v-home .tcard.t-info{border-color:var(--line);border-left-color:var(--hm-silver)}
 #v-home .month .g-state{background:var(--hm-ink);color:var(--surface)} #v-home .month .g-state:is(.g-ok,.g-top){background:var(--hm-silver-soft);color:var(--hm-ink);border:1px solid var(--hm-silver)}
 #v-home .month :is(.f-inv,.f-inv.good){border-left-color:var(--hm-ink)} #v-home .month .f-wip{border-left-color:var(--hm-steel)} #v-home .month :is(.f-gap,.f-gap.none){border-left-color:var(--hm-silver)}
-#v-home .vt-fill:is(.t-warn,.t-ok,.t-top){--f1:#7C828B;--f2:#2E3238;--f3:#0E0F11}
+#v-home .vt-fill:is(.t-warn,.t-ok,.t-top){--f1:#7C828B;--f2:#2E3238;--f3:#0E0F11} #v-home .month.hit .vt-fill.t-top{--f1:#FFF1B8;--f2:#E8C15A;--f3:#B8891A}   /* gold when the target is hit (28 Oct) */
 #v-home .vt-could{background:repeating-linear-gradient(135deg,rgba(255,255,255,.35) 0 4px,rgba(255,255,255,0) 4px 9px),linear-gradient(90deg,#E9ECEF 0%,#A3A9B1 50%,#6C727B 100%)}
 #v-home ul.tasks li.late{border-color:var(--hm-ink);border-left-width:4px} #v-home ul.tasks .chip.late{background:var(--hm-ink);color:var(--surface)}
 #v-home .vt-marks .vt-pace{color:var(--hm-ink)} #v-home .vt-marks .vt-pace::before{border-right-color:var(--hm-ink)}

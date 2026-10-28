@@ -74,7 +74,7 @@ export function monthPanel({ mp, breakeven, target, name, edit = false, compact 
   const warn = st?.short > 0 && !later ? `<p class="bad">${gbp(st.short)} short of ${breakeven && mp.dispatched < breakeven ? 'break-even' : 'target'}, even if all the work in progress goes out.</p>` : '';
   const link = compact ? `<a href="#jobs" data-tab="jobs">${set ? 'See the jobs →' : 'Set break-even and target on Jobs →'}</a>`
     : edit ? form : `<button type="button" class="btn link sm" data-edittarget>${set ? 'Change break-even / target' : 'Set break-even and target'}</button>`;
-  return `<section class="month${set ? ' has-gauge' : ''}${compact ? ' compact' : ''}" aria-label="${esc(name)}: sales, work in progress and the gap to target">
+  return `<section class="month${set ? ' has-gauge' : ''}${compact ? ' compact' : ''}${st?.tone === 'top' ? ' hit' : ''}" data-month="${mp.start.slice(0, 7)}" aria-label="${esc(name)}: sales, work in progress and the gap to target">
     <div class="mhead"><h3>${esc(name)}</h3>${set ? `<span class="g-state g-${st.tone}">${esc(st.word)}</span>` : ''}</div>
     <div class="mbody">
       ${set ? `<figure class="gwrap" role="img" aria-label="${esc(`${name}: ${gbp(mp.dispatched)} sales, ${gbp(wip)} work in progress${gap ? `, gap ${gbp(gap)}` : ''}. ${st.word}.`)}">${monthGauge(mp, breakeven, target, st, gbp)}<figcaption class="gtotal" title="Sales plus work in progress: what ${esc(name)} should invoice if it all goes out">${gbp(mp.dispatched + wip)}</figcaption></figure>` : ''}
