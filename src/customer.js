@@ -4,6 +4,7 @@
  * Logic in core/crm.js and core/sales.js (tested); this file only draws. Money totals only when md is true.
  */
 import { icon } from './icons.js';
+import { CONFIG } from './config.js';
 import { STAGES } from './core/sales.js';
 import { trendWords } from './core/crm.js';
 import { topicChip, topicTone } from './core/inbox.js';
@@ -105,6 +106,7 @@ export function renderEnquiries({ list, funnel, turnaround = null, state, mailbo
       <div class="actions">${e.webLink ? `<a class="btn sm" href="${esc(e.webLink)}" target="_blank" rel="noopener">Open the email</a>` : ''}
         <button class="btn sm pri" type="button" data-enqreply="${e.id}" ${busy === e.id ? 'disabled' : ''}>${busy === e.id ? 'Writing…' : 'Draft a reply with AI'}</button>
         <button class="btn sm" type="button" data-taskadd="enquiry:${e.id}">Add a task</button>
+        <a class="btn sm" href="${CONFIG.QUOTE_CALCULATOR}" target="_blank" rel="noopener" title="Levi's quote calculator (the Power App), in a new tab">Open the quote calculator</a>
         ${e.customerKey ? `<button class="btn sm" type="button" data-custpage="${esc(e.customerKey)}">Customer page</button>` : `<button class="btn sm" type="button" data-enqnewcust="${e.id}">Add as a customer</button>`}
         <label class="sinline">Mark as <select data-enqstatus="${e.id}"><option value="">…</option>${['replied', 'quoted', 'won', 'lost', 'ignored', 'new'].map(s => `<option value="${s}">${{ replied: 'Replied', quoted: 'Quoted', won: 'Won', lost: 'Lost', ignored: 'Not an enquiry', new: 'Not answered' }[s]}</option>`).join('')}</select></label></div></td></tr>` : ''}`;
   const f = funnel, stat = (n, label, cls = '') => `<div class="estat${cls}"><b>${n}</b><span>${label}</span></div>`;

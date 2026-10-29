@@ -7,6 +7,7 @@
  */
 import { icon, XERO } from './icons.js';
 import { fold } from './fold.js';
+import { CONFIG } from './config.js';
 import { monthPanel } from './gauge.js';
 import { monthProgress, monthInvoiced, dashboard, attention, PROCESSES, needed, allDone, deliveryLabel, nextDue, value, despatchValue, homeGaps } from './core/jobs.js';
 
@@ -120,7 +121,7 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
     <td class="act"><a class="btn sm" href="${xeroLink(x.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a></td></tr>`;
   // Waiting on a reply (29 Oct): who, how long, what, and the button that deals with it; an estimate says so.
   const waitKind = { po: '<span class="chip ok">PO received</span>', question: '<span class="chip soon">Question on a quote</span>', chase: '<span class="chip">Due a follow-up</span>', enquiry: '<span class="chip late">Not yet quoted</span>' };
-  const waitAct = i => i.kind === 'chase' ? '<button class="btn sm" type="button" data-tab="sales">Open the CRM</button>' : `<button class="btn sm" type="button" data-tab="customers" data-goenq data-goenqid="${i.id}">${i.kind === 'po' ? 'Make the order' : i.kind === 'question' ? 'Answer it' : 'Quote it'}</button>`;
+  const waitAct = i => i.kind === 'chase' ? '<button class="btn sm" type="button" data-tab="sales">Open the CRM</button>' : `<button class="btn sm" type="button" data-tab="customers" data-goenq data-goenqid="${i.id}">${i.kind === 'po' ? 'Make the order' : i.kind === 'question' ? 'Answer it' : 'Quote it'}</button>${i.kind === 'enquiry' ? ` <a class="btn sm link" href="${CONFIG.QUOTE_CALCULATOR}" target="_blank" rel="noopener" title="Levi's quote calculator (the Power App), in a new tab">Calculator</a>` : ''}`;
   const waitRow = i => `<tr><td>${who(i.who, i.what)}</td><td><span class="chip${i.hours > 48 && i.kind !== 'chase' ? ' late' : i.hours > 24 ? ' soon' : ''}">${i.hours < 48 ? `${i.hours} hours` : `${Math.floor(i.hours / 24)} days`}</span></td><td>${i.kind === 'enquiry' && i.replied ? 'Answered, not quoted' : i.kind === 'chase' ? `Sent ${Math.floor(i.hours / 24)} days ago` : 'Unanswered'}</td><td>${waitKind[i.kind]}</td>
     <td class="num">${i.value != null ? gbp(i.value, 2) : i.estimate != null ? `<span class="note">about ${gbp(i.estimate)}</span>` : '<span class="note">not priced</span>'}</td><td class="act">${waitAct(i)}</td></tr>`;
   const chased = c => { const ch = (debts.chases || []).find(x => x.customer === c.customer);
