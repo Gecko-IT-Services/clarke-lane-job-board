@@ -14,11 +14,15 @@ const first = s => String(s || '').split(/[ @]/)[0];
 
 /** Home: what is waiting today, and my tasks. panel (Levi): Sales this week and his tasks; otherwise Mandy's two panels, Today and Sales this week. */
 export function renderToday({ m, tasks, md, me, staff, panel = false }, h) {
-  const { esc, fmt } = h;
+  const { esc, fmt, gbp } = h;
   const tile = (n, label, attrs, tone) => `<button type="button" class="tcard${n > 0 ? ' t-' + tone : ''}" ${attrs}><b>${n}</b><span>${label}</span></button>`;
   // Levi's Home (Philip, 21 Oct: "remove what doesn't matter"): the four sales numbers he acts on, then his tasks.
+  // Waiting on a reply (Philip, 29 Oct): the money sitting in POs, questions, due chases and unquoted enquiries, instead of a bare count.
+  const w = m.waiting, days = n => `${Math.floor(n / 24)} day${Math.floor(n / 24) === 1 ? '' : 's'}`;
+  const waitTile = w && gbp ? `<button type="button" class="tcard${w.late ? ' t-bad' : w.items.length ? ' t-warn' : ''}" data-homeview="waiting" title="What is waiting on a reply from you, and what it is worth"><b>${gbp(w.exact)}</b><span>waiting on a reply${w.exactCount ? ` · ${w.exactCount} with a known value` : ''}${w.estimateCount ? ` · ${w.estimateCount} enquir${w.estimateCount === 1 ? 'y' : 'ies'} not yet quoted${w.estimate ? `, about ${gbp(w.estimate)} at your average` : ''}` : ''}${w.late ? ` · oldest ${days(w.oldestHours)}` : ''}</span></button>`
+    : tile(m.enquiries, m.enquiries === 1 ? 'enquiry waiting for a reply' : 'enquiries waiting for a reply', 'data-tab="customers" data-goenq', 'bad');
   const salesTiles = [tile(m.chase, 'quotes to chase', 'data-tab="sales"', 'warn'), tile(m.reorders, 'repeat parts to ask about', 'data-tab="sales" data-gosmart', 'info'),
-    tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info'), tile(m.enquiries, m.enquiries === 1 ? 'enquiry waiting for a reply' : 'enquiries waiting for a reply', 'data-tab="customers" data-goenq', 'bad')].join('');
+    tile(m.quiet, 'customers gone quiet', 'data-tab="sales" data-gosmart', 'info'), waitTile].join('');
   // Mandy's Home (Philip, 21 Oct: "align what matters"): Today is the day's work (enquiries, tasks, won quotes to turn
   // into orders, orders still without a drawing) with her tasks below; Sales this week is what to chase, no task list.
   const won = m.won == null ? '—' : m.won;

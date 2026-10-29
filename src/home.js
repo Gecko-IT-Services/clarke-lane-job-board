@@ -16,7 +16,7 @@ export const card = (tone, ic, shown, label, on, attrs = '') => attrs
   ? `<button type="button" class="hcard go${on ? ' t-' + tone : ''}" ${attrs}><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></button>`
   : `<div class="hcard${on ? ' t-' + tone : ''}"><span class="ic">${icon(ic)}</span><div><b>${shown}</b><span>${label}</span></div></div>`;
 
-export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, changes = null, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, invFilter = null, approval = { off: true }, sentOut = null }, h) {
+export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reorderBox = '', folds = {}, changes = null, waiting = null, jobs, me, office, md = false, editTarget = false, monthXero = { x: null, note: '' }, debts = { off: true }, breakeven = null, target = null, today, wonQuotes, view, invFilter = null, approval = { off: true }, sentOut = null }, h) {
   const { esc, fmt, gbp } = h;
   const d = dashboard(jobs, today);
   const hour = new Date().getHours();
@@ -118,6 +118,11 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
     <td class="act">${r.d.xero ? `<a class="btn sm" href="${xeroLink(r.d.xero.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a>` : ''}</td></tr>`;
   const outsideRow = x => `<tr><td>${who(x.customer, x.credit ? 'Credit note, raised in Xero' : 'Raised in Xero, not on the board')}</td><td>${fmt(x.date)}</td><td class="mono">${esc(x.number)}</td><td><span class="chip ok">Approved in Xero</span></td>${x.credit ? `<td class="num">-${gbp(-x.net, 2)}</td>` : money(x.net)}
     <td class="act"><a class="btn sm" href="${xeroLink(x.id)}" target="_blank" rel="noopener" title="Open this invoice in Xero">Open in ${XERO}</a></td></tr>`;
+  // Waiting on a reply (29 Oct): who, how long, what, and the button that deals with it; an estimate says so.
+  const waitKind = { po: '<span class="chip ok">PO received</span>', question: '<span class="chip soon">Question on a quote</span>', chase: '<span class="chip">Due a follow-up</span>', enquiry: '<span class="chip late">Not yet quoted</span>' };
+  const waitAct = i => i.kind === 'chase' ? '<button class="btn sm" type="button" data-tab="sales">Open the CRM</button>' : `<button class="btn sm" type="button" data-tab="customers" data-goenq data-goenqid="${i.id}">${i.kind === 'po' ? 'Make the order' : i.kind === 'question' ? 'Answer it' : 'Quote it'}</button>`;
+  const waitRow = i => `<tr><td>${who(i.who, i.what)}</td><td><span class="chip${i.hours > 48 && i.kind !== 'chase' ? ' late' : i.hours > 24 ? ' soon' : ''}">${i.hours < 48 ? `${i.hours} hours` : `${Math.floor(i.hours / 24)} days`}</span></td><td>${i.kind === 'enquiry' && i.replied ? 'Answered, not quoted' : i.kind === 'chase' ? `Sent ${Math.floor(i.hours / 24)} days ago` : 'Unanswered'}</td><td>${waitKind[i.kind]}</td>
+    <td class="num">${i.value != null ? gbp(i.value, 2) : i.estimate != null ? `<span class="note">about ${gbp(i.estimate)}</span>` : '<span class="note">not priced</span>'}</td><td class="act">${waitAct(i)}</td></tr>`;
   const chased = c => { const ch = (debts.chases || []).find(x => x.customer === c.customer);
     return ch ? `<span class="chip ok">Chased ${fmt(ch.at.slice(0, 10))} · ${esc(ch.by.split(' ')[0])}</span>` : '<span class="chip soon">Not chased</span>'; };
   const debtRow = c => `<tr><td>${who(c.customer, `${c.invoices.length} invoice${c.invoices.length === 1 ? '' : 's'} over 60 days`)}</td>
@@ -143,6 +148,8 @@ export function renderHome({ digestBox = '', todayBox = '', notesBox = '', reord
           ...(invFilter === 'awaiting' ? [] : split.outside.map(x => ({ date: x.date, html: outsideRow(x) })))]
         .sort((a, b) => b.date.localeCompare(a.date)).map(r => r.html),   // newest first, like Xero's own list (Levi, 27 Oct)
       empty: 'Nothing dispatched or invoiced this month yet.', cols: ['Customer', 'Date', 'Invoice', 'Status'] },
+    waiting: { title: 'Waiting on a reply', sub: waiting ? `${gbp(waiting.exact)} with a known value (POs received, questions on quotes, quotes due a chase)${waiting.estimateCount ? ` · ${waiting.estimateCount} enquir${waiting.estimateCount === 1 ? 'y' : 'ies'} not yet quoted, about ${gbp(waiting.estimate)} at the customer's or your average` : ''} · longest waiting first` : 'Still reading the quotes and the mailbox',
+      list: (waiting?.items || []).map(waitRow), empty: 'Nothing is waiting on a reply.', cols: ['Customer', 'Waiting', 'What', 'Kind'] },
     drafts: { title: 'In Xero, not approved', sub: 'draft invoices the board made, still waiting to be approved in Xero · oldest first',
       list: (ap.list || []).map(draftRow), empty: 'Nothing waiting: every invoice the board made has been approved in Xero.', cols: ['Customer', 'Sent', 'Invoice', 'Status'] },
   };

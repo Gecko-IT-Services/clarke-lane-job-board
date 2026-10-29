@@ -200,3 +200,36 @@ export function quoteTurnaround(enquiries, quotes, now, { days = 90 } = {}) {
   const hs = quoted.map(q => q.hours);
   return { days, quoted: quoted.length, medianHours: median(hs), within24: hs.filter(h => h <= 24).length, within48: hs.filter(h => h <= 48).length, overWeek: hs.filter(h => h > 168).length, waiting, list: quoted };
 }
+
+/**
+ * Money waiting on a reply (Philip, 29 Oct: the value in unanswered emails is where future business comes from).
+ * What the board knows exactly: POs received but not yet booked and customers' questions on a quote (the quote's
+ * value), and open quotes due a chase (their value; the likely value too). What it can only estimate: enquiries not
+ * yet quoted, at the customer's average order from Xero's invoices, else Levi's average won quote, else nothing.
+ * Each item: who, what, how long it has waited, and the kind, longest waiting first. late: anything over 48 hours.
+ */
+export function waitingOnReply({ enquiries = [], quotes = [], chase = [], base = [], stats = null, now }) {
+  const r2 = n => Math.round(n * 100) / 100, t = Date.parse(now), hrs = iso => Math.max(0, Math.round((t - Date.parse(iso)) / 36e5));
+  const byNo = new Map(quotes.map(q => [String(q.quoteNo || '').toUpperCase(), q])), byId = new Map(quotes.map(q => [q.spId, q]));
+  const qv = q => (q ? r2((Number(q.sellTotal) || 0) + (Number(q.carriage) || 0)) : null);
+  const quoteOf = e => (e.quoteSpId != null && byId.get(e.quoteSpId)) || (e.refs?.quote && byNo.get(String(e.refs.quote).toUpperCase())) || null;
+  const who = e => e.company || e.fromName || e.fromEmail || 'a customer';
+  const avgFor = key => { const c = base.find(x => x.key === key), inv = c ? c.invoices.filter(x => x.net > 0) : []; return inv.length >= 2 ? r2(inv.reduce((a, x) => a + x.net, 0) / inv.length) : null; };
+  const items = [];
+  for (const e of enquiries) {
+    if (e.kind === 'customer' && e.status === 'new' && ['po', 'quote_question'].includes(e.topic)) {
+      const q = quoteOf(e);
+      items.push({ kind: e.topic === 'po' ? 'po' : 'question', id: e.id, who: who(e), what: e.topic === 'po' ? `PO received${q ? ` for ${q.quoteNo}` : ''}` : `Question on ${q ? q.quoteNo : 'a quote'}`,
+        hours: hrs(e.receivedAt), value: qv(q), estimate: null, quoteNo: q?.quoteNo || '' });
+    } else if (e.kind === 'enquiry' && (e.status === 'new' || e.status === 'replied') && !quoteOf(e)) {
+      const est = (e.customerKey ? avgFor(e.customerKey) : null) ?? (stats?.avgWon ? r2(stats.avgWon) : null);
+      items.push({ kind: 'enquiry', id: e.id, who: who(e), what: e.wants || e.subject || 'an enquiry', hours: hrs(e.receivedAt), value: null, estimate: est, replied: e.status === 'replied' });
+    }
+  }
+  const asked = new Set(items.map(i => i.quoteNo).filter(Boolean));   // a quote the customer has a question on is not also a chase
+  for (const q of chase) if (!asked.has(q.quoteNo)) items.push({ kind: 'chase', id: q.spId, who: q.customer, what: `${q.quoteNo} due a follow-up`, hours: (q.age || 0) * 24, value: r2(q.value || 0), likely: q.likely ?? null, estimate: null, quoteNo: q.quoteNo });
+  const sum = l => r2(l.reduce((a, x) => a + (x || 0), 0)), priced = items.filter(i => i.value != null), est = items.filter(i => i.kind === 'enquiry');
+  return { items: items.sort((a, b) => b.hours - a.hours), exact: sum(priced.map(i => i.value)), exactCount: priced.length,
+    estimate: sum(est.map(i => i.estimate)), estimateCount: est.length, unpriced: est.filter(i => i.estimate == null).length,
+    late: items.some(i => i.kind !== 'chase' && i.hours > 48), oldestHours: Math.max(0, ...items.filter(i => i.kind !== 'chase').map(i => i.hours)) };
+}
