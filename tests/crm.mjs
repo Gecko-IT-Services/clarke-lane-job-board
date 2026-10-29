@@ -106,3 +106,25 @@ console.log('crm sorting: ok');
   assert.equal(quoteTurnaround([], [], at).medianHours, null);
   console.log('crm turnaround: ok');
 }
+
+// Money waiting on a reply (29 Oct): the exact part, the estimated part, and who has waited longest.
+{
+  const { waitingOnReply } = await import('../src/core/crm.js');
+  const at = '2026-10-29T12:00:00Z', h = n => new Date(Date.parse(at) - n * 36e5).toISOString();
+  const quotes = [{ spId: 1, quoteNo: 'Q-0335', customer: 'BSA Regal', sellTotal: 133.8, carriage: 0 }, { spId: 2, quoteNo: 'Q-0311', customer: 'Tectonics', sellTotal: 35620, carriage: 0 }, { spId: 3, quoteNo: 'Q-0300', customer: 'Lime', sellTotal: 500, carriage: 20 }];
+  const enquiries = [
+    { id: 1, kind: 'customer', status: 'new', topic: 'po', receivedAt: h(14), company: 'BSA Regal', refs: { quote: 'Q-0335' } },
+    { id: 2, kind: 'customer', status: 'new', topic: 'quote_question', receivedAt: h(30), company: 'Lime', quoteSpId: 3 },
+    { id: 3, kind: 'customer', status: 'new', topic: 'delivery', receivedAt: h(2), company: 'Nobody' },                      // not money waiting on a reply
+    { id: 4, kind: 'enquiry', status: 'new', receivedAt: h(6 * 24), company: 'VFS', customerKey: 'vfs', wants: 'five part numbers' },   // a regular: their average order
+    { id: 5, kind: 'enquiry', status: 'replied', receivedAt: h(50), company: 'Newco', customerKey: '', wants: 'brackets' },           // new customer: the average won quote
+    { id: 6, kind: 'enquiry', status: 'quoted', receivedAt: h(70), company: 'Done' }, { id: 7, kind: 'customer', status: 'ignored', topic: 'po', receivedAt: h(70), company: 'Old' }];
+  const base = [{ key: 'vfs', invoices: [{ net: 1000 }, { net: 3000 }, { net: -200 }] }];
+  const chase = [{ spId: 2, quoteNo: 'Q-0311', customer: 'Tectonics', value: 35620, likely: 2962, age: 13 }, { spId: 3, quoteNo: 'Q-0300', customer: 'Lime', value: 520, likely: 100, age: 9 }];
+  const w = waitingOnReply({ enquiries, quotes, chase, base, stats: { avgWon: 1850 }, now: at });
+  assert.deepEqual(w.items.map(i => [i.kind, i.who, i.hours, i.value, i.estimate]), [['chase', 'Tectonics', 312, 35620, null], ['enquiry', 'VFS', 144, null, 2000], ['enquiry', 'Newco', 50, null, 1850], ['question', 'Lime', 30, 520, null], ['po', 'BSA Regal', 14, 133.8, null]],
+    'longest first; the Lime quote is a question, so not also a chase; the delivery email, the quoted and the ignored are left out');
+  assert.deepEqual([w.exact, w.exactCount, w.estimate, w.estimateCount, w.unpriced, w.late, w.oldestHours], [36273.8, 3, 3850, 2, 0, true, 144]);
+  assert.equal(waitingOnReply({ enquiries: [enquiries[4]], quotes, now: at }).unpriced, 1, 'no history and no win stats: counted, not priced');
+  console.log('crm waiting on a reply: ok');
+}

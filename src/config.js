@@ -6,6 +6,7 @@ export const CONFIG = {
   SUPABASE_KEY: 'sb_publishable_3EuZ_lKqgulfFMIPbiaskA_lmsi6LYO',
   GRAPH: 'https://graph.microsoft.com/v1.0',
   SP_SITE: 'clarkelane.sharepoint.com:/sites/FactoryJobs',   // Levi's quote calculator lists
+  QUOTE_CALCULATOR: 'https://clarkelane.sharepoint.com/sites/FactoryJobs/SitePages/Quoting-Calculator.aspx',   // the Power App itself (29 Oct), opened in a new tab
   // Company Data: customers' old files, laser drawings and material certificates. Read only, never written.
   SP_DATA_SITE: 'clarkelane.sharepoint.com:/sites/CompanyData',
   SP_CLIENTS: 'Company Data/01 Client Folder',

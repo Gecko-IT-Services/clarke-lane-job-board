@@ -39,7 +39,7 @@ import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob,
 import { CONFIG } from './config.js';
 import { searchAll } from './core/search.js';
 import { newDispatches } from './core/mood.js';
-import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf, quoteTurnaround } from './core/crm.js';
+import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf, quoteTurnaround, waitingOnReply } from './core/crm.js';
 import { linkEmail, emailActions, sortEmails, emailTaskTitle, needTopic, cleanTopic, ASKED, customerQuestion } from './core/inbox.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue, priceReview, spendChanges, PRICE_REVIEWED, quoteChaseFacts } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
@@ -1641,6 +1641,12 @@ async function toggleTask(id, done) {
 }
 /** Won quotes not yet sales orders (SharePoint's and Xero's), or null until SharePoint's quotes are read. */
 const wonWaiting = () => S.quotesRaw ? (quotes() || []).filter(q => q.state === 'waiting').length + xeroWaiting().length : null;
+/** Money waiting on a reply (29 Oct), Levi only: POs, questions and due chases at their quote's value, enquiries not yet quoted at an average. */
+function waitingModel() {
+  if (!md()) return null;
+  const m = S.salesQ && S.salesF ? salesModel() : null;
+  return waitingOnReply({ enquiries: S.enq || [], quotes: S.salesQ || [], chase: m ? m.chase : [], base: m?.base || [], stats: m?.stats || null, now: new Date().toISOString() });
+}
 /** Home's Today panel: for Mandy, Today and Sales this week side by side; for Levi, Sales this week and his tasks. */
 function todayHtml() {
   if (!office()) return '';
@@ -1649,8 +1655,8 @@ function todayHtml() {
   const rm = reorderModel();
   { if (S.salesQ && S.salesF) chase = salesModel().chase; if (S.hist) { quiet = quietCustomers(customerBase(S.hist.invoices, today)); reorders = rm.round.filter(r => r.state === 'due'); } }
   const gaps = md() ? {} : homeGaps(S.jobs, S.book?.people || []);   // Mandy's Today and Sales tiles (21 Oct)
-  const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet, won: wonWaiting(), ...gaps }), today };   // the tile counts only those still to ask
-  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList(), panel: md() }, { esc, fmt });
+  const m = { ...morning({ enquiries: S.enq || [], tasks, chase, reorders, quiet, won: wonWaiting(), ...gaps }), today, waiting: waitingModel() };   // the tile counts only those still to ask
+  return renderToday({ m, tasks, md: md(), me: S.me.email, staff: staffList(), panel: md() }, { esc, fmt, gbp });
 }
 const floorNotesHtml = () => office() ? floorNotesBox(newNotes(S.notes || [], true, S.jobs.filter(j => j.status !== 'cancelled')), S.jobs, { esc }) : '';
 
@@ -3313,7 +3319,7 @@ function render() {
   $('err').hidden = !S.error;
   if (S.error) $('err').innerHTML = `<b>The board could not load.</b> ${esc(S.error)} <button class="btn sm" type="button" data-reload>Try again</button>`;
   for (const [k] of TABS) $('v-' + k).hidden = S.tab !== k;
-  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), folds: S.folds, changes: md() ? salesMemory() : null, jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
+  ({ home: () => { if (office()) { ensureHistory(); ensureQuotes(); if (!S.salesF && !S.salesLoading) loadSalesData(); } $('v-home').innerHTML = renderHome({ digestBox: digestHtml(), todayBox: todayHtml(), notesBox: floorNotesHtml(), reorderBox: reordersHtml(true), folds: S.folds, changes: md() ? salesMemory() : null, waiting: waitingModel(), jobs: S.jobs, me: S.me, office: office(), md: md(), monthXero: monthXero(), editTarget: S.editTarget,
       debts: !S.xero || PREVIEW.on ? { off: true } : { list: debts(), err: S.debtErr, note: S.debtNote || '', chases: S.chases || [] }, breakeven: Number(S.settings?.monthly_breakeven) || null, target: Number(S.settings?.monthly_target) || null, today: todayIso(), view: S.homeView,
       wonQuotes: wonWaiting(), invFilter: S.invFilter || null,
       sentOut: (() => { const b = outBoard(S.outwork || [], S.jobs, todayIso()); return { out: b.out.length, late: b.late.length, ready: b.ready.length }; })(),
