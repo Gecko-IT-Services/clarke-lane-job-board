@@ -28,8 +28,9 @@ const find = id => jobs.find(j => j.id === id);
 const whoEmail = () => role === 'md' ? 'levi@clarke-lane.example' : role === 'office' ? 'mandy@clarke-lane.example' : role === 'accounts' ? 'accounts@clarke-lane.example' : 'workshop@clarke-lane.example';
 export const whoAmI = async () => ({ email: whoEmail(), name: role === 'md' ? 'Levi' : role === 'office' ? 'Mandy' : role === 'accounts' ? 'Keith Morell' : 'Shop Floor', role });
 const files = new Map(); let fileNo = 1; const blobs = new Map();   // drawings: kept in this page only
-export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, files: structuredClone(files.get(j.id) || []) }));
-export const uploadDrawing = async (job, file, onProgress = () => {}) => { const f = { id: fileNo++, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
+export const loadJobs = async () => structuredClone(jobs).map(hide).map(j => ({ ...j, lines: j.lines.map(l => ({ batch: '', ...l })), files: structuredClone((files.get(j.id) || []).filter(f => f.kind !== 'cert')), certs: structuredClone((files.get(j.id) || []).filter(f => f.kind === 'cert')) }));
+export const setLineBatch = async (lineId, batch) => { for (const j of jobs) for (const l of j.lines) if (l.id === lineId) l.batch = String(batch || '').trim(); };
+export const uploadDrawing = async (job, file, onProgress = () => {}, kind = 'drawing') => { const f = { id: fileNo++, kind, name: file.name, driveId: 'd', itemId: 'i' + fileNo, url: '#', size: file.size, mime: file.type, by: 'levi@example.com', at: new Date().toISOString() };
   blobs.set(f.itemId, file); files.set(job.id, [...(files.get(job.id) || []), f]); onProgress(1); return f; };
 export const drawingBlob = async f => blobs.get(f.itemId) || (f.itemId.startsWith('sp') ? (await fetch('/dev/example-drawing.pdf')).blob() : undefined);
 // Parts library, in this page only (made-up).

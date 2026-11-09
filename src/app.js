@@ -2360,11 +2360,13 @@ function renderDrawer() {
     </div>
     ${j.notes ? `<div class="panel"><div class="note">Order notes</div>${esc(j.notes)}</div>` : ''}
     ${notesPanel({ notes: S.notes || [], job: j, office: office(), name: noteName(), canRemove: office() }, { esc })}
-    <div class="panel"><h3>Lines</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Desp.</th><th>Outst.</th>${money ? '<th>Unit</th><th>Net</th>' : ''}</tr></thead><tbody>
-      ${j.lines.map(l => `<tr><td>${lineHtml(l, esc)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+    <div class="panel"><h3>Lines</h3><div style="overflow-x:auto"><table class="lines"><thead><tr><th>Part</th><th>Due</th><th>Ordered</th><th>Desp.</th><th>Outst.</th>${money ? '<th>Unit</th><th>Net</th>' : ''}<th>Cert / batch no.</th></tr></thead><tbody>
+      ${j.lines.map(l => `<tr><td>${lineHtml(l, esc)}${l.po ? ` <span class="note">PO ${esc(l.po)}</span>` : ''}</td><td>${fmt(l.due)}</td><td>${l.qty}</td><td>${sent(j, l)}</td><td><b>${left(j, l)}</b></td>${money ? `<td>${unit(l.price)}</td><td>${gbp(round2(l.qty * l.price), 2)}</td>` : ''}
+        <td><input type="text" class="batch" data-batch="${l.id}" value="${esc(l.batch || '')}" placeholder="e.g. H123456" maxlength="80" aria-label="Certificate or batch number for ${esc(lineLabel(l))}"${j.status === 'cancelled' ? ' disabled' : ''}></td></tr>`).join('')}</tbody></table></div>
+      <p class="note">Cert / batch no. (9 Nov): the mill certificate or batch number for each part, typed by the laser operator or the office. It prints on the front sheet, fills in the certificate of conformity, and stays on the order.</p>
       ${money ? `<p class="note" style="text-align:right">Net <b>${gbp(net, 2)}</b> · VAT 20% ${gbp(round2(net * 0.2), 2)} · Total <b>${gbp(round2(net * 1.2), 2)}</b></p>` : ''}
       ${deliveryRow(j)}</div>
-    ${drawingsPanel(j)}${certsPanel(j)}
+    ${drawingsPanel(j)}${certFilesPanel(j)}${certsPanel(j)}
     <div class="panel"><h3>Processes</h3><div class="pbtns">${procButtons(j)}</div>${outPanel(j)}</div>
     <div class="panel"><h3>Dispatched</h3>${j.despatches.length ? `<table class="lines"><thead><tr><th>Note</th><th>Date</th><th>Items</th><th>Emailed</th><th>Delivered</th>${money ? '<th>Net</th><th>Invoice</th>' : ''}<th></th></tr></thead><tbody>
       ${j.despatches.map(d => `<tr><td class="mono">${esc(d.dn)}</td><td>${fmt(d.date)}</td><td>${Object.values(d.lines).reduce((a, q) => a + q, 0)}</td>
@@ -2384,6 +2386,18 @@ function renderDrawer() {
 
 /* ---------- drawings: kept in SharePoint (Factory Jobs › Documents › Job drawings › SO), shown on every screen ---------- */
 const kb = n => n == null ? '' : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+/** The suppliers' certificates filed on this order (Mandy, 9 Nov: the Aalco certs sat in an email folder). Filed in SharePoint under Certificates › SO; the office drops them on, everyone can open them. */
+function certFilesPanel(j) {
+  const up = S.uploading?.jobId === j.id && S.uploading.kind === 'cert' ? `<p class="note">Uploading ${esc(S.uploading.name)} to SharePoint… ${Math.round(S.uploading.pct * 100)}%</p>` : '';
+  const certs = j.certs || [];
+  return `<div class="panel certfiles"${office() ? ` data-dropcert="${j.id}"` : ''}><h3>Certificates</h3>${certs.length ? `<ul class="files">${certs.map(f => `<li>
+      <a class="btn" href="${esc(f.url || '#')}" target="_blank" rel="noopener">${icon('doc')}${esc(f.name)}</a><span class="note">${kb(f.size)} · ${fmt(f.at.slice(0, 10))}</span>
+      ${office() ? `<button type="button" class="btn link sm" data-rmdrawing="${f.id}" title="Takes it off this order. The file stays in SharePoint.">Remove</button>` : ''}</li>`).join('')}</ul>`
+    : `<div class="note">${office() ? 'No certificates filed on this order yet. Drop the supplier\'s certificate here (from the email, or your desktop) and it is kept with the order.' : 'No certificates on this order.'}</div>`}${up}
+    ${office() ? `<label class="btn"${S.uploading ? ' aria-disabled="true"' : ''}>${icon('plus')}Attach certificates<input type="file" class="sr" data-attachcert="${j.id}" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.msg,.eml"${S.uploading ? ' disabled' : ''}></label>
+      <span class="note droptip">or drag the certificate here</span>
+      <p class="note">Saved in SharePoint: Factory Jobs › Documents › Certificates › ${esc(j.so)}. They are listed on the certificate of conformity for this order, and the cert / batch number typed on each line finds the order in Search.</p>` : ''}</div>`;
+}
 function drawingsPanel(j) {
   const up = S.uploading?.jobId === j.id ? `<p class="note">Uploading ${esc(S.uploading.name)} to SharePoint… ${Math.round(S.uploading.pct * 100)}%</p>` : '';
   return `<div class="panel drawings"${office() ? ` data-dropjob="${j.id}"` : ''}><h3>Drawings</h3>${j.files.length ? `<ul class="files">${j.files.map(f => `<li>
@@ -2395,19 +2409,28 @@ function drawingsPanel(j) {
       <span class="note droptip">or drag PDF drawings here</span>
       <p class="note">Saved in SharePoint: Factory Jobs › Documents › Job drawings › ${esc(j.so)}.</p>` : ''}</div>`;
 }
-async function attachDrawings(jobId, files) {
+async function attachDrawings(jobId, files, kind = 'drawing') {
   const j = job(jobId); if (!j || !files.length) return;
   for (const f of files) {
-    S.uploading = { jobId, name: f.name, pct: 0 }; render();
+    S.uploading = { jobId, name: f.name, pct: 0, kind }; render();
     try {
-      await data.uploadDrawing(j, f, p => { S.uploading.pct = p; render(); });
-      toast(`${f.name} attached to ${j.so}.`);
+      await data.uploadDrawing(j, f, p => { S.uploading.pct = p; render(); }, kind);
+      toast(kind === 'cert' ? `${f.name} filed on ${j.so} as a certificate.` : `${f.name} attached to ${j.so}.`);
     } catch (e) { toast(e.message, null, true); break; }
   }
   S.uploading = null; await reload();
+  if (kind !== 'drawing') return;   // a certificate says nothing about the processes
   // Read the PDFs just attached for the processes they suggest (the office checks and adds them).
   const pdf = [...files].reverse().find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
   if (pdf && office()) readDrawingFile(jobId, pdf.name, pdf);
+}
+/** The cert / batch number typed on a line (9 Nov), by the shop floor or the office. */
+async function setBatch(lineId, value) {
+  const j = S.jobs.find(x => x.lines.some(l => l.id === lineId)), l = j?.lines.find(x => x.id === lineId); if (!l) return;
+  const prev = l.batch || '', next = String(value || '').trim().slice(0, 80); if (next === prev) return;
+  l.batch = next;
+  try { await data.setLineBatch(lineId, next); toast(next ? `Cert / batch ${next} saved on ${lineLabel(l)} (${j.so}).` : `Cert / batch number cleared on ${lineLabel(l)}.`); }
+  catch (e) { l.batch = prev; render(); toast(e.message, null, true); }
 }
 
 /* ---------- parts library: a customer's part numbers and their drawings (Sales orders › Parts) ---------- */
@@ -2552,7 +2575,7 @@ async function keepForPart(jobId) {
 }
 
 /* Drag and drop drawings onto an order's Drawings section (Philip, 20 Oct), office only. */
-const dropZone = e => (office() && e.dataTransfer?.types?.includes('Files') ? e.target.closest?.('[data-dropjob],[data-droppart],[data-dropsugg]') : null);
+const dropZone = e => (office() && e.dataTransfer?.types?.includes('Files') ? e.target.closest?.('[data-dropjob],[data-dropcert],[data-droppart],[data-dropsugg]') : null);
 let dropOver = null;
 document.addEventListener('dragover', e => {
   const z = dropZone(e); if (!z) return;
@@ -2568,6 +2591,7 @@ document.addEventListener('drop', e => {
   const files = [...e.dataTransfer.files]; if (!files.length) return;
   if (z.dataset.droppart) return attachPartDrawing(+z.dataset.droppart, files[0]);
   if (z.dataset.dropsugg) return addSuggested(z.dataset.dropsugg, files[0]);
+  if (z.dataset.dropcert) return attachDrawings(+z.dataset.dropcert, files, 'cert');
   attachDrawings(+z.dataset.dropjob, files);
 });
 window.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files') && !dropZone(e)) e.preventDefault(); });
@@ -2862,7 +2886,7 @@ function docHtml(kind, jobId, despId) {
         : '<div class="jnote">Nothing to make on this sheet. Enter a quantity above it on screen.</div>'}
       ${!need.length ? '<div class="k" style="text-transform:none;letter-spacing:0">No processes ticked on this order.</div>' : ''}
       ${j.notes ? `<div class="jnote"><div class="k">Notes</div><div style="white-space:pre-line">${esc(j.notes)}</div></div>` : ''}
-      <div class="jnote jcert"><div class="k">Certificate batch no.</div></div>
+      <div class="jnote jcert"><div class="k">Certificate batch no.</div>${make.some(l => l.batch) ? `<div>${make.filter(l => l.batch).map(l => `<b class="mono">${esc(l.batch)}</b> ${esc((l.partNo || '').trim() || l.part)}`).join(' · ')}</div>` : ''}</div>
       <div class="foot">Printed ${fmtLong(todayIso())} from the job board. The job board is the live record: tick processes there too.</div>`;
   } else if (kind === 'pf' || kind === 'pfnew') {
     const p = kind === 'pf' ? S.pfs.find(x => x.id === despId) : null;
@@ -2907,6 +2931,7 @@ function docHtml(kind, jobId, despId) {
       <table class="coc"><thead><tr><th>Part no.</th><th>Description</th><th>Qty</th><th>Material</th><th>Cert / batch no.</th></tr></thead><tbody>
       ${rows.map(r => `<tr><td class="mono">${esc(r.partNo) || '—'}</td><td>${esc(r.desc)}</td><td>${r.qty}</td><td>${esc(r.material) || '—'}</td><td>${esc(r.batch) || '—'}</td></tr>`).join('')}</tbody></table>
       <p>${esc(COC_STATEMENT)}</p>
+      ${(j.certs || []).length ? `<p>Material certificates held on file for this order: ${j.certs.map(f => esc(f.name)).join(', ')}.</p>` : ''}
       <div class="kv"><span class="k">Country of origin</span><span><b>${esc(origin)}</b></span></div>
       <p style="color:var(--paper-mute)">Clarke Lane Engineering Ltd is certified to BS EN ISO 9001:2015, certificate no. GB2005189.</p>
       <div class="sign"><div>Signed for Clarke Lane Engineering Ltd</div><div>Name and position<b class="sv">${esc([by, pos].filter(Boolean).join(', '))}</b></div><div>Date<b class="sv">${fmtLong(date)}</b></div></div>
@@ -3781,6 +3806,8 @@ document.addEventListener('change', e => {
   if (e.target.dataset.suggattach) { const fl = e.target.files[0]; e.target.value = ''; if (fl) addSuggested(e.target.dataset.suggattach, fl); return; }
   if (e.target.dataset.partattach) { const fl = e.target.files[0]; e.target.value = ''; attachPartDrawing(+e.target.dataset.partattach, fl); return; }
   if (e.target.dataset.attach) { const fs = [...e.target.files]; e.target.value = ''; attachDrawings(+e.target.dataset.attach, fs); return; }
+  if (e.target.dataset.attachcert) { const fs = [...e.target.files]; e.target.value = ''; attachDrawings(+e.target.dataset.attachcert, fs, 'cert'); return; }
+  if (e.target.dataset.batch) { setBatch(+e.target.dataset.batch, e.target.value); return; }
   if (e.target.dataset.setdue) { setDue(+e.target.dataset.setdue, e.target.dataset.from, e.target.value); return; }
   if (e.target.dataset.mapkind) { S.mapShow[e.target.dataset.mapkind] = e.target.checked; render(); }
   if (e.target.id === 'mapmiles') { S.mapMiles = +e.target.value; render(); }

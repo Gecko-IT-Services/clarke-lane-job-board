@@ -37,8 +37,8 @@ export function searchAll(q, src, { office = false, per = 6 } = {}) {
   for (const j of src.jobs || []) {
     if (j.preview) continue;
     // A line's Part no. box is searched too (22 Oct), and the result reads "BRK-1001 · Bracket".
-    const line = (j.lines || []).find(l => matches(q, l.partNo, l.part, l.po));
-    if (matches(q, j.so, j.customer, j.po, j.quote, j.contactName, ...(j.lines || []).map(l => `${l.partNo || ''} ${l.part} ${l.po || ''}`)))
+    const line = (j.lines || []).find(l => matches(q, l.partNo, l.part, l.po, l.batch));   // a cert / batch number finds its order too (9 Nov)
+    if (matches(q, j.so, j.customer, j.po, j.quote, j.contactName, ...(j.lines || []).map(l => `${l.partNo || ''} ${l.part} ${l.po || ''} ${l.batch || ''}`)))
       add('job', { at: j.ordered || j.createdAt || '', id: j.id, title: `${j.so} · ${j.customer}`, sub: [j.po && `PO ${j.po}`, line ? lineLabel(line) : j.lines?.[0] && lineLabel(j.lines[0]), j.status === 'cancelled' && 'cancelled'].filter(Boolean).join(' · '), key: normName(j.customer), name: j.customer });
     for (const d of j.despatches || []) if (d.dn && matches(q, d.dn)) add('dn', { at: d.date || '', id: j.id, title: `${d.dn} · ${j.customer}`, sub: `for ${j.so}${d.date ? `, ${d.date}` : ''}` });
   }
