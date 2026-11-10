@@ -67,11 +67,11 @@ export async function loadJobs({ office }) {
     contactName: j.contact_name, contactEmail: j.contact_email, po: j.customer_po,
     ordered: j.ordered_on, due: j.due_date, notes: j.notes, address: j.delivery_address, status: j.status,
     createdBy: j.created_by, createdAt: j.created_at, ackEmailedAt: j.ack_emailed_at, priority: j.priority ?? null,
-    lines: [], procs: {}, despatches: [], cancelledDespatches: [], files: [],
+    lines: [], procs: {}, despatches: [], cancelledDespatches: [], files: [], certs: [],   // certs (9 Nov): the suppliers' certificates filed on the order
   }]));
   for (const l of lines.data) byJob.get(l.job_id)?.lines.push(
     { id: l.id, lineNo: l.line_no, partNo: l.part_no || '', part: l.part, qty: l.qty, due: l.due_date, po: l.customer_po || '', price: office ? (price.get(l.id) ?? null) : null,
-      procs: l.processes || [] });   // [] before 22 Oct (or before the migration): every process on the order, read with lineProcs
+      procs: l.processes || [], batch: l.cert_batch || '' });   // batch (9 Nov): the cert / batch number typed on the line   // [] before 22 Oct (or before the migration): every process on the order, read with lineProcs
   for (const p of procs.data) { const j = byJob.get(p.job_id); if (j) j.procs[p.process] = { done: !!p.done_at, by: p.done_by, at: p.done_at, place: p.place ?? null }; }
   const dById = new Map();
   for (const d of desps.data) {
@@ -88,8 +88,8 @@ export async function loadJobs({ office }) {
   }
   for (const dl of dlines.data) { const d = dById.get(dl.despatch_id); if (d) d.lines[dl.job_line_id] = dl.qty; }
   // Drawings: a missing table (before the migration) just means none yet.
-  for (const f of files.data || []) byJob.get(f.job_id)?.files.push({ id: f.id, name: f.name, driveId: f.drive_id, itemId: f.item_id,
-    url: f.web_url, size: f.size, mime: f.mime, by: f.uploaded_by, at: f.uploaded_at, partFileId: f.part_file_id ?? null });
+  for (const f of files.data || []) { const j = byJob.get(f.job_id); if (j) (f.kind === 'cert' ? j.certs : j.files).push({ id: f.id, kind: f.kind || 'drawing', name: f.name, driveId: f.drive_id, itemId: f.item_id,
+    url: f.web_url, size: f.size, mime: f.mime, by: f.uploaded_by, at: f.uploaded_at, partFileId: f.part_file_id ?? null }); }
   return [...byJob.values()];
 }
 
@@ -283,10 +283,11 @@ async function putFactoryFile(folders, file, onProgress) {
   }
   return { drive, item };
 }
-export async function uploadDrawing(job, file, onProgress = () => {}) {
-  const { drive, item } = await putFactoryFile(['Job drawings', job.so], file, onProgress);
+/** A drawing (Job drawings › SO) or, kind 'cert' (9 Nov), a supplier's certificate (Certificates › SO), uploaded to SharePoint and linked to the job. */
+export async function uploadDrawing(job, file, onProgress = () => {}, kind = 'drawing') {
+  const { drive, item } = await putFactoryFile([kind === 'cert' ? 'Certificates' : 'Job drawings', job.so], file, onProgress);
   const sb = await getSupabase();
-  const { error } = await sb.from('job_files').insert({ job_id: job.id, name: item.name, drive_id: drive, item_id: item.id,
+  const { error } = await sb.from('job_files').insert({ job_id: job.id, kind, name: item.name, drive_id: drive, item_id: item.id,
     web_url: item.webUrl || '', size: item.size ?? file.size, mime: item.file?.mimeType || file.type || '' });
   if (error) fail(`${item.name} is in SharePoint but was not linked to ${job.so}`, error);
   return item;
@@ -354,7 +355,13 @@ export async function markJobFileFromPart(jobFileId, partFileId) {
 export async function drawingBlob(f) {
   return (await graphRaw(`/drives/${f.driveId}/items/${f.itemId}/content`)).blob();
 }
-/** Takes the drawing off the job. The file stays in SharePoint. */
+/** The cert / batch number on a line (9 Nov): typed by the shop floor or the office; only that column changes. */
+export async function setLineBatch(lineId, batch) {
+  const sb = await getSupabase();
+  const { error } = await sb.rpc('set_line_batch', { p_line_id: lineId, p_batch: String(batch || '') });
+  if (error) fail('The certificate number was not saved', error);
+}
+/** Takes the drawing (or certificate) off the job. The file stays in SharePoint. */
 export async function removeDrawing(id) {
   const sb = await getSupabase();
   const { error, count } = await sb.from('job_files').delete({ count: 'exact' }).eq('id', id);

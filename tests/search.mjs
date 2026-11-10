@@ -47,6 +47,8 @@ assert.ok(!JSON.stringify(searchAll('9781', src, {})).includes('12.5'), 'never a
 {
   const r = searchAll('brk-1001', { jobs: [{ id: 7, so: 'SO-9790', customer: 'Sample Works Ltd', lines: [{ partNo: 'BRK-1001', part: 'Mounting bracket' }], despatches: [] }] }, {});
   assert.equal(r[0].items[0].sub, 'BRK-1001 · Mounting bracket');
+  const rb = searchAll('h123456', { jobs: [{ id: 7, so: 'SO-9790', customer: 'Sample Works Ltd', lines: [{ partNo: 'BRK-1001', part: 'Mounting bracket', batch: 'H123456' }], despatches: [] }] }, {});
+  assert.equal(rb[0]?.items[0]?.title, 'SO-9790 · Sample Works Ltd', 'a cert / batch number finds its order (9 Nov)');
 }
 
 // Best group first: an exact code beats a word inside another group.

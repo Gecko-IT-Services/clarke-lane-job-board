@@ -22,7 +22,7 @@ export function cocRows(job, despatch, saved = {}) {
   return (job.lines || []).filter(l => (despatch.lines?.[l.id] || 0) > 0).map(l => {
     const s = saved[l.id] || {};
     return { lineId: l.id, partNo: String(l.partNo || '').trim(), desc: String(l.part || '').trim(), qty: despatch.lines[l.id],
-      material: s.material ?? gradesIn(l.part).join(', '), batch: s.batch ?? '' };
+      material: s.material ?? gradesIn(l.part).join(', '), batch: s.batch ?? l.batch ?? '' };   // the number typed on the line by the shop floor (9 Nov) unless the office typed one here
   });
 }
 

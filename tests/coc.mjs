@@ -15,6 +15,8 @@ assert.deepEqual(cocRows(job, d), [
 const saved = { 1: { material: 'S275JR', batch: 'H123456' }, 2: { material: '', batch: 'B-77' } };
 assert.deepEqual(cocRows(job, d, saved).map(r => [r.material, r.batch]), [['S275JR', 'H123456'], ['', 'B-77']], 'what was typed wins, even a cleared material');
 assert.deepEqual(cocRows(job, { id: 8, lines: {} }), [], 'nothing went out: no lines');
+assert.deepEqual(cocRows({ ...job, lines: job.lines.map(l => (l.id === 1 ? { ...l, batch: 'H555' } : l)) }, d).map(r => r.batch), ['H555', ''], 'the number the laser operator typed on the line fills the certificate (9 Nov)');
+assert.equal(cocRows({ ...job, lines: job.lines.map(l => (l.id === 1 ? { ...l, batch: 'H555' } : l)) }, d, { 1: { batch: 'H999' } })[0].batch, 'H999', 'what the office typed on the certificate still wins');
 
 // — When one is wanted. —
 assert.ok(!cocNeeded(job, d, new Set(), new Set()));
