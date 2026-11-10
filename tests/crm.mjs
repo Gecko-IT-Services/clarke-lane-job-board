@@ -128,3 +128,27 @@ console.log('crm sorting: ok');
   assert.equal(waitingOnReply({ enquiries: [enquiries[4]], quotes, now: at }).unpriced, 1, 'no history and no win stats: counted, not priced');
   console.log('crm waiting on a reply: ok');
 }
+
+// Faster replies (10 Nov): the acknowledgement, the quick no, and repeat parts quoted from the last price.
+{
+  const { promiseDate, ackEmail, declineEmail, repeatPartsIn, repeatQuoteEmail } = await import('../src/core/crm.js');
+  assert.equal(promiseDate('2026-11-12', 2), '2026-11-16', 'Thursday plus two working days is Monday');
+  assert.equal(promiseDate('2026-11-10', 1), '2026-11-11');
+  const e = { id: 1, kind: 'enquiry', status: 'new', person: 'Jo Bloggs', fromName: 'Jo Bloggs', wants: '50 brackets', hasDrawings: true, customerKey: 'examplecustomer', subject: 'Brackets', summary: 'Asks for 50 of BRK-1001 and 20 of the CAB-2040 cabinets.' };
+  const a = ackEmail(e, { today: '2026-11-10' });
+  assert.equal(a.by, '2026-11-12'); assert.equal(a.greeting, 'Hi Jo,');
+  assert.ok(a.paragraphs[0].includes('for 50 brackets, and for the drawings') && a.paragraphs[0].includes('Thursday 12 November'));
+  assert.equal(declineEmail({ fromName: '' }).greeting, 'Hello,');
+  const jobs = [{ customer: 'Example Customer Ltd', status: 'open', ordered: '2025-09-01', so: 'SO-9700', lines: [{ partNo: 'BRK-1001', part: 'Bracket 3mm S275', price: 12.4 }] },
+    { customer: 'Example Customer Ltd', status: 'open', ordered: '2026-10-01', so: 'SO-9790', lines: [{ partNo: 'CAB-2040', part: 'Cabinet', price: 310 }, { partNo: 'XX-1', part: 'Not mentioned', price: 5 }] },
+    { customer: 'Someone Else Ltd', status: 'open', ordered: '2026-10-20', so: 'SO-9799', lines: [{ partNo: 'BRK-1001', part: 'Their bracket', price: 99 }] }];
+  const rp = repeatPartsIn(e, { jobs, parts: [{ customerKey: 'examplecustomer', partNo: 'SH-9', description: 'Shim' }], hist: [{ customer: 'Example Customer Ltd', net: 100, date: '2026-06-01', number: 'INV-1', lines: [{ code: 'BRK-1001', description: 'Bracket', qty: 10, amount: 130 }] }], today: '2026-11-10' });
+  assert.deepEqual(rp.map(p => [p.partNo, p.price, p.date, p.so, p.stale, p.suggested]), [['BRK-1001', 13, '2026-06-01', 'INV-1', false, 13], ['CAB-2040', 310, '2026-10-01', 'SO-9790', false, 310]],
+    'only this customer\'s parts named in the text; the latest price wins (Xero in June over the board in 2025); the shim is not mentioned');
+  assert.equal(repeatPartsIn({ ...e, summary: 'BRK-1001 again please' }, { jobs: [jobs[0]], today: '2026-11-10' })[0].suggested, 13.02, 'over a year old: 5% suggested');
+  assert.deepEqual(repeatPartsIn({ ...e, customerKey: '' }, { jobs, today: '2026-11-10' }), [], 'a new customer has no repeat parts');
+  const q = repeatQuoteEmail(e, [{ partNo: 'BRK-1001', description: 'Bracket', qty: 50, price: 13 }, { partNo: 'CAB-2040', description: 'Cabinet', qty: 0, price: 310 }], { from: 'Mandy' });
+  assert.deepEqual([q.subject, q.total, q.lines], ['Quote: BRK-1001', 650, 1], 'a line with no quantity is left off');
+  assert.ok(q.html.includes('£13.00') && q.html.includes('10 working days') && q.html.includes('Mandy'));
+  console.log('crm faster replies: ok');
+}
