@@ -3309,15 +3309,18 @@ function snapshotInputs() {
   keptFocus = keepInputs && a?.id && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.closest('#views, #drawer')
     ? { id: a.id, start: a.selectionStart, end: a.selectionEnd } : null;
   if (keepInputs) document.querySelectorAll(KEPT_FIELDS).forEach(el => {
-    const k = el.id || (el.name ? el.name + '=' + el.value : '');
+    const k = keptKey(el);
     if (k && el.type !== 'search') m.set(k, el.type === 'checkbox' ? el.checked : el.value);
   });
   keepInputs = true;
   return m;
 }
+/** What a kept field is known by across a redraw: its id, else name=value, with the line for a per-line box (Mandy, 10 Nov:
+ *  the process boxes on every line shared one key, so a redraw made every line's ticks the same as one line's). */
+const keptKey = el => el.id || (el.name ? `${el.name}=${el.value}${el.dataset.line != null ? '@' + el.dataset.line : ''}` : '');
 function restoreInputs(m) {
   document.querySelectorAll(KEPT_FIELDS).forEach(el => {
-    const k = el.id || (el.name ? el.name + '=' + el.value : '');
+    const k = keptKey(el);
     if (!m.has(k)) return;
     if (el.type === 'checkbox') el.checked = m.get(k); else el.value = m.get(k);
   });
@@ -3779,6 +3782,7 @@ document.addEventListener('change', e => {
     const p = e.target.value, col = [...document.querySelectorAll('input[name=of-lp]')].filter(i => i.value === p);
     if (e.target.dataset.allp) col.forEach(i => { i.checked = e.target.checked; });
     else { const all = [...document.querySelectorAll('input[data-allp]')].find(i => i.value === p); if (all) all.checked = col.every(i => i.checked); }
+    collectForm();   // so a redraw (a tick from the shop floor, Xero finishing a read) draws the ticks as they are now (10 Nov)
   }
   if (/^of-(part|pno)\d+$/.test(e.target.id) && S.form) {   // the Processes table names the line as it is typed
     const i = +e.target.id.replace(/\D+/g, ''), cell = $('of-plbl' + i);
