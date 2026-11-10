@@ -233,3 +233,74 @@ export function waitingOnReply({ enquiries = [], quotes = [], chase = [], base =
     estimate: sum(est.map(i => i.estimate)), estimateCount: est.length, unpriced: est.filter(i => i.estimate == null).length,
     late: items.some(i => i.kind !== 'chase' && i.hours > 48), oldestHours: Math.max(0, ...items.filter(i => i.kind !== 'chase').map(i => i.hours)) };
 }
+
+/* ---------- Faster replies (Philip, 10 Nov: Levi has no time, and the first quote wins) ---------- */
+const r2c = n => Math.round(n * 100) / 100;
+const firstName = e => String(e.person || e.fromName || '').trim().split(/\s+/)[0] || '';
+/** The next working day `days` working days on from `fromIso` (weekends skipped): when the price is promised for. */
+export function promiseDate(fromIso, days = 2) {
+  const d = new Date(String(fromIso).slice(0, 10) + 'T12:00:00Z'); let n = 0;
+  while (n < days) { d.setUTCDate(d.getUTCDate() + 1); if (d.getUTCDay() % 6) n++; }
+  return d.toISOString().slice(0, 10);
+}
+const longDay = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+/**
+ * The same-day acknowledgement (no AI): we have it, here is when the price is coming. { subject, greeting, paragraphs, by }.
+ * by: the promised day (two working days on unless given), so the customer knows and the office has a date to keep.
+ */
+export function ackEmail(e, { today, by = null } = {}) {
+  const day = by || promiseDate(today, 2), f = firstName(e);
+  return { subject: `Your enquiry${e.wants ? `: ${String(e.wants).slice(0, 60)}` : ''}`, greeting: f ? `Hi ${f},` : 'Hello,', by: day,
+    paragraphs: [`Thank you for your enquiry${e.wants ? ` for ${e.wants}` : ''}${e.hasDrawings ? ', and for the drawings' : ''}. We have everything we need to price it and will come back to you by ${longDay(day)}.`,
+      'If anything changes in the meantime, or it is more urgent than that, just reply to this email.'] };
+}
+/** A quick, kind no (no AI), for the enquiries that are not for us: it frees the time and the customer remembers it well. */
+export function declineEmail(e, { reason = '' } = {}) {
+  const f = firstName(e);
+  return { subject: `Your enquiry${e.wants ? `: ${String(e.wants).slice(0, 60)}` : ''}`, greeting: f ? `Hi ${f},` : 'Hello,',
+    paragraphs: [`Thank you for thinking of us${e.wants ? ` for ${e.wants}` : ''}. Having looked at it, this is not one we can help with${reason ? ` (${reason})` : ''}, and rather than hold you up we wanted to say so straight away.`,
+      'We would be glad to quote for sheet metal work in future: laser cutting, folding, welding, powder coating and the finishing that goes with them.'] };
+}
+/**
+ * Repeat parts named in an enquiry (10 Nov: Mandy can quote these herself): part numbers this customer has had before
+ * (the board's orders, the parts library, Xero's invoice lines) that appear in the enquiry's text, each with the last
+ * price charged, when and on what, and a suggested price (the last price, plus 5% when it is over a year old).
+ * e: the enquiry (customerKey, wants, summary, subject). Returns [] for a new customer or when nothing matches.
+ */
+export function repeatPartsIn(e, { jobs = [], parts = [], hist = [], today }) {
+  const key = e.customerKey; if (!key) return [];
+  const text = ` ${[e.wants, e.summary, e.subject].filter(Boolean).join(' ').toLowerCase()} `;
+  const known = new Map();   // part no (lower) → { partNo, description, price, date, so }
+  const note = (partNo, description, price, date, so) => {
+    const p = String(partNo || '').trim(); if (p.length < 3 || !/\d/.test(p)) return;
+    const k = p.toLowerCase(), was = known.get(k);
+    if (!was || (date && date > (was.date || '') && price != null)) known.set(k, { partNo: p, description: description || was?.description || '', price: price ?? was?.price ?? null, date: date || was?.date || '', so: so || was?.so || '' });
+  };
+  for (const j of jobs) if (normName(j.customer) === key && j.status !== 'cancelled') for (const l of j.lines || []) note(l.partNo, l.part, l.price, j.ordered || '', j.so);
+  for (const p of parts) if (p.customerKey === key) note(p.partNo, p.description, null, '', '');
+  for (const x of hist) if (x.customer && normName(x.customer) === key && x.net > 0) for (const l of x.lines || []) if (l.code && l.qty > 0) note(l.code, String(l.description || '').split('\n')[0], r2c(l.amount / l.qty), x.date, x.number || '');
+  const t = dayNo(today);
+  return [...known.values()].filter(p => text.includes(` ${p.partNo.toLowerCase()} `) || text.includes(p.partNo.toLowerCase()))
+    .map(p => { const stale = p.price != null && p.date && t - dayNo(p.date) > 365;
+      return { ...p, stale, suggested: p.price == null ? null : r2c(stale ? p.price * 1.05 : p.price) }; })
+    .sort((a, b) => a.partNo.localeCompare(b.partNo, 'en', { numeric: true }));
+}
+/**
+ * The quote email for repeat parts (no AI): a table of part, description, quantity and unit price, the lead time and
+ * how long it holds. rows: [{ partNo, description, qty, price }] with qty and price as typed. Prices are what Mandy typed.
+ */
+export function repeatQuoteEmail(e, rows, { from, leadDays = 10, validDays = 30, company = 'Clarke Lane Engineering Ltd' } = {}) {
+  const f = firstName(e), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const money = n => `£${Number(n).toFixed(2)}`;
+  const lines = rows.filter(r => r.qty > 0 && r.price != null);
+  const total = r2c(lines.reduce((a, r) => a + r.qty * r.price, 0));
+  const table = `<table style="border-collapse:collapse;margin:8px 0 12px"><thead><tr>${['Part', 'Description', 'Qty', 'Unit price', 'Total'].map(h => `<th style="text-align:left;padding:4px 10px 4px 0;border-bottom:1px solid #ccc">${h}</th>`).join('')}</tr></thead><tbody>
+    ${lines.map(r => `<tr><td style="padding:4px 10px 4px 0">${esc(r.partNo)}</td><td style="padding:4px 10px 4px 0">${esc(r.description)}</td><td style="padding:4px 10px 4px 0">${r.qty}</td><td style="padding:4px 10px 4px 0">${money(r.price)}</td><td style="padding:4px 10px 4px 0">${money(r2c(r.qty * r.price))}</td></tr>`).join('')}
+    <tr><td colspan="4" style="padding:6px 10px 4px 0;border-top:1px solid #ccc"><b>Total, net of VAT</b></td><td style="padding:6px 0 4px;border-top:1px solid #ccc"><b>${money(total)}</b></td></tr></tbody></table>`;
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5">
+<p>${f ? `Hi ${esc(f)},` : 'Hello,'}</p>
+<p>Thank you for your enquiry. As these are parts we have made for you before, here is our price:</p>${table}
+<p>Lead time ${leadDays} working days from order. Prices are net of VAT and hold for ${validDays} days. To go ahead, just reply with your order number.</p>
+<p>Kind regards,<br>${esc(from)}<br>${esc(company)}</p></div>`;
+  return { subject: `Quote: ${lines.map(r => r.partNo).join(', ')}`, html, total, lines: lines.length };
+}

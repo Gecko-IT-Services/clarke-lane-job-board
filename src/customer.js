@@ -70,8 +70,8 @@ export function taskForm(f, { staff, customers }, h) {
  * the last 90 days as four figures, the new enquiries first with how long they have waited, customers writing about
  * their orders as their own short list, and the mailbox setting tucked away.
  */
-export function renderEnquiries({ list, funnel, turnaround = null, state, mailbox, open, busy, reply, checkedAt, settings, packBusy = null }, h) {
-  const { esc, fmt, fmtTime } = h;
+export function renderEnquiries({ list, funnel, turnaround = null, state, mailbox, open, busy, reply, checkedAt, settings, packBusy = null, repeat = null }, h) {
+  const { esc, fmt, fmtTime, gbp } = h;
   const st = { new: '<span class="chip late">Not answered</span>', replied: '<span class="chip soon">Replied</span>', quoted: '<span class="chip soon">Quoted</span>', won: '<span class="chip ok">Won</span>',
     lost: '<span class="chip">Lost</span>', ignored: '<span class="chip">Not an enquiry</span>' };   // 'ignored' is Done for a customer's email
   const head = state === 'consent' ? `<div class="warn">Reading ${esc(mailbox)} needs a one-off Microsoft 365 permission (Mail.Read.Shared) that is not approved yet. Gecko IT approves it once; until then this list stays empty.</div>`
@@ -95,6 +95,19 @@ export function renderEnquiries({ list, funnel, turnaround = null, state, mailbo
         ${k.questions?.length ? `<button class="btn sm" type="button" data-enqask="${e.id}" ${busy === e.id ? 'disabled' : ''}>${icon('mail')}Ask these questions</button>` : ''}
         <button class="btn sm" type="button" data-packread="${e.id}" ${reading ? 'disabled' : ''}>${reading ? 'Reading the drawings…' : 'Read again'}</button></div></div>`;
   };
+  // Repeat parts (10 Nov): parts this customer has had before, named in the enquiry, with the last price; Mandy quotes them herself.
+  const repeatBox = e => {
+    if (open !== e.id || e.kind !== 'enquiry' || !['new', 'replied'].includes(e.status) || !repeat?.length || !gbp) return '';
+    return `<div class="repeatbox"><h4>${icon('repeat')}Repeat parts: quote from the last price</h4>
+      <p class="note">These part numbers are in the enquiry and this customer has had them from us before. Check the quantity and price, then <b>Draft the quote</b>: it goes in your Outlook Drafts and the enquiry is marked Quoted. ${repeat.some(r => r.stale) ? 'A price over a year old has 5% added for you to keep or change.' : ''}</p>
+      <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th style="text-align:left">Description</th><th style="text-align:left">Last charged</th><th>Qty</th><th>Unit price £</th></tr></thead><tbody>
+      ${repeat.map((r, i) => `<tr><td class="mono" style="text-align:left">${esc(r.partNo)}</td><td style="text-align:left">${esc(r.description)}</td>
+        <td style="text-align:left">${r.price != null ? `${gbp(r.price, 2)}<small> · ${esc(fmt(r.date))}${r.so ? ' · ' + esc(r.so) : ''}${r.stale ? ' · over a year ago' : ''}</small>` : '<span class="note">no price on record</span>'}</td>
+        <td><input type="number" min="0" step="1" data-rqty="${i}" placeholder="qty" style="width:80px" aria-label="Quantity of ${esc(r.partNo)}"></td>
+        <td><input type="number" min="0" step="0.01" data-rprice="${i}" value="${r.suggested != null ? r.suggested.toFixed(2) : ''}" style="width:110px" aria-label="Unit price for ${esc(r.partNo)}"></td></tr>`).join('')}</tbody></table></div>
+      <div class="actions"><label class="sinline">Lead time <input type="number" min="1" step="1" id="rlead" value="10" style="width:64px"> working days</label>
+        <button class="btn sm pri" type="button" data-enqrepeat="${e.id}">${icon('mail')}Draft the quote</button></div></div>`;
+  };
   const row = e => `<tr class="${open === e.id ? 'open' : ''}${e.status === 'new' ? ' waiting' : ''}" data-enqopen="${e.id}" tabindex="0"><td class="ewait">${e.status === 'new' ? `<b>${esc(waited(e.waitHours))}</b><small>waiting</small>` : `${esc(fmt(e.receivedAt.slice(0, 10)))}`}</td>
       <td><b>${esc(e.company || e.fromName || e.fromEmail)}</b><small>${esc(e.person || e.fromName)}${e.phone ? ' · ' + esc(e.phone) : ''}</small></td>
       <td>${esc(e.wants || e.subject)}<div class="echips">${e.hasDrawings ? '<span class="chip ok">drawings</span>' : ''}${e.quotePack ? '<span class="chip qp">quote pack</span>' : ''}${e.customerKey ? '<span class="chip">customer</span>' : '<span class="chip soon">new customer</span>'}</div></td><td class="est">${st[e.status] || ''}</td></tr>
@@ -103,8 +116,11 @@ export function renderEnquiries({ list, funnel, turnaround = null, state, mailbo
       ${reply?.id === e.id && reply.draft ? `<div class="saibox"><label class="fl">Subject<input type="text" id="er-subj" value="${esc(reply.draft.subject)}"></label>
           <label class="fl">Reply (edit anything)<textarea id="er-body" rows="7">${esc([reply.draft.greeting, ...reply.draft.paragraphs].join('\n\n'))}</textarea></label>
           <div class="actions"><button class="btn pri sm" type="button" data-enqsend="${e.id}">${icon('mail')}Put in my Outlook Drafts</button><button class="btn sm" type="button" data-enqreply="${e.id}">Write it again</button></div></div>` : ''}
+      ${repeatBox(e)}
       <div class="actions">${e.webLink ? `<a class="btn sm" href="${esc(e.webLink)}" target="_blank" rel="noopener">Open the email</a>` : ''}
-        <button class="btn sm pri" type="button" data-enqreply="${e.id}" ${busy === e.id ? 'disabled' : ''}>${busy === e.id ? 'Writing…' : 'Draft a reply with AI'}</button>
+        ${e.kind === 'enquiry' && e.status === 'new' ? `<button class="btn sm pri" type="button" data-enqack="${e.id}" title="A ready-made acknowledgement in your Outlook Drafts: we have it, and the day the price is coming. No AI.">${icon('mail')}Acknowledge</button>` : ''}
+        <button class="btn sm${e.kind === 'enquiry' && e.status === 'new' ? '' : ' pri'}" type="button" data-enqreply="${e.id}" ${busy === e.id ? 'disabled' : ''}>${busy === e.id ? 'Writing…' : 'Draft a reply with AI'}</button>
+        ${e.kind === 'enquiry' && ['new', 'replied'].includes(e.status) ? `<button class="btn sm" type="button" data-enqdecline="${e.id}" title="A polite, quick no in your Outlook Drafts, and the enquiry marked lost">Not for us</button>` : ''}
         <button class="btn sm" type="button" data-taskadd="enquiry:${e.id}">Add a task</button>
         <a class="btn sm" href="${CONFIG.QUOTE_CALCULATOR}" target="_blank" rel="noopener" title="Levi's quote calculator (the Power App), in a new tab">Open the quote calculator</a>
         ${e.customerKey ? `<button class="btn sm" type="button" data-custpage="${esc(e.customerKey)}">Customer page</button>` : `<button class="btn sm" type="button" data-enqnewcust="${e.id}">Add as a customer</button>`}

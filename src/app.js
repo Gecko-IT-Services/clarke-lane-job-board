@@ -39,7 +39,7 @@ import { customerFolders, quoteHistory, foundDrawings, drawingsFor, gradesOnJob,
 import { CONFIG } from './config.js';
 import { searchAll } from './core/search.js';
 import { newDispatches } from './core/mood.js';
-import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf, quoteTurnaround, waitingOnReply } from './core/crm.js';
+import { mailTerms, customerIndex, whoIs, sortEmail, emailCustomer, plainText, worthReading, enquiryList, enquiryFunnel, taskGroups, reordersDue, couldBuyMore, timeline, trendWords, morning, domainOf, quoteTurnaround, waitingOnReply, ackEmail, declineEmail, repeatPartsIn, repeatQuoteEmail } from './core/crm.js';
 import { linkEmail, emailActions, sortEmails, emailTaskTitle, needTopic, cleanTopic, ASKED, customerQuestion } from './core/inbox.js';
 import { winStats, pipeline, chaseList, monthGap, customerBase, quietCustomers, customerFacts, quoteChaseEmail, aiEmailHtml, quoteValue, priceReview, spendChanges, PRICE_REVIEWED, quoteChaseFacts } from './core/sales.js';
 import { rfqRef, lineText, checkRfq, rfqEmail } from './core/metal.js';
@@ -1260,8 +1260,10 @@ function enquiriesHtml() {
     const x = { ...e, jobSo: e.jobId != null ? S.jobs.find(j => j.id === e.jobId)?.so || '' : '', quoteNo: e.quoteSpId != null ? (S.salesQ || []).find(q => q.spId === e.quoteSpId)?.quoteNo || '' : '' };
     return { ...x, actions: emailActions(x, { md: md() }) };
   });
-  return renderEnquiries({ list: [...list.filter(e => e.kind !== 'customer'), ...sortEmails(list.filter(e => e.kind === 'customer'))], funnel: enquiryFunnel(S.enq || [], todayIso()), turnaround: quoteTurnaround(S.enq || [], S.salesQ || [], new Date().toISOString()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
-    open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply, checkedAt: S.enqCheckedAt, settings: S.enqSettings, packBusy: S.packBusy }, { esc, fmt, fmtTime });
+  const openE = (S.enq || []).find(e => e.id === S.enqOpen);   // repeat parts (10 Nov) for the open enquiry only
+  const repeat = openE && openE.kind === 'enquiry' ? repeatPartsIn(openE, { jobs: S.jobs, parts: S.parts || [], hist: S.hist?.invoices || [], today: todayIso() }) : null;
+  return renderEnquiries({ list: [...list.filter(e => e.kind !== 'customer'), ...sortEmails(list.filter(e => e.kind === 'customer'))], funnel: enquiryFunnel(S.enq || [], todayIso()), repeat, turnaround: quoteTurnaround(S.enq || [], S.salesQ || [], new Date().toISOString()), state: S.enqState || 'reading', mailbox: enquiryMailbox(),
+    open: S.enqOpen, busy: S.enqBusy, reply: S.enqReply, checkedAt: S.enqCheckedAt, settings: S.enqSettings, packBusy: S.packBusy }, { esc, fmt, fmtTime, gbp });
 }
 /** The AI reply to an enquiry; questions (from the quote pack's Ask these questions) are what the reply must ask. */
 async function replyEnquiry(id, questions = []) {
@@ -1369,6 +1371,55 @@ async function sendEnquiryReply(id) {
     if (e.customerKey) data.addSalesAction({ customer: e.company || e.fromName, kind: 'email', note: e.kind === 'customer' ? `Reply to their email: ${e.summary || e.subject}` : `Reply to enquiry: ${e.wants || e.subject}` }).catch(() => {});
     S.enqReply = null; S.enq = await data.loadEnquiries();
     toast(`The reply to ${e.fromName || e.fromEmail} is in your Outlook Drafts. Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (x) { toast(mailErr(x), null, true); }
+  S.busy = false; render();
+}
+/* ---------- Faster replies (Philip, 10 Nov): acknowledge the same day, say no quickly, quote repeat parts from the last price ---------- */
+/** The acknowledgement: a ready-made email in Outlook Drafts (no AI) and the enquiry marked replied. */
+async function acknowledgeEnquiry(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e || S.busy) return; S.busy = true;
+  try {
+    const a = ackEmail(e, { today: todayIso() });
+    const link = await data.draftEmail({ to: e.fromEmail, subject: a.subject, html: aiEmailHtml({ greeting: a.greeting, paragraphs: a.paragraphs }, S.me.name) });
+    await data.setEnquiry(id, { status: 'replied', by: S.me.email });
+    if (e.customerKey) data.addSalesAction({ customer: e.company || e.fromName, kind: 'email', note: `Acknowledged their enquiry: ${e.wants || e.subject}; price promised by ${fmt(a.by)}` }).catch(() => {});
+    S.enq = await data.loadEnquiries();
+    toast(`The acknowledgement to ${e.fromName || e.fromEmail} is in your Outlook Drafts, promising a price by ${fmt(a.by)}. Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (x) { toast(mailErr(x), null, true); }
+  S.busy = false; render();
+}
+/** Not for us: a polite, quick no in Outlook Drafts (no AI) and the enquiry marked lost. */
+async function declineEnquiry(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e || S.busy) return; S.busy = true;
+  try {
+    const d = declineEmail(e);
+    const link = await data.draftEmail({ to: e.fromEmail, subject: d.subject, html: aiEmailHtml({ greeting: d.greeting, paragraphs: d.paragraphs }, S.me.name) });
+    await data.setEnquiry(id, { status: 'lost', by: S.me.email });
+    if (e.customerKey) data.addSalesAction({ customer: e.company || e.fromName, kind: 'note', note: `Not for us: ${e.wants || e.subject}` }).catch(() => {});
+    S.enq = await data.loadEnquiries();
+    toast(`The reply to ${e.fromName || e.fromEmail} is in your Outlook Drafts and the enquiry is marked lost (not for us). Check it and press Send.`);
+    if (link) window.open(link, '_blank', 'noopener');
+  } catch (x) { toast(mailErr(x), null, true); }
+  S.busy = false; render();
+}
+/** Repeat parts quoted from the last price: the quote email in Outlook Drafts, the enquiry marked Quoted, a note on the customer. */
+async function quoteRepeatParts(id) {
+  const e = (S.enq || []).find(x => x.id === id); if (!e || S.busy) return;
+  const parts = repeatPartsIn(e, { jobs: S.jobs, parts: S.parts || [], hist: S.hist?.invoices || [], today: todayIso() });
+  const rows = parts.map((r, i) => ({ ...r, qty: Number($('v-customers').querySelector(`[data-rqty="${i}"]`)?.value) || 0, price: (v => (v === '' ? null : Number(v)))($('v-customers').querySelector(`[data-rprice="${i}"]`)?.value ?? '') }))
+    .filter(r => r.qty > 0 && r.price != null && Number.isFinite(r.price));
+  if (!rows.length) return toast('Put a quantity (and a price) against at least one part first.', null, true);
+  const lead = Math.max(1, Number($('rlead')?.value) || 10);
+  S.busy = true;
+  try {
+    const q = repeatQuoteEmail(e, rows, { from: S.me.name, leadDays: lead });
+    const link = await data.draftEmail({ to: e.fromEmail, subject: q.subject, html: q.html });
+    await data.setEnquiry(id, { status: 'quoted', by: S.me.email });
+    if (e.customerKey) data.addSalesAction({ customer: e.company || e.fromName, kind: 'note', note: `Quoted from the last price: ${rows.map(r => `${r.qty} × ${r.partNo} at £${r.price.toFixed(2)}`).join(', ')} (${gbp(q.total, 2)} net, ${lead} working days)` }).catch(() => {});
+    S.enq = await data.loadEnquiries();
+    toast(`The quote (${gbp(q.total, 2)} net) is in your Outlook Drafts and the enquiry is marked Quoted. Check it and press Send.`);
     if (link) window.open(link, '_blank', 'noopener');
   } catch (x) { toast(mailErr(x), null, true); }
   S.busy = false; render();
@@ -3491,6 +3542,9 @@ function onClick(e) {
   if ('taskcancel' in d) { S.taskForm = null; return closeDoc(); }
   if (d.enqopen) { S.enqOpen = S.enqOpen === +d.enqopen ? null : +d.enqopen; return render(); }
   if (d.enqreply) return replyEnquiry(+d.enqreply);
+  if (d.enqack) return acknowledgeEnquiry(+d.enqack);
+  if (d.enqdecline) return declineEnquiry(+d.enqdecline);
+  if (d.enqrepeat) return quoteRepeatParts(+d.enqrepeat);
   if (d.packread) return prepareQuotePack(+d.packread);
   if (d.packcopy) return copyQuotePack(+d.packcopy);
   if (d.enqask) return replyEnquiry(+d.enqask, (S.enq || []).find(x => x.id === +d.enqask)?.quotePack?.questions || []);
