@@ -613,3 +613,15 @@ console.log('jobs: ok');
   assert.equal(salesSnapshot(null, 'x'), null); assert.equal(salesDiff(null, after), null);
   console.log('jobs sales memory: ok');
 }
+
+// A carriage line (11 Nov): on the invoice and the dispatch note, never on the shop floor or the front sheet's process boxes.
+{
+  const { lineProcs, linesFor, isCarriage } = await import('../src/core/jobs.js');
+  const job = { procs: { Laser: { done: false }, Fold: { done: false } }, lines: [{ id: 1, part: 'Bracket', procs: ['Laser', 'Fold'] }, { id: 2, part: 'Premium Delivery Charge', procs: [] }, { id: 3, part: 'Carriage', procs: [] }] };
+  assert.deepEqual(lineProcs(job, job.lines[1]), [], 'a carriage line needs no process, even with nothing ticked');
+  assert.deepEqual(linesFor(job, 'Laser').map(l => l.id), [1], 'the shop floor never sees carriage as a part');
+  const { partsLeft } = await import('../src/core/jobs.js');
+  assert.deepEqual(partsLeft({ ...job, despatches: [], lines: job.lines.map(l => ({ ...l, qty: 5, due: '2026-11-20' })) }).map(r => r.part), ['Bracket'], 'nor on All jobs, the TV or a sent-out card');
+  assert.deepEqual([isCarriage({ part: 'Delivery' }), isCarriage({ part: 'Premium Delivery Charge' }), isCarriage({ part: 'Carriage and packing' }), isCarriage({ part: 'Delivery bracket' }), isCarriage({ part: 'Bracket for delivery van' })], [true, true, true, false, false], 'the whole description is a carriage word, so a Delivery bracket is still a part');
+  console.log('jobs carriage: ok');
+}

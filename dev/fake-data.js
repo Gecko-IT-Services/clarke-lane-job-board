@@ -7,7 +7,7 @@ let jobs = [
     ordered: '2026-10-14', due: '2026-10-30', notes: '', address: 'Unit 4, Example Park\nSouthampton SO14 3TJ', status: 'open',
     // Lines 1–2 use the Part no. box (22 Oct); line 3 is an older line with the number in its text: both looks show.
     // Lines 1–2 have their own processes (22 Oct); line 3 is from before, procs [] = every process on the order.
-    lines: [{ id: 11, lineNo: 1, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16', procs: ['Laser', 'Fold'] },
+    lines: [{ id: 19, lineNo: 9, partNo: '', part: 'Premium Delivery Charge', qty: 1, price: 15, due: '2026-10-20', procs: [] }, { id: 11, lineNo: 1, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-16', procs: ['Laser', 'Fold'] },
             { id: 12, lineNo: 2, partNo: 'BRK-1001', part: 'Mounting bracket — 3mm S275', qty: 10, price: 13.1, due: '2026-10-23', procs: ['Laser', 'Fold'] },
             { id: 13, lineNo: 3, part: 'Bracket BRK-1001 — 3mm S275, 304 stainless cover', qty: 10, price: 13.1, due: '2026-10-30', procs: [] }],
     procs: { 'Laser': { done: true, by: 'Shop Floor', at: '2026-10-14T09:00:00Z' }, 'Fold': { done: false } },

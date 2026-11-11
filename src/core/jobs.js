@@ -70,7 +70,10 @@ export const needed = job => PROCESSES.filter(p => job.procs[p]);
  * order on its own, e.g. from a drawing) is needed by every line, as it was before. A line left with nothing
  * reads as every process too: a line that needs no process at all is not something the board holds yet.
  */
+/** A carriage line (Mandy, 11 Nov: "Premium Delivery Charge" got process boxes on the front sheet): invoiced and dispatched like any line, but nothing is made. */
+export const isCarriage = l => /^(premium\s+)?(carriage|delivery|postage|shipping)(\s+(charge|charges|cost|costs|fee|and\s+packing|packing))?$/i.test(String(l?.part || '').trim());
 export function lineProcs(job, line) {
+  if (isCarriage(line)) return [];
   const need = needed(job), listed = l => (l?.procs || []).filter(p => job.procs[p]);
   if (!listed(line).length) return need;
   const anyOld = (job.lines || []).some(l => !listed(l).length);
@@ -348,7 +351,7 @@ export const nextStep = job => needed(job).find(p => !job.procs[p].done) || null
 export function partsLeft(job, process) {
   const by = new Map(), nd = nextDue(job);
   // Grouped by how the line reads, so the same description under two part numbers stays two parts.
-  for (const l of process ? linesFor(job, process) : job.lines) { const k = lineLabel(l), r = by.get(k) || { part: k, partNo: lineNo(l), desc: lineDesc(l), left: 0, next: 0 }; r.left += left(job, l); if (l.due <= nd) r.next += left(job, l); by.set(k, r); }
+  for (const l of (process ? linesFor(job, process) : job.lines).filter(l => !isCarriage(l))) { const k = lineLabel(l), r = by.get(k) || { part: k, partNo: lineNo(l), desc: lineDesc(l), left: 0, next: 0 }; r.left += left(job, l); if (l.due <= nd) r.next += left(job, l); by.set(k, r); }
   return [...by.values()].filter(r => r.left > 0);
 }
 

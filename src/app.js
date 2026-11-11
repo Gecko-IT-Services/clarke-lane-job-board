@@ -49,7 +49,7 @@ import { renderDeliveries, signaturePad } from './deliveries.js';
 import { deliveryRuns, deliveryProblem, signatureOk, vanStatus, worthSending } from './core/deliveries.js';
 import { drawMap, focusStop, fitAll, showVans, focusVan, KINDS } from './map.js';
 import { postcodeOf } from './core/geo.js';
-import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps, monthInvoiced, salesSnapshot, salesDiff, sameSnapshot } from './core/jobs.js';
+import { dashboard, dispatchLists, partSuggestions, partMatches, lineLabel, lineHtml, xeroLineFields, emailList, invoiceIdsToCheck, awaitingApproval, SETTLED, homeGaps, monthInvoiced, salesSnapshot, salesDiff, sameSnapshot, isCarriage } from './core/jobs.js';
 import { PROCESSES, SHORT, dayNo, sent, left, needed, doneCount, allDone, value, despatchValue, stage, nextDue,
   lastDespatch, calloffDates, defaultDespatchQty, suggestProcesses, describeLine, unitPrice, round2,
   addWorkingDays, quoteStates, repeatLines, poSuggestions, backToBackLines, xeroLinePart, missingLineCodes, deliveryDates, deliveryLabel, despatchStatus, invoiceStatus, splitIntoCalloffs,
@@ -2919,7 +2919,7 @@ function docHtml(kind, jobId, despId) {
     const need = needed(j);
     // What to make on this sheet: chosen on screen before printing (S.sheet); the order is not changed.
     const pick = S.sheet?.jobId === j.id ? S.sheet.qty : Object.fromEntries(j.lines.map(l => [l.id, left(j, l)]));
-    const make = j.lines.filter(l => (pick[l.id] || 0) > 0);
+    const make = j.lines.filter(l => (pick[l.id] || 0) > 0 && !isCarriage(l));   // carriage is invoiced, not made (11 Nov)
     const allDates = deliveryDates(j), dates = [...new Set(make.map(l => l.due))].sort();
     const which = allDates.length > 1 && dates.length ? dates.map(d => allDates.indexOf(d) + 1).filter(n => n > 0) : [];
     const pos = [...new Set(make.map(l => l.po).filter(Boolean))];
@@ -3039,7 +3039,7 @@ function sheetEditor(j) {
   return `<div class="sheetedit panel"><h3>What is this sheet for?</h3>
     <p class="note">Change <b>To make</b> for this front sheet only, for example the call-off you are making now. The order is not changed; to change the order, use Amend.</p>
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="text-align:left">Part</th><th>Due</th>${linePos(j).length ? '<th>Call-off PO</th>' : ''}<th>Ordered</th><th>Outstanding</th><th>To make</th></tr></thead><tbody>
-    ${j.lines.map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td style="text-align:left">${lineHtml(l, esc)}</td><td>${fmt(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${l.qty}</td><td>${left(j, l)}</td>
+    ${j.lines.filter(l => !isCarriage(l)).map(l => `<tr${left(j, l) === 0 ? ' class="muted"' : ''}><td style="text-align:left">${lineHtml(l, esc)}</td><td>${fmt(l.due)}</td>${linePos(j).length ? `<td>${esc(l.po) || ''}</td>` : ''}<td>${l.qty}</td><td>${left(j, l)}</td>
       <td><input type="number" min="0" step="1" value="${S.sheet.qty[l.id] || 0}" data-sq="${l.id}" style="width:90px" aria-label="To make on this sheet: ${esc(lineLabel(l))} due ${fmt(l.due)}"></td></tr>`).join('')}</tbody></table></div>
     <div class="actions">${call ? '<button class="btn sm" type="button" data-sqset="next">Next delivery</button>' : ''}<button class="btn sm" type="button" data-sqset="all">Everything outstanding</button><button class="btn sm" type="button" data-sqset="none">Clear</button></div></div>`;
 }
